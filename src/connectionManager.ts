@@ -1,0 +1,305 @@
+import * as vscode from 'vscode';
+import axios, { AxiosInstance } from 'axios';
+import { DfcBridge } from './dfcBridge';
+
+export interface DocumentumConnection {
+    name: string;
+    type: 'dfc' | 'rest';
+    // DFC connection properties
+    docbroker?: string;
+    port?: number;
+    dfcProfile?: string;
+    // REST connection properties
+    endpoint?: string;
+    // Common properties
+    repository: string;
+    username?: string;
+}
+
+export interface DfcProfile {
+    javaHome?: string;
+    dfcPath: string;
+    dfcProperties?: string;
+}
+
+export interface ActiveConnection {
+    config: DocumentumConnection;
+    type: 'dfc' | 'rest';
+    // For REST connections
+    client?: AxiosInstance;
+    // For DFC connections
+    sessionId?: string;
+}
+
+type ConnectionChangeCallback = (connected: boolean, name?: string) => void;
+
+export class ConnectionManager {
+    private context: vscode.ExtensionContext;
+    private activeConnection: ActiveConnection | null = null;
+    private connectionChangeCallbacks: ConnectionChangeCallback[] = [];
+    private dfcBridge: DfcBridge;
+
+    constructor(context: vscode.ExtensionContext) {
+        this.context = context;
+        this.dfcBridge = new DfcBridge(context);
+    }
+
+    onConnectionChange(callback: ConnectionChangeCallback): void {
+        this.connectionChangeCallbacks.push(callback);
+    }
+
+    private notifyConnectionChange(connected: boolean, name?: string): void {
+        this.connectionChangeCallbacks.forEach(cb => cb(connected, name));
+    }
+
+    getConnections(): DocumentumConnection[] {
+        const config = vscode.workspace.getConfiguration('documentum');
+        return config.get<DocumentumConnection[]>('connections', []);
+    }
+
+    getDfcProfiles(): Record<string, DfcProfile> {
+        const config = vscode.workspace.getConfiguration('documentum');
+        return config.get<Record<string, DfcProfile>>('dfc.profiles', {});
+    }
+
+    async connect(): Promise<void> {
+        const connections = this.getConnections();
+
+        if (connections.length === 0) {
+            const action = await vscode.window.showWarningMessage(
+                'No Documentum connections configured. Would you like to add one?',
+                'Open Settings'
+            );
+            if (action === 'Open Settings') {
+                vscode.commands.executeCommand(
+                    'workbench.action.openSettings',
+                    'documentum.connections'
+                );
+            }
+            return;
+        }
+
+        // Let user pick a connection
+        const items = connections.map(c => ({
+            label: c.name,
+            description: c.type === 'dfc'
+                ? `${c.docbroker}:${c.port || 1489}`
+                : c.endpoint,
+            detail: `${c.type.toUpperCase()} - ${c.repository}`,
+            connection: c
+        }));
+
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select a Documentum connection'
+        });
+
+        if (!selected) {
+            return;
+        }
+
+        const connection = selected.connection;
+
+        // Get credentials
+        const username = connection.username || await vscode.window.showInputBox({
+            prompt: 'Enter username',
+            placeHolder: 'dmadmin'
+        });
+
+        if (!username) {
+            return;
+        }
+
+        const password = await vscode.window.showInputBox({
+            prompt: 'Enter password',
+            password: true
+        });
+
+        if (!password) {
+            return;
+        }
+
+        if (connection.type === 'dfc') {
+            await this.connectDfc(connection, username, password);
+        } else {
+            await this.connectRest(connection, username, password);
+        }
+    }
+
+    private async connectDfc(
+        connection: DocumentumConnection,
+        username: string,
+        password: string
+    ): Promise<void> {
+        // Validate DFC profile exists
+        const profiles = this.getDfcProfiles();
+        const profileName = connection.dfcProfile;
+
+        if (profileName && !profiles[profileName]) {
+            vscode.window.showErrorMessage(
+                `DFC profile "${profileName}" not found. Configure it in settings.`
+            );
+            return;
+        }
+
+        try {
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: `Connecting to ${connection.name} via DFC...`,
+                cancellable: false
+            }, async () => {
+                // Ensure DFC Bridge is running
+                await this.dfcBridge.ensureRunning(profileName ? profiles[profileName] : undefined);
+
+                // Connect via DFC Bridge
+                const sessionId = await this.dfcBridge.connect({
+                    docbroker: connection.docbroker!,
+                    port: connection.port || 1489,
+                    repository: connection.repository,
+                    username,
+                    password
+                });
+
+                this.activeConnection = {
+                    config: connection,
+                    type: 'dfc',
+                    sessionId
+                };
+
+                this.notifyConnectionChange(true, connection.name);
+                vscode.window.showInformationMessage(
+                    `Connected to ${connection.name} (${connection.repository}) via DFC`
+                );
+            });
+        } catch (error) {
+            if (error instanceof Error) {
+                vscode.window.showErrorMessage(`DFC connection failed: ${error.message}`);
+            }
+        }
+    }
+
+    private async connectRest(
+        connection: DocumentumConnection,
+        username: string,
+        password: string
+    ): Promise<void> {
+        try {
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: `Connecting to ${connection.name} via REST...`,
+                cancellable: false
+            }, async () => {
+                const client = axios.create({
+                    baseURL: connection.endpoint,
+                    auth: { username, password },
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                // Test connection by fetching repository info
+                const response = await client.get(`/repositories/${connection.repository}`);
+
+                if (response.status === 200) {
+                    this.activeConnection = {
+                        config: connection,
+                        type: 'rest',
+                        client
+                    };
+
+                    this.notifyConnectionChange(true, connection.name);
+                    vscode.window.showInformationMessage(
+                        `Connected to ${connection.name} (${connection.repository}) via REST`
+                    );
+                }
+            });
+        } catch (error) {
+            if (axios.isAxiosError(error)) {
+                if (error.response?.status === 401) {
+                    vscode.window.showErrorMessage('Authentication failed. Check your credentials.');
+                } else {
+                    vscode.window.showErrorMessage(`REST connection failed: ${error.message}`);
+                }
+            } else if (error instanceof Error) {
+                vscode.window.showErrorMessage(`REST connection failed: ${error.message}`);
+            }
+        }
+    }
+
+    async disconnect(): Promise<void> {
+        if (this.activeConnection) {
+            const name = this.activeConnection.config.name;
+
+            // Disconnect from DFC Bridge if it's a DFC connection
+            if (this.activeConnection.type === 'dfc' && this.activeConnection.sessionId) {
+                try {
+                    await this.dfcBridge.disconnect(this.activeConnection.sessionId);
+                } catch (error) {
+                    // Log but don't fail
+                    console.error('Error disconnecting from DFC:', error);
+                }
+            }
+
+            this.activeConnection = null;
+            this.notifyConnectionChange(false);
+            vscode.window.showInformationMessage(`Disconnected from ${name}`);
+        }
+    }
+
+    async showConnections(): Promise<void> {
+        const connections = this.getConnections();
+        const currentName = this.activeConnection?.config.name;
+
+        const items: vscode.QuickPickItem[] = connections.map(c => ({
+            label: c.name === currentName ? `$(check) ${c.name}` : c.name,
+            description: c.type === 'dfc'
+                ? `${c.docbroker}:${c.port || 1489}`
+                : c.endpoint,
+            detail: `${c.type.toUpperCase()} - ${c.repository}`
+        }));
+
+        items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
+        items.push({ label: '$(add) Add New Connection...', description: 'Open settings' });
+
+        if (this.activeConnection) {
+            items.push({ label: '$(debug-disconnect) Disconnect', description: currentName });
+        }
+
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: currentName
+                ? `Connected to: ${currentName}`
+                : 'No active connection'
+        });
+
+        if (!selected) {
+            return;
+        }
+
+        if (selected.label.includes('Add New Connection')) {
+            vscode.commands.executeCommand(
+                'workbench.action.openSettings',
+                'documentum.connections'
+            );
+        } else if (selected.label.includes('Disconnect')) {
+            await this.disconnect();
+        } else {
+            await this.connect();
+        }
+    }
+
+    getActiveConnection(): ActiveConnection | null {
+        return this.activeConnection;
+    }
+
+    getDfcBridge(): DfcBridge {
+        return this.dfcBridge;
+    }
+
+    isConnected(): boolean {
+        return this.activeConnection !== null;
+    }
+
+    isDfcConnection(): boolean {
+        return this.activeConnection?.type === 'dfc';
+    }
+}

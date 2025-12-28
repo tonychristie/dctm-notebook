@@ -1,0 +1,210 @@
+{
+  "name": "dctm-vscode",
+  "displayName": "Documentum Tools",
+  "description": "VS Code extension for Documentum development - DQL queries and DFC integration",
+  "version": "0.0.1",
+  "publisher": "spire",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "documentum",
+    "dql",
+    "opentext",
+    "content management",
+    "ecm"
+  ],
+  "activationEvents": [
+    "onLanguage:dql",
+    "onCommand:dctm.connect",
+    "onCommand:dctm.executeDql"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "dql",
+        "aliases": [
+          "DQL",
+          "Documentum Query Language"
+        ],
+        "extensions": [
+          ".dql"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "dql",
+        "scopeName": "source.dql",
+        "path": "./syntaxes/dql.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "dctm.connect",
+        "title": "Connect to Documentum",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.disconnect",
+        "title": "Disconnect from Documentum",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.executeDql",
+        "title": "Execute DQL Query",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.showConnections",
+        "title": "Show Connections",
+        "category": "Documentum"
+      }
+    ],
+    "configuration": {
+      "title": "Documentum",
+      "properties": {
+        "documentum.connections": {
+          "type": "array",
+          "default": [],
+          "description": "List of Documentum connection configurations",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Connection display name"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "dfc",
+                  "rest"
+                ],
+                "default": "dfc",
+                "description": "Connection type (DFC primary, REST secondary)"
+              },
+              "dfcProfile": {
+                "type": "string",
+                "description": "DFC profile name (for DFC connections)"
+              },
+              "endpoint": {
+                "type": "string",
+                "description": "REST API endpoint URL (for REST connections)"
+              },
+              "docbroker": {
+                "type": "string",
+                "description": "Docbroker hostname (for DFC connections)"
+              },
+              "port": {
+                "type": "number",
+                "default": 1489,
+                "description": "Docbroker port (for DFC connections)"
+              },
+              "repository": {
+                "type": "string",
+                "description": "Repository/docbase name"
+              },
+              "username": {
+                "type": "string",
+                "description": "Username for authentication"
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "repository"
+            ]
+          }
+        },
+        "documentum.defaultConnection": {
+          "type": "string",
+          "default": "",
+          "description": "Name of the default connection to use"
+        },
+        "documentum.dfc.profiles": {
+          "type": "object",
+          "default": {},
+          "description": "DFC profile configurations (like dqMan profiles)",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "javaHome": {
+                "type": "string",
+                "description": "Path to Java installation"
+              },
+              "dfcPath": {
+                "type": "string",
+                "description": "Path to DFC installation directory"
+              },
+              "dfcProperties": {
+                "type": "string",
+                "description": "Path to dfc.properties file"
+              }
+            },
+            "required": ["dfcPath"]
+          }
+        },
+        "documentum.bridge.port": {
+          "type": "number",
+          "default": 9876,
+          "description": "Port for DFC Bridge microservice"
+        },
+        "documentum.bridge.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start DFC Bridge when connecting"
+        }
+      }
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "dctm.executeDql",
+          "when": "editorLangId == dql",
+          "group": "documentum"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "dctm.executeDql",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "editorLangId == dql"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "18.x",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "@vscode/test-cli": "^0.0.4",
+    "@vscode/test-electron": "^2.3.8",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "axios": "^1.6.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://colossus:3000/tchristie/dctm-vscode.git"
+  }
+}

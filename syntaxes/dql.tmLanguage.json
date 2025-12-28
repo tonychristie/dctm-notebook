@@ -1,0 +1,148 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "DQL",
+  "scopeName": "source.dql",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#operators" },
+    { "include": "#functions" },
+    { "include": "#types" },
+    { "include": "#constants" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-dash.dql",
+          "match": "--.*$"
+        },
+        {
+          "name": "comment.block.dql",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.single.dql",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.dql",
+              "match": "''"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.dql",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.dql",
+              "match": "\\\\\""
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.dql",
+          "match": "\\b\\d+(\\.\\d+)?\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.dql",
+          "match": "(?i)\\b(SELECT|FROM|WHERE|ORDER\\s+BY|GROUP\\s+BY|HAVING|UNION|INTERSECT|MINUS|ALL|DISTINCT|AS|IN|NOT\\s+IN|BETWEEN|LIKE|IS\\s+NULL|IS\\s+NOT\\s+NULL|EXISTS|AND|OR|NOT|ASC|DESC|ENABLE|WITH|ANY|SOME)\\b"
+        },
+        {
+          "name": "keyword.other.dml.dql",
+          "match": "(?i)\\b(INSERT|INTO|VALUES|UPDATE|SET|DELETE|APPEND|REMOVE|TRUNCATE|MOVE|LINK|UNLINK|CREATE|ALTER|DROP|REGISTER|UNREGISTER|CHANGE|GRANT|REVOKE|EXECUTE)\\b"
+        },
+        {
+          "name": "keyword.other.object.dql",
+          "match": "(?i)\\b(OBJECT|OBJECTS|TYPE|TYPES|CABINET|CABINETS|FOLDER|FOLDERS|DOCUMENT|DOCUMENTS|ASSEMBLY|ASSEMBLIES|RELATION|RELATIONS|ACL|ACLS|GROUP|GROUPS|USER|USERS|POLICY|POLICIES|ALIAS\\s+SET|METHOD|PROCEDURE|JOB)\\b"
+        },
+        {
+          "name": "keyword.other.clause.dql",
+          "match": "(?i)\\b(INNER\\s+JOIN|LEFT\\s+OUTER\\s+JOIN|RIGHT\\s+OUTER\\s+JOIN|FULL\\s+OUTER\\s+JOIN|CROSS\\s+JOIN|JOIN|ON|SEARCH|FULLTEXT|CONTAINS|REPEATING|FOR|RETURN|TOP|FETCH\\s+FIRST|ROWS\\s+ONLY|OFFSET)\\b"
+        },
+        {
+          "name": "storage.modifier.dql",
+          "match": "(?i)\\b(PUBLIC|PRIVATE|OWNER|WORLD|GROUP)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison.dql",
+          "match": "(=|<>|!=|<|>|<=|>=)"
+        },
+        {
+          "name": "keyword.operator.arithmetic.dql",
+          "match": "(\\+|-|\\*|/|%)"
+        },
+        {
+          "name": "keyword.operator.concatenation.dql",
+          "match": "\\|\\|"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "support.function.aggregate.dql",
+          "match": "(?i)\\b(COUNT|SUM|AVG|MIN|MAX)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.string.dql",
+          "match": "(?i)\\b(UPPER|LOWER|SUBSTR|LENGTH|TRIM|LTRIM|RTRIM|INSTR|REPLACE|CONCAT)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.date.dql",
+          "match": "(?i)\\b(DATE|DATEADD|DATEDIFF|DATEFLOOR|DATETOSTRING|TODAY|NOW|YEAR|MONTH|DAY|HOUR|MINUTE|SECOND)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.conversion.dql",
+          "match": "(?i)\\b(CAST|TO_CHAR|TO_DATE|TO_NUMBER|ID|FOLDER|CABINET|USER|GROUP|MFILE_URL|MCONTENTS_URL)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.documentum.dql",
+          "match": "(?i)\\b(DOCUMENT|GET_PATH|ANY|SOME|DATETOSTRING_LOCAL)\\s*(?=\\()"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.dql",
+          "match": "(?i)\\b(dm_document|dm_folder|dm_cabinet|dm_sysobject|dm_user|dm_group|dm_acl|dm_relation|dm_relation_type|dm_type|dm_format|dm_store|dm_location|dm_policy|dm_process|dm_workflow|dm_activity|dm_router|dm_method|dm_job|dm_queue_item|dm_registered|dm_alias_set|dmi_|dmr_|scs_)\\w*\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.dql",
+          "match": "(?i)\\b(TRUE|FALSE)\\b"
+        },
+        {
+          "name": "constant.language.null.dql",
+          "match": "(?i)\\b(NULL|NULLDATE|NULLSTRING|NULLINT|NULLID)\\b"
+        }
+      ]
+    }
+  }
+}

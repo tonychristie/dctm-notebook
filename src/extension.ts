@@ -3,9 +3,12 @@ import { ConnectionManager } from './connectionManager';
 import { DqlExecutor } from './dqlExecutor';
 import { ResultsPanel } from './resultsPanel';
 import { registerObjectBrowser } from './objectBrowser';
+import { ApiExecutor } from './apiExecutor';
+import { registerApiPanel } from './apiPanel';
 
 let connectionManager: ConnectionManager;
 let dqlExecutor: DqlExecutor;
+let apiExecutor: ApiExecutor;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Documentum Tools extension is now active');
@@ -13,6 +16,7 @@ export function activate(context: vscode.ExtensionContext) {
     // Initialize managers
     connectionManager = new ConnectionManager(context);
     dqlExecutor = new DqlExecutor(connectionManager);
+    apiExecutor = new ApiExecutor(connectionManager);
 
     // Register commands
     const connectCommand = vscode.commands.registerCommand('dctm.connect', async () => {
@@ -86,6 +90,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register Object Browser tree view
     registerObjectBrowser(context, connectionManager);
+
+    // Register API Panel and related commands
+    registerApiPanel(context, apiExecutor);
 }
 
 export function deactivate() {

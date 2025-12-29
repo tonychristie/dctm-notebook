@@ -88,6 +88,32 @@
         "command": "dctm.queryType",
         "title": "Query All Objects",
         "category": "Documentum"
+      },
+      {
+        "command": "dctm.openApiPanel",
+        "title": "Open API Panel",
+        "category": "Documentum",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "dctm.executeApiOnObject",
+        "title": "Execute API Method",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.checkout",
+        "title": "Checkout",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.checkin",
+        "title": "Checkin",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.cancelCheckout",
+        "title": "Cancel Checkout",
+        "category": "Documentum"
       }
     ],
     "views": {
@@ -237,6 +263,26 @@
           "command": "dctm.queryType",
           "when": "view == documentumExplorer && viewItem == type",
           "group": "1_query"
+        },
+        {
+          "command": "dctm.executeApiOnObject",
+          "when": "view == documentumExplorer && viewItem =~ /^(document|folder|cabinet)$/",
+          "group": "3_api"
+        },
+        {
+          "command": "dctm.checkout",
+          "when": "view == documentumExplorer && viewItem == document",
+          "group": "4_version"
+        },
+        {
+          "command": "dctm.checkin",
+          "when": "view == documentumExplorer && viewItem == document",
+          "group": "4_version"
+        },
+        {
+          "command": "dctm.cancelCheckout",
+          "when": "view == documentumExplorer && viewItem == document",
+          "group": "4_version"
         }
       ]
     },

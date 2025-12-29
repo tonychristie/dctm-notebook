@@ -13,7 +13,8 @@ import {
     UserNodeData,
     GroupNodeData,
     NodeType,
-    createNodeId
+    createNodeId,
+    escapeDqlString
 } from './objectBrowserNodes';
 
 /**
@@ -206,8 +207,9 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
         try {
             const items: ObjectBrowserItem[] = [];
 
-            // Get subfolders
-            const folderQuery = `SELECT r_object_id, object_name FROM dm_folder WHERE folder('${data.path}') ORDER BY object_name`;
+            // Get subfolders - escape path to prevent SQL injection
+            const escapedPath = escapeDqlString(data.path);
+            const folderQuery = `SELECT r_object_id, object_name FROM dm_folder WHERE folder('${escapedPath}') ORDER BY object_name`;
             const folderResults = await this.executeDql(connection, folderQuery);
 
             for (const row of folderResults.rows) {
@@ -223,8 +225,8 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
                 items.push(new ObjectBrowserItem(folderData, vscode.TreeItemCollapsibleState.Collapsed));
             }
 
-            // Get documents (non-folder sysobjects)
-            const docQuery = `SELECT r_object_id, object_name, r_object_type, a_content_type FROM dm_sysobject WHERE folder('${data.path}') AND r_object_type != 'dm_folder' ORDER BY object_name`;
+            // Get documents (non-folder sysobjects) - use same escaped path
+            const docQuery = `SELECT r_object_id, object_name, r_object_type, a_content_type FROM dm_sysobject WHERE folder('${escapedPath}') AND r_object_type != 'dm_folder' ORDER BY object_name`;
             const docResults = await this.executeDql(connection, docQuery);
 
             for (const row of docResults.rows) {
@@ -293,7 +295,9 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
         }
 
         try {
-            const query = `SELECT name, super_name FROM dm_type WHERE super_name = '${data.typeName}' ORDER BY name`;
+            // Escape type name to prevent SQL injection
+            const escapedTypeName = escapeDqlString(data.typeName);
+            const query = `SELECT name, super_name FROM dm_type WHERE super_name = '${escapedTypeName}' ORDER BY name`;
             const results = await this.executeDql(connection, query);
 
             return results.rows.map(row => {

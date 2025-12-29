@@ -265,3 +265,17 @@ export class ObjectBrowserItem extends vscode.TreeItem {
 export function createNodeId(connectionName: string, type: NodeType, identifier: string): string {
     return `${connectionName}::${type}::${identifier}`;
 }
+
+/**
+ * Escape a string for use in DQL queries.
+ * Escapes single quotes by doubling them to prevent SQL injection.
+ *
+ * @param value The string to escape
+ * @returns The escaped string safe for use in DQL
+ */
+export function escapeDqlString(value: string): string {
+    if (!value) {
+        return value;
+    }
+    return value.replace(/'/g, "''");
+}

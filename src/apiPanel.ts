@@ -440,11 +440,8 @@ export class ApiPanel {
     <div class="section">
         <div class="input-group">
             <label for="objectId">Object ID (r_object_id)</label>
-            <div class="input-row">
-                <input type="text" id="objectId" placeholder="0900000180001234">
-                <button class="secondary" onclick="browseObject()">Browse...</button>
-            </div>
-            <span class="info">Leave empty for session-level operations</span>
+            <input type="text" id="objectId" placeholder="0900000180001234">
+            <span class="info">Leave empty for session-level operations. Use Object Browser context menu to pre-fill.</span>
         </div>
     </div>
 
@@ -723,10 +720,6 @@ export class ApiPanel {
             document.getElementById('executeBtn').disabled = true;
             renderCategories();
             renderMethodList(getAllMethods());
-        }
-
-        function browseObject() {
-            vscode.postMessage({ type: 'browseObject' });
         }
 
         // Initial render

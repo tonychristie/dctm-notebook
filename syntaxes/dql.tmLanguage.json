@@ -3,16 +3,41 @@
   "name": "DQL",
   "scopeName": "source.dql",
   "patterns": [
+    { "include": "#hints" },
     { "include": "#comments" },
     { "include": "#strings" },
+    { "include": "#object-ids" },
     { "include": "#numbers" },
     { "include": "#keywords" },
     { "include": "#operators" },
     { "include": "#functions" },
     { "include": "#types" },
-    { "include": "#constants" }
+    { "include": "#constants" },
+    { "include": "#repeating-attributes" },
+    { "include": "#folder-paths" }
   ],
   "repository": {
+    "hints": {
+      "patterns": [
+        {
+          "name": "comment.block.hint.dql",
+          "begin": "/\\*\\+",
+          "end": "\\*/",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.comment.hint.begin.dql" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.comment.hint.end.dql" }
+          },
+          "patterns": [
+            {
+              "name": "keyword.other.hint.dql",
+              "match": "(?i)\\b(SQL_DEF_RESULT_SET|FTINDEX|ROW_BASED|ALLOW_LEADING_WILDCARD|FORCE_ORDER|USE_DM_FULLTEXT_INDEX|REPARSE)\\b"
+            }
+          ]
+        }
+      ]
+    },
     "comments": {
       "patterns": [
         {
@@ -21,7 +46,7 @@
         },
         {
           "name": "comment.block.dql",
-          "begin": "/\\*",
+          "begin": "/\\*(?!\\+)",
           "end": "\\*/"
         }
       ]
@@ -52,11 +77,40 @@
         }
       ]
     },
+    "object-ids": {
+      "patterns": [
+        {
+          "name": "constant.other.objectid.dql",
+          "match": "'[0-9a-fA-F]{16}'"
+        }
+      ]
+    },
     "numbers": {
       "patterns": [
         {
           "name": "constant.numeric.dql",
           "match": "\\b\\d+(\\.\\d+)?\\b"
+        }
+      ]
+    },
+    "repeating-attributes": {
+      "patterns": [
+        {
+          "match": "(\\w+)(\\[)(\\d+|\\*)(\\])",
+          "captures": {
+            "1": { "name": "variable.other.attribute.dql" },
+            "2": { "name": "punctuation.bracket.open.dql" },
+            "3": { "name": "constant.numeric.index.dql" },
+            "4": { "name": "punctuation.bracket.close.dql" }
+          }
+        }
+      ]
+    },
+    "folder-paths": {
+      "patterns": [
+        {
+          "name": "string.other.folderpath.dql",
+          "match": "'/[^']*'"
         }
       ]
     },
@@ -68,19 +122,31 @@
         },
         {
           "name": "keyword.other.dml.dql",
-          "match": "(?i)\\b(INSERT|INTO|VALUES|UPDATE|SET|DELETE|APPEND|REMOVE|TRUNCATE|MOVE|LINK|UNLINK|CREATE|ALTER|DROP|REGISTER|UNREGISTER|CHANGE|GRANT|REVOKE|EXECUTE)\\b"
+          "match": "(?i)\\b(INSERT|INTO|VALUES|UPDATE|SET|DELETE|APPEND|REMOVE|TRUNCATE|MOVE|LINK|UNLINK|CREATE|ALTER|DROP|REGISTER|UNREGISTER|CHANGE|GRANT|REVOKE|EXECUTE|CHECKOUT|CHECKIN|LOCK|UNLOCK|QUEUE|DEQUEUE|BRANCH|FREEZE|UNFREEZE|DESTROY|PURGE)\\b"
         },
         {
           "name": "keyword.other.object.dql",
-          "match": "(?i)\\b(OBJECT|OBJECTS|TYPE|TYPES|CABINET|CABINETS|FOLDER|FOLDERS|DOCUMENT|DOCUMENTS|ASSEMBLY|ASSEMBLIES|RELATION|RELATIONS|ACL|ACLS|GROUP|GROUPS|USER|USERS|POLICY|POLICIES|ALIAS\\s+SET|METHOD|PROCEDURE|JOB)\\b"
+          "match": "(?i)\\b(OBJECT|OBJECTS|TYPE|TYPES|CABINET|CABINETS|FOLDER|FOLDERS|DOCUMENT|DOCUMENTS|ASSEMBLY|ASSEMBLIES|COMPONENT|COMPONENTS|RELATION|RELATIONS|ACL|ACLS|GROUP|GROUPS|USER|USERS|POLICY|POLICIES|ALIAS\\s+SET|METHOD|PROCEDURE|JOB|WORKFLOW|PROCESS|ACTIVITY|ROUTER|WORKITEM|INBOX|LIFECYCLE|STATE|RENDITION|FORMAT|STORE|LOCATION|INDEX)\\b"
         },
         {
           "name": "keyword.other.clause.dql",
-          "match": "(?i)\\b(INNER\\s+JOIN|LEFT\\s+OUTER\\s+JOIN|RIGHT\\s+OUTER\\s+JOIN|FULL\\s+OUTER\\s+JOIN|CROSS\\s+JOIN|JOIN|ON|SEARCH|FULLTEXT|CONTAINS|REPEATING|FOR|RETURN|TOP|FETCH\\s+FIRST|ROWS\\s+ONLY|OFFSET)\\b"
+          "match": "(?i)\\b(INNER\\s+JOIN|LEFT\\s+OUTER\\s+JOIN|RIGHT\\s+OUTER\\s+JOIN|FULL\\s+OUTER\\s+JOIN|CROSS\\s+JOIN|JOIN|ON|SEARCH|FULLTEXT|CONTAINS|REPEATING|FOR|RETURN|RETURN_TOP|TOP|FETCH\\s+FIRST|ROWS\\s+ONLY|OFFSET|RELATE|UNRELATE|REGISTRATION|FTINDEX|VERITY|COMPUTED)\\b"
+        },
+        {
+          "name": "keyword.other.search.dql",
+          "match": "(?i)\\b(SEARCH\\s+DOCUMENT\\s+CONTAINS|FT_OPTIMIZER|SCORE|SUMMARY|TOPIC|ZONE|NEAR|PARAGRAPH|SENTENCE|SOUNDEX|STEM|THESAURUS|WILDCARD|ACCRUE|CASE|MANY|ORDER|PHRASE|WORD|YESNO)\\b"
         },
         {
           "name": "storage.modifier.dql",
-          "match": "(?i)\\b(PUBLIC|PRIVATE|OWNER|WORLD|GROUP)\\b"
+          "match": "(?i)\\b(PUBLIC|PRIVATE|OWNER|WORLD|GROUP|PERMIT|BROWSE|READ|RELATE|VERSION|WRITE|DELETE|SYSADMIN|SUPERUSER|NONE)\\b"
+        },
+        {
+          "name": "keyword.other.transaction.dql",
+          "match": "(?i)\\b(BEGIN|COMMIT|ROLLBACK|TRANSACTION|SAVEPOINT)\\b"
+        },
+        {
+          "name": "keyword.other.options.dql",
+          "match": "(?i)\\b(NOCOMMIT|NOWAIT|WAIT|FORCE|CASCADE|RESTRICT|CONTINUE|ABORT|SKIP|ALLOW|DISALLOW|OPTIONAL|REQUIRED)\\b"
         }
       ]
     },
@@ -104,31 +170,79 @@
       "patterns": [
         {
           "name": "support.function.aggregate.dql",
-          "match": "(?i)\\b(COUNT|SUM|AVG|MIN|MAX)\\s*(?=\\()"
+          "match": "(?i)\\b(COUNT|SUM|AVG|MIN|MAX|FIRST|LAST)\\s*(?=\\()"
         },
         {
           "name": "support.function.string.dql",
-          "match": "(?i)\\b(UPPER|LOWER|SUBSTR|LENGTH|TRIM|LTRIM|RTRIM|INSTR|REPLACE|CONCAT)\\s*(?=\\()"
+          "match": "(?i)\\b(UPPER|LOWER|SUBSTR|SUBSTRING|LENGTH|TRIM|LTRIM|RTRIM|INSTR|REPLACE|CONCAT|LPAD|RPAD|INITCAP|REVERSE|SPACE|CHAR|ASCII|CHR|POSITION|TRANSLATE|SOUNDEX|CHARINDEX)\\s*(?=\\()"
         },
         {
           "name": "support.function.date.dql",
-          "match": "(?i)\\b(DATE|DATEADD|DATEDIFF|DATEFLOOR|DATETOSTRING|TODAY|NOW|YEAR|MONTH|DAY|HOUR|MINUTE|SECOND)\\s*(?=\\()"
+          "match": "(?i)\\b(DATE|DATEADD|DATEDIFF|DATEFLOOR|DATETOSTRING|DATETOSTRING_LOCAL|TODAY|NOW|YEAR|MONTH|DAY|HOUR|MINUTE|SECOND|QUARTER|WEEK|DAYOFWEEK|DAYOFYEAR|CURRENT_DATE|CURRENT_TIME|CURRENT_TIMESTAMP|GETDATE|SYSDATE|ADD_MONTHS|MONTHS_BETWEEN|LAST_DAY|NEXT_DAY|TRUNC|ROUND|EXTRACT)\\s*(?=\\()"
         },
         {
           "name": "support.function.conversion.dql",
-          "match": "(?i)\\b(CAST|TO_CHAR|TO_DATE|TO_NUMBER|ID|FOLDER|CABINET|USER|GROUP|MFILE_URL|MCONTENTS_URL)\\s*(?=\\()"
+          "match": "(?i)\\b(CAST|CONVERT|TO_CHAR|TO_DATE|TO_NUMBER|TO_INTEGER|TO_DOUBLE|TO_BOOLEAN|ID|FOLDER|CABINET|USER|GROUP|MFILE_URL|MCONTENTS_URL|OBJECT_NAME|TYPE_NAME)\\s*(?=\\()"
         },
         {
           "name": "support.function.documentum.dql",
-          "match": "(?i)\\b(DOCUMENT|GET_PATH|ANY|SOME|DATETOSTRING_LOCAL)\\s*(?=\\()"
+          "match": "(?i)\\b(DOCUMENT|GET_PATH|GET_PERMIT|GET_GROUP_PERMIT|HAS_PERMIT|CONTAINS|ISCHILDOF|ISPARENTOF|DESCEND|ANCESTORS|DESCENDANTS|PARENT|CHILDREN|SIBLINGS|SUBTYPES|ALL_SUBTYPES|INHERITS|EXTENDS|DATEDIFF|DATEPART|DATESERIAL|TIMESERIAL)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.workflow.dql",
+          "match": "(?i)\\b(GET_WORKFLOW_ID|GET_ACTIVITY_ID|GET_ACTIVITY_NAME|GET_PERFORMER|GET_DUE_DATE|GET_PRIORITY|GET_PACKAGE|IS_ACTIVE|IS_RUNNING|IS_PAUSED|IS_HALTED|IS_FINISHED|IS_DORMANT|GET_WORKITEM|GET_QUEUE_ITEM)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.permission.dql",
+          "match": "(?i)\\b(GET_PERMIT|GET_GROUP_PERMIT|HAS_PERMIT|HAS_GROUP_PERMIT|GET_PERMIT_NAME|IS_SUPERUSER|IS_SYSADMIN|OWNER_NAME|OWNER_PERMIT|GROUP_NAME|GROUP_PERMIT|WORLD_PERMIT|ACL_NAME|ACL_DOMAIN|GET_DEFAULT_ACL|GET_FOLDER_PATH)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.lifecycle.dql",
+          "match": "(?i)\\b(GET_STATE|GET_STATE_NAME|GET_POLICY_ID|GET_POLICY_NAME|GET_CURRENT_STATE|GET_RESUME_STATE|GET_ALIAS_VALUE|GET_ALIAS_SET_ID|IS_ATTACHED|CAN_ATTACH|CAN_DETACH|CAN_PROMOTE|CAN_DEMOTE|CAN_SUSPEND|CAN_RESUME)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.retention.dql",
+          "match": "(?i)\\b(GET_RETENTION_DATE|GET_HOLD_EXPIRATION|IS_HOLD|IS_FROZEN|IS_IMMUTABLE|GET_DISPOSITION_DATE|GET_RULE_APPLIED_DATE)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.fulltext.dql",
+          "match": "(?i)\\b(SCORE|FTCONTAINS|FTSEARCH|FT_OPTIMIZER|HIGHLIGHT|SNIPPET)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.math.dql",
+          "match": "(?i)\\b(ABS|CEIL|CEILING|FLOOR|ROUND|TRUNCATE|MOD|POWER|SQRT|EXP|LOG|LOG10|LN|SIGN|GREATEST|LEAST|COALESCE|NVL|NULLIF|DECODE|IIF|CASE|WHEN|THEN|ELSE|END)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.system.dql",
+          "match": "(?i)\\b(SESSION_ID|SERVER_NAME|DOCBASE_NAME|DOCBASE_ID|USER_NAME|USER_ID|CLIENT_ID|CLIENT_HOST|DB_NAME|DB_VERSION|SERVER_VERSION|DM_VERSION|DATASPACE|GET_SESSION)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.virtual-document.dql",
+          "match": "(?i)\\b(GET_ASSEMBLY|GET_COMPONENTS|GET_BINDING_LABEL|GET_BINDING_CONDITION|GET_LATE_BINDING|IS_VIRTUAL_DOCUMENT|GET_SNAPSHOT_DATE|GET_VERSION_LABEL)\\s*(?=\\()"
         }
       ]
     },
     "types": {
       "patterns": [
         {
-          "name": "storage.type.dql",
-          "match": "(?i)\\b(dm_document|dm_folder|dm_cabinet|dm_sysobject|dm_user|dm_group|dm_acl|dm_relation|dm_relation_type|dm_type|dm_format|dm_store|dm_location|dm_policy|dm_process|dm_workflow|dm_activity|dm_router|dm_method|dm_job|dm_queue_item|dm_registered|dm_alias_set|dmi_|dmr_|scs_)\\w*\\b"
+          "name": "storage.type.dm.dql",
+          "match": "(?i)\\b(dm_document|dm_folder|dm_cabinet|dm_sysobject|dm_user|dm_group|dm_acl|dm_permission|dm_relation|dm_relation_type|dm_type|dm_format|dm_store|dm_location|dm_policy|dm_process|dm_workflow|dm_activity|dm_router|dm_method|dm_job|dm_job_request|dm_queue_item|dm_registered|dm_alias_set|dm_note|dm_assembly|dm_reference|dm_smart_container|dm_audittrail|dm_audittrail_acl|dm_dump_object|dm_load_object|dm_ftindex_agent_config|dm_fulltext_index)\\b"
+        },
+        {
+          "name": "storage.type.dmi.dql",
+          "match": "(?i)\\b(dmi_change_record|dmi_dist_comp_record|dmi_dump_record|dmi_expr_code|dmi_load_record|dmi_object_type|dmi_package|dmi_queue_item|dmi_registry|dmi_replica_record|dmi_session|dmi_type_info|dmi_vstamp|dmi_wf_attachment|dmi_wf_timer|dmi_workitem)\\b"
+        },
+        {
+          "name": "storage.type.dmr.dql",
+          "match": "(?i)\\b(dmr_containment|dmr_content|dmr_replica_type)\\b"
+        },
+        {
+          "name": "storage.type.scs.dql",
+          "match": "(?i)\\b(scs_)\\w*\\b"
+        },
+        {
+          "name": "storage.type.custom.dql",
+          "match": "(?i)\\b[a-z][a-z0-9_]*_[cs]\\b"
         }
       ]
     },
@@ -141,6 +255,10 @@
         {
           "name": "constant.language.null.dql",
           "match": "(?i)\\b(NULL|NULLDATE|NULLSTRING|NULLINT|NULLID)\\b"
+        },
+        {
+          "name": "constant.language.special.dql",
+          "match": "(?i)\\b(CURRENT|ALL|LATEST|BRANCH)\\b"
         }
       ]
     }

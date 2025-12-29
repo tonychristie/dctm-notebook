@@ -1,0 +1,399 @@
+-- =============================================================================
+-- DQL Syntax Test File
+-- This file demonstrates all DQL syntax patterns for grammar testing
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- Basic SELECT queries
+-- -----------------------------------------------------------------------------
+
+SELECT r_object_id, object_name, r_modify_date
+FROM dm_document
+WHERE folder('/Cabinet/MyFolder')
+ORDER BY object_name ASC;
+
+SELECT DISTINCT object_name, title
+FROM dm_sysobject
+WHERE r_modify_date > DATE('2024-01-01')
+  AND owner_name = 'admin'
+ORDER BY r_modify_date DESC;
+
+-- -----------------------------------------------------------------------------
+-- Hints (optimizer directives)
+-- -----------------------------------------------------------------------------
+
+/*+ FTINDEX */
+SELECT r_object_id, object_name
+FROM dm_document
+WHERE SEARCH DOCUMENT CONTAINS 'contract';
+
+/*+ SQL_DEF_RESULT_SET ROW_BASED ALLOW_LEADING_WILDCARD */
+SELECT * FROM dm_document WHERE object_name LIKE '%report%';
+
+/*+ FORCE_ORDER USE_DM_FULLTEXT_INDEX */
+SELECT r_object_id FROM dm_document WHERE FTCONTAINS('quarterly');
+
+-- -----------------------------------------------------------------------------
+-- Aggregate functions
+-- -----------------------------------------------------------------------------
+
+SELECT COUNT(*) AS total_count,
+       MIN(r_modify_date) AS earliest,
+       MAX(r_modify_date) AS latest,
+       SUM(r_content_size) AS total_size,
+       AVG(r_content_size) AS avg_size
+FROM dm_document
+WHERE folder('/Cabinet')
+GROUP BY owner_name
+HAVING COUNT(*) > 10;
+
+-- -----------------------------------------------------------------------------
+-- String functions
+-- -----------------------------------------------------------------------------
+
+SELECT UPPER(object_name) AS upper_name,
+       LOWER(title) AS lower_title,
+       SUBSTR(object_name, 1, 10) AS short_name,
+       LENGTH(object_name) AS name_length,
+       TRIM(subject) AS trimmed_subject,
+       CONCAT(object_name, ' - ', title) AS full_name,
+       REPLACE(object_name, 'old', 'new') AS replaced_name
+FROM dm_document
+WHERE INSTR(object_name, 'test') > 0;
+
+-- -----------------------------------------------------------------------------
+-- Date functions
+-- -----------------------------------------------------------------------------
+
+SELECT r_object_id,
+       DATE('2024-06-15') AS fixed_date,
+       TODAY() AS current_date,
+       NOW() AS current_timestamp,
+       DATEADD(YEAR, 1, r_modify_date) AS next_year,
+       DATEDIFF(DAY, r_creation_date, r_modify_date) AS days_since_creation,
+       YEAR(r_modify_date) AS modify_year,
+       MONTH(r_modify_date) AS modify_month,
+       DATETOSTRING(r_modify_date, 'yyyy-mm-dd') AS formatted_date,
+       DATETOSTRING_LOCAL(r_modify_date, 'dd/mm/yyyy') AS local_date
+FROM dm_document
+WHERE r_modify_date BETWEEN DATE('2024-01-01') AND DATE('2024-12-31');
+
+-- -----------------------------------------------------------------------------
+-- Object ID literals
+-- -----------------------------------------------------------------------------
+
+SELECT * FROM dm_document WHERE r_object_id = '0901234567890123';
+
+SELECT * FROM dm_sysobject
+WHERE r_object_id IN ('0901234567890123', '090123456789abcd', '090123456789ABCD');
+
+-- -----------------------------------------------------------------------------
+-- Repeating attributes with index access
+-- -----------------------------------------------------------------------------
+
+SELECT r_object_id,
+       keywords[0] AS first_keyword,
+       keywords[1] AS second_keyword,
+       keywords[*] AS all_keywords,
+       i_folder_id[0] AS primary_folder,
+       r_version_label[*] AS all_labels
+FROM dm_document
+WHERE keywords[0] = 'important';
+
+-- -----------------------------------------------------------------------------
+-- Folder and path functions
+-- -----------------------------------------------------------------------------
+
+SELECT r_object_id, object_name, GET_PATH(r_object_id) AS path
+FROM dm_document
+WHERE FOLDER('/Cabinet/Projects', DESCEND);
+
+SELECT * FROM dm_folder WHERE ISCHILDOF('/Cabinet/Archive');
+
+SELECT * FROM dm_document WHERE CABINET('HR Documents');
+
+-- -----------------------------------------------------------------------------
+-- Type hierarchy queries
+-- -----------------------------------------------------------------------------
+
+SELECT r_object_id, object_name, r_object_type
+FROM dm_sysobject (ALL)
+WHERE r_modify_date > TODAY() - 7;
+
+SELECT name FROM dm_type WHERE SUBTYPES('dm_document');
+
+-- -----------------------------------------------------------------------------
+-- Permission and ACL functions
+-- -----------------------------------------------------------------------------
+
+SELECT r_object_id,
+       object_name,
+       GET_PERMIT(r_object_id) AS my_permit,
+       GET_GROUP_PERMIT(r_object_id, 'Engineering') AS group_permit,
+       acl_name,
+       acl_domain
+FROM dm_document
+WHERE HAS_PERMIT(r_object_id, 'dm_world', 3);
+
+SELECT * FROM dm_acl WHERE owner_name = 'dm_dbo';
+
+-- -----------------------------------------------------------------------------
+-- Lifecycle and state functions
+-- -----------------------------------------------------------------------------
+
+SELECT r_object_id,
+       object_name,
+       r_policy_id,
+       r_current_state,
+       GET_STATE_NAME(r_policy_id, r_current_state) AS state_name
+FROM dm_document
+WHERE r_policy_id IS NOT NULL
+  AND CAN_PROMOTE(r_object_id);
+
+-- -----------------------------------------------------------------------------
+-- Workflow functions
+-- -----------------------------------------------------------------------------
+
+SELECT r_object_id,
+       object_name,
+       GET_WORKFLOW_ID(r_object_id) AS wf_id,
+       GET_ACTIVITY_NAME(r_object_id) AS activity
+FROM dm_document
+WHERE IS_ACTIVE(r_object_id);
+
+SELECT * FROM dmi_workitem
+WHERE r_performer_name = USER()
+  AND r_runtime_state = 0;
+
+SELECT * FROM dmi_queue_item
+WHERE router_id = '0901234567890123';
+
+-- -----------------------------------------------------------------------------
+-- Full-text search
+-- -----------------------------------------------------------------------------
+
+SEARCH DOCUMENT CONTAINS 'quarterly report'
+WHERE folder('/Cabinet/Reports', DESCEND);
+
+SELECT r_object_id, object_name, SCORE() AS relevance
+FROM dm_document
+WHERE FTCONTAINS('contract AND legal')
+ORDER BY SCORE() DESC;
+
+-- -----------------------------------------------------------------------------
+-- Virtual documents and assemblies
+-- -----------------------------------------------------------------------------
+
+SELECT r_object_id, object_name
+FROM dm_assembly
+WHERE IS_VIRTUAL_DOCUMENT(r_object_id);
+
+SELECT GET_COMPONENTS(r_object_id) AS components
+FROM dm_document
+WHERE r_is_virtual_doc = TRUE;
+
+-- -----------------------------------------------------------------------------
+-- DML statements
+-- -----------------------------------------------------------------------------
+
+-- Insert
+INSERT INTO dm_document (object_name, title, owner_name)
+VALUES ('new_document.txt', 'New Document', 'admin');
+
+-- Update
+UPDATE dm_document OBJECTS
+SET title = 'Updated Title',
+    subject = 'New Subject'
+WHERE r_object_id = '0901234567890123';
+
+-- Delete
+DELETE dm_document OBJECTS WHERE r_object_id = '0901234567890123';
+
+-- Append to repeating attribute
+APPEND dm_document OBJECTS
+SET keywords = 'newkeyword'
+WHERE r_object_id = '0901234567890123';
+
+-- Remove from repeating attribute
+REMOVE dm_document OBJECTS
+SET keywords = 'oldkeyword'
+WHERE r_object_id = '0901234567890123';
+
+-- -----------------------------------------------------------------------------
+-- Document lifecycle operations
+-- -----------------------------------------------------------------------------
+
+CHECKOUT dm_document OBJECT WHERE r_object_id = '0901234567890123';
+
+CHECKIN dm_document OBJECT WHERE r_object_id = '0901234567890123';
+
+LOCK dm_document OBJECT WHERE r_object_id = '0901234567890123';
+
+UNLOCK dm_document OBJECT WHERE r_object_id = '0901234567890123';
+
+BRANCH dm_document OBJECT WHERE r_object_id = '0901234567890123';
+
+FREEZE dm_document OBJECT WHERE r_object_id = '0901234567890123';
+
+-- -----------------------------------------------------------------------------
+-- Relation operations
+-- -----------------------------------------------------------------------------
+
+CREATE dm_relation OBJECT
+SET relation_name = 'my_relation',
+    parent_id = '0901234567890123',
+    child_id = '090123456789abcd';
+
+RELATE '0901234567890123' TO '090123456789abcd' AS 'my_relation';
+
+UNRELATE '0901234567890123' TO '090123456789abcd' AS 'my_relation';
+
+-- -----------------------------------------------------------------------------
+-- Registration queries
+-- -----------------------------------------------------------------------------
+
+REGISTER dm_document OBJECT WITH CONTENT
+SET object_name = 'registered_doc.pdf',
+    title = 'Registered Document',
+    a_content_type = 'pdf';
+
+UNREGISTER dm_document OBJECT WHERE r_object_id = '0901234567890123';
+
+-- -----------------------------------------------------------------------------
+-- Permission operations
+-- -----------------------------------------------------------------------------
+
+GRANT READ TO 'Engineering' FOR '0901234567890123';
+
+REVOKE WRITE FROM 'Marketing' FOR '0901234567890123';
+
+-- -----------------------------------------------------------------------------
+-- Math functions
+-- -----------------------------------------------------------------------------
+
+SELECT r_object_id,
+       ABS(r_content_size) AS abs_size,
+       CEIL(r_page_cnt / 10.0) AS page_groups,
+       FLOOR(r_page_cnt / 10.0) AS complete_groups,
+       ROUND(r_content_size / 1024.0, 2) AS size_kb,
+       MOD(r_page_cnt, 10) AS remainder,
+       POWER(2, 10) AS kilobyte,
+       SQRT(r_content_size) AS sqrt_size,
+       COALESCE(title, object_name) AS display_name,
+       NVL(subject, 'No Subject') AS subject_or_default,
+       NULLIF(title, '') AS title_or_null
+FROM dm_document;
+
+-- CASE expression
+SELECT r_object_id,
+       CASE r_lock_owner
+           WHEN '' THEN 'Available'
+           WHEN NULL THEN 'Available'
+           ELSE 'Locked by ' || r_lock_owner
+       END AS lock_status,
+       DECODE(a_status, 0, 'Draft', 1, 'Approved', 2, 'Published', 'Unknown') AS status_name
+FROM dm_document;
+
+-- -----------------------------------------------------------------------------
+-- System functions
+-- -----------------------------------------------------------------------------
+
+SELECT SESSION_ID() AS session,
+       USER_NAME() AS current_user,
+       DOCBASE_NAME() AS repository;
+
+-- -----------------------------------------------------------------------------
+-- Joins
+-- -----------------------------------------------------------------------------
+
+SELECT d.r_object_id, d.object_name, f.object_name AS folder_name
+FROM dm_document d
+INNER JOIN dm_folder f ON d.i_folder_id = f.r_object_id
+WHERE d.owner_name = 'admin';
+
+SELECT d.*, u.user_name, u.user_login_name
+FROM dm_document d
+LEFT OUTER JOIN dm_user u ON d.owner_name = u.user_name;
+
+-- -----------------------------------------------------------------------------
+-- Subqueries
+-- -----------------------------------------------------------------------------
+
+SELECT * FROM dm_document
+WHERE i_folder_id IN (
+    SELECT r_object_id FROM dm_folder WHERE r_folder_path LIKE '/Cabinet/Archive%'
+);
+
+SELECT * FROM dm_document d
+WHERE EXISTS (
+    SELECT 1 FROM dm_relation r
+    WHERE r.parent_id = d.r_object_id
+    AND r.relation_name = 'reference'
+);
+
+-- -----------------------------------------------------------------------------
+-- Various Documentum types
+-- -----------------------------------------------------------------------------
+
+SELECT * FROM dm_user WHERE user_state = 0;
+SELECT * FROM dm_group WHERE group_class = 'group';
+SELECT * FROM dm_acl WHERE acl_class = 0;
+SELECT * FROM dm_format WHERE name = 'pdf';
+SELECT * FROM dm_store WHERE name = 'filestore_01';
+SELECT * FROM dm_location WHERE object_name = 'default_location';
+SELECT * FROM dm_policy WHERE object_name = 'Document Lifecycle';
+SELECT * FROM dm_process WHERE object_name = 'Approval Workflow';
+SELECT * FROM dm_method WHERE object_name = 'dm_sysobject_checkin';
+SELECT * FROM dm_job WHERE object_name = 'dm_DMClean';
+
+-- Internal types
+SELECT * FROM dmi_session WHERE session_id = SESSION_ID();
+SELECT * FROM dmi_type_info WHERE r_type_name = 'dm_document';
+SELECT * FROM dmi_queue_item WHERE task_state = 0;
+
+-- Relation types
+SELECT * FROM dmr_content WHERE r_object_id = '0901234567890123';
+SELECT * FROM dmr_containment WHERE parent_id = '0901234567890123';
+
+-- -----------------------------------------------------------------------------
+-- Constants and special values
+-- -----------------------------------------------------------------------------
+
+SELECT * FROM dm_document
+WHERE r_modify_date IS NOT NULL
+  AND title IS NOT NULLSTRING
+  AND r_page_cnt IS NOT NULLINT
+  AND r_policy_id IS NOT NULLID
+  AND a_is_template = TRUE
+  AND a_is_hidden = FALSE;
+
+SELECT * FROM dm_sysobject WHERE r_version_label = 'CURRENT';
+
+SELECT * FROM dm_document WHERE r_version_label LIKE '%LATEST%';
+
+-- -----------------------------------------------------------------------------
+-- Transaction control (if supported)
+-- -----------------------------------------------------------------------------
+
+BEGIN TRANSACTION;
+
+UPDATE dm_document OBJECTS SET title = 'Test' WHERE r_object_id = '0901234567890123';
+
+COMMIT;
+
+-- Or: ROLLBACK;
+
+-- -----------------------------------------------------------------------------
+-- Comments
+-- -----------------------------------------------------------------------------
+
+-- This is a single-line comment
+
+/* This is a
+   multi-line comment */
+
+/*+ This is a hint, not a regular comment */
+
+-- =============================================================================
+-- End of DQL Syntax Test File
+-- =============================================================================

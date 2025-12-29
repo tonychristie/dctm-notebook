@@ -41,6 +41,14 @@
         "path": "./syntaxes/dql.tmLanguage.json"
       }
     ],
+    "semanticTokenScopes": [
+      {
+        "language": "dql",
+        "scopes": {
+          "type": ["entity.name.type.dql"]
+        }
+      }
+    ],
     "commands": [
       {
         "command": "dctm.connect",
@@ -114,6 +122,40 @@
         "command": "dctm.cancelCheckout",
         "title": "Cancel Checkout",
         "category": "Documentum"
+      },
+      {
+        "command": "dctm.refreshTypeBrowser",
+        "title": "Refresh Type Browser",
+        "category": "Documentum",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "dctm.toggleInheritedAttributes",
+        "title": "Toggle Inherited Attributes",
+        "category": "Documentum",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "dctm.searchTypes",
+        "title": "Search Types",
+        "category": "Documentum",
+        "icon": "$(search)"
+      },
+      {
+        "command": "dctm.clearTypeSearch",
+        "title": "Clear Type Search",
+        "category": "Documentum",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "dctm.showTypeDetails",
+        "title": "Show Type Details",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.generateTypeQuery",
+        "title": "Generate DQL Query",
+        "category": "Documentum"
       }
     ],
     "views": {
@@ -123,6 +165,12 @@
           "name": "Documentum Explorer",
           "icon": "$(database)",
           "contextualTitle": "Documentum"
+        },
+        {
+          "id": "documentumTypeBrowser",
+          "name": "Type Browser",
+          "icon": "$(symbol-class)",
+          "contextualTitle": "Documentum Types"
         }
       ]
     },
@@ -130,6 +178,10 @@
       {
         "view": "documentumExplorer",
         "contents": "No Documentum connections configured.\n[Add Connection](command:workbench.action.openSettings?%22documentum.connections%22)"
+      },
+      {
+        "view": "documentumTypeBrowser",
+        "contents": "Connect to a repository to browse types.\n[Connect](command:dctm.connect)"
       }
     ],
     "configuration": {
@@ -241,6 +293,21 @@
           "command": "dctm.refreshObjectBrowser",
           "when": "view == documentumExplorer",
           "group": "navigation"
+        },
+        {
+          "command": "dctm.refreshTypeBrowser",
+          "when": "view == documentumTypeBrowser",
+          "group": "navigation"
+        },
+        {
+          "command": "dctm.searchTypes",
+          "when": "view == documentumTypeBrowser",
+          "group": "navigation"
+        },
+        {
+          "command": "dctm.toggleInheritedAttributes",
+          "when": "view == documentumTypeBrowser",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -283,6 +350,16 @@
           "command": "dctm.cancelCheckout",
           "when": "view == documentumExplorer && viewItem == document",
           "group": "4_version"
+        },
+        {
+          "command": "dctm.showTypeDetails",
+          "when": "view == documentumTypeBrowser && viewItem == type",
+          "group": "1_info"
+        },
+        {
+          "command": "dctm.generateTypeQuery",
+          "when": "view == documentumTypeBrowser && viewItem == type",
+          "group": "2_actions"
         }
       ]
     },

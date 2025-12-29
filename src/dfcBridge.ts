@@ -198,6 +198,36 @@ export class DfcBridge {
     }
 
     /**
+     * Get list of all types in the repository
+     */
+    async getTypes(sessionId: string): Promise<unknown> {
+        if (!this.client) {
+            throw new Error('DFC Bridge not initialized');
+        }
+
+        const response = await this.client.get(`/api/v1/types`, {
+            params: { sessionId }
+        });
+
+        return response.data;
+    }
+
+    /**
+     * Get detailed type information including attributes
+     */
+    async getTypeDetails(sessionId: string, typeName: string): Promise<unknown> {
+        if (!this.client) {
+            throw new Error('DFC Bridge not initialized');
+        }
+
+        const response = await this.client.get(`/api/v1/types/${typeName}`, {
+            params: { sessionId }
+        });
+
+        return response.data;
+    }
+
+    /**
      * Stop the DFC Bridge if we started it
      */
     async stop(): Promise<void> {

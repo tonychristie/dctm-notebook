@@ -5,10 +5,14 @@ import { ResultsPanel } from './resultsPanel';
 import { registerObjectBrowser } from './objectBrowser';
 import { ApiExecutor } from './apiExecutor';
 import { registerApiPanel } from './apiPanel';
+import { TypeCache } from './typeCache';
+import { registerTypeBrowser } from './typeBrowser';
+import { registerDqlSemanticTokens } from './dqlSemanticTokens';
 
 let connectionManager: ConnectionManager;
 let dqlExecutor: DqlExecutor;
 let apiExecutor: ApiExecutor;
+let typeCache: TypeCache;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Documentum Tools extension is now active');
@@ -17,6 +21,7 @@ export function activate(context: vscode.ExtensionContext) {
     connectionManager = new ConnectionManager(context);
     dqlExecutor = new DqlExecutor(connectionManager);
     apiExecutor = new ApiExecutor(connectionManager);
+    typeCache = new TypeCache(connectionManager);
 
     // Register commands
     const connectCommand = vscode.commands.registerCommand('dctm.connect', async () => {
@@ -93,6 +98,23 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register API Panel and related commands
     registerApiPanel(context, apiExecutor);
+
+    // Register Type Browser and semantic tokens
+    registerTypeBrowser(context, typeCache, connectionManager);
+    registerDqlSemanticTokens(context, typeCache);
+
+    // Auto-refresh type cache on connection
+    connectionManager.onConnectionChange(async (connected) => {
+        if (connected) {
+            try {
+                await typeCache.refresh();
+            } catch {
+                // Silent fail - types will be loaded on demand
+            }
+        } else {
+            typeCache.clear();
+        }
+    });
 }
 
 export function deactivate() {

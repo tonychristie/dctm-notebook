@@ -1,0 +1,817 @@
+{
+  "serverApi": {
+    "description": "Documentum Server API methods (dmAPI commands)",
+    "categories": {
+      "exec": {
+        "description": "Commands that modify state (dmAPIExec)",
+        "methods": [
+          {
+            "name": "abort",
+            "signature": "dmAPIExec(\"abort,session[,workflow_id]\")",
+            "description": "Aborts the current transaction or workflow"
+          },
+          {
+            "name": "acquire",
+            "signature": "dmAPIExec(\"acquire,session,workitem_id\")",
+            "description": "Acquires a work item for processing"
+          },
+          {
+            "name": "addactivity",
+            "signature": "dmAPIExec(\"addactivity,session,process_id,activity_identifier,activity_definition_id[,activity_type[,activity_priority]]\")",
+            "description": "Adds an activity to a process"
+          },
+          {
+            "name": "addlink",
+            "signature": "dmAPIExec(\"addlink,session,process_id,link_identifier,source_activity,source_port,destination_activity,destination_port\")",
+            "description": "Adds a link between activities in a process"
+          },
+          {
+            "name": "addnote",
+            "signature": "dmAPIExec(\"addnote,session,annotation_id,object_id[,keep_permanent]\")",
+            "description": "Adds a note/annotation to an object"
+          },
+          {
+            "name": "addpackageinfo",
+            "signature": "dmAPIExec(\"addpackageinfo,session,activity_id,port_name,package_name,package_type[,package_id[,package_label]][,package_operation][,r_package_flag]\")",
+            "description": "Adds package information to an activity"
+          },
+          {
+            "name": "addport",
+            "signature": "dmAPIExec(\"addport,session,activity_id,port_name,port_type\")",
+            "description": "Adds a port to an activity"
+          },
+          {
+            "name": "addrendition",
+            "signature": "dmAPIExec(\"addrendition,session,object_id,file_name,format[,page_number][,storage_name][,atomic][,keep_flag][,page_modifier][,batch_flag][,other_file]\")",
+            "description": "Adds a rendition to an object"
+          },
+          {
+            "name": "addroutecase",
+            "signature": "dmAPIExec(\"addroutecase,session,activity_id,route_case_identifier,routing_condition{,output_port}\")",
+            "description": "Adds a route case to an activity"
+          },
+          {
+            "name": "anyevents",
+            "signature": "dmAPIExec(\"anyevents,session\")",
+            "description": "Checks if there are any pending events"
+          },
+          {
+            "name": "appendfile",
+            "signature": "dmAPIExec(\"appendfile,session,object_id,file_name[,other_file]\")",
+            "description": "Appends content from a file"
+          },
+          {
+            "name": "assemble",
+            "signature": "dmAPIExec(\"assemble,session,document_id[,virtual_doc_id][,interrupt_freq][,qualification][,nodesort_list]\")",
+            "description": "Assembles a virtual document"
+          },
+          {
+            "name": "assume",
+            "signature": "dmAPIExec(\"assume,session,user_auth_name,password|login_ticket[,domain][,user_arg]\")",
+            "description": "Assumes identity of another user"
+          },
+          {
+            "name": "attach",
+            "signature": "dmAPIExec(\"attach,session,object_id[,default|policy_id[,position|state_name]][,alias_set_position|alias_set_name]\")",
+            "description": "Attaches an object to a lifecycle policy"
+          },
+          {
+            "name": "audit",
+            "signature": "dmAPIExec(\"audit,session[,object_id],event_name[,audit_subtypes][,controlling_app][,policy_id[,state_name]][,sign_audit][,authentication][,event_description][,attribute_list][,esignature_required]\")",
+            "description": "Creates an audit entry"
+          },
+          {
+            "name": "authenticate",
+            "signature": "dmAPIExec(\"authenticate,session[,repository_name],user_auth_name,password|ticket[,domain][,user_arg]\")",
+            "description": "Authenticates a user"
+          },
+          {
+            "name": "begintran",
+            "signature": "dmAPIExec(\"begintran,session\")",
+            "description": "Begins a transaction"
+          },
+          {
+            "name": "bindfile",
+            "signature": "dmAPIExec(\"bindfile,session,object_id,page_number,src_id,src_page_number\")",
+            "description": "Binds file content from another object"
+          },
+          {
+            "name": "changepassword",
+            "signature": "dmAPIExec(\"changepassword,session,old_password,new_password\")",
+            "description": "Changes the current user's password"
+          },
+          {
+            "name": "close",
+            "signature": "dmAPIExec(\"close,session,collection_identifier\")",
+            "description": "Closes a query collection"
+          },
+          {
+            "name": "commit",
+            "signature": "dmAPIExec(\"commit,session\")",
+            "description": "Commits the current transaction"
+          },
+          {
+            "name": "complete",
+            "signature": "dmAPIExec(\"complete,session,workitem_id[,[return_value],[os_error],[result_id][,user_time][,user_cost]]\")",
+            "description": "Completes a work item"
+          },
+          {
+            "name": "delegate",
+            "signature": "dmAPIExec(\"delegate,session,workitem_id,user_name\")",
+            "description": "Delegates a work item to another user"
+          },
+          {
+            "name": "demote",
+            "signature": "dmAPIExec(\"demote,session,sysobject_id[,to_state|to_position,return_to_base]\")",
+            "description": "Demotes an object to an earlier lifecycle state"
+          },
+          {
+            "name": "dequeue",
+            "signature": "dmAPIExec(\"dequeue,session,stamp\")",
+            "description": "Removes an item from the queue"
+          },
+          {
+            "name": "destroy",
+            "signature": "dmAPIExec(\"destroy,session,object_id[,force_flag]\")",
+            "description": "Permanently destroys an object"
+          },
+          {
+            "name": "disassemble",
+            "signature": "dmAPIExec(\"disassemble,session,document_id\")",
+            "description": "Disassembles a virtual document"
+          },
+          {
+            "name": "disconnect",
+            "signature": "dmAPIExec(\"disconnect,session\")",
+            "description": "Disconnects from the repository"
+          },
+          {
+            "name": "execute",
+            "signature": "dmAPIExec(\"execute,session,workflow_id\")",
+            "description": "Executes a workflow"
+          },
+          {
+            "name": "execquery",
+            "signature": "dmAPIExec(\"execquery,session,[readquery_flag],dql_query\")",
+            "description": "Executes a DQL query"
+          },
+          {
+            "name": "execsql",
+            "signature": "dmAPIExec(\"execsql,session,sql_statement\")",
+            "description": "Executes a SQL statement"
+          },
+          {
+            "name": "fetch",
+            "signature": "dmAPIExec(\"fetch,session,object_id[,type][,persistent_cache][,consistency_check_value]\")",
+            "description": "Fetches an object from the repository"
+          },
+          {
+            "name": "flush",
+            "signature": "dmAPIExec(\"flush,session,cache_keyword,[object_type][,reset_change_bit][,include_subtypes]\")",
+            "description": "Flushes cached data"
+          },
+          {
+            "name": "flushcache",
+            "signature": "dmAPIExec(\"flushcache,session[,discard_changed]\")",
+            "description": "Flushes the client cache"
+          },
+          {
+            "name": "flushconnectpool",
+            "signature": "dmAPIExec(\"flushconnectpool\")",
+            "description": "Flushes the connection pool"
+          },
+          {
+            "name": "freeze",
+            "signature": "dmAPIExec(\"freeze,session,object_id[,freeze_components]\")",
+            "description": "Freezes an object (makes immutable)"
+          },
+          {
+            "name": "grant",
+            "signature": "dmAPIExec(\"grant,session,object_id[,accessor_name|alias][,permit_type][,unused][,basic_permission|extended_permit][,application_permit]\")",
+            "description": "Grants permissions on an object"
+          },
+          {
+            "name": "halt",
+            "signature": "dmAPIExec(\"halt,session,workflow_id[,activity_sequence_number[,suspend_interval]]\")",
+            "description": "Halts a workflow"
+          },
+          {
+            "name": "initcrypto",
+            "signature": "dmAPIExec(\"initcrypto,apisession[,location][,passphrase]\")",
+            "description": "Initializes cryptographic services"
+          },
+          {
+            "name": "insertfile",
+            "signature": "dmAPIExec(\"insertfile,session,object_id,file_name[,page_number][,other_file]\")",
+            "description": "Inserts content from a file"
+          },
+          {
+            "name": "install",
+            "signature": "dmAPIExec(\"install,session,object_id[,notify_flag]\")",
+            "description": "Installs a workflow or process"
+          },
+          {
+            "name": "invalidate",
+            "signature": "dmAPIExec(\"invalidate,session,object_id\")",
+            "description": "Invalidates a cached object"
+          },
+          {
+            "name": "kill",
+            "signature": "dmAPIExec(\"kill,session,session_to_kill[,immediacy_level][,message]\")",
+            "description": "Kills another session"
+          },
+          {
+            "name": "link",
+            "signature": "dmAPIExec(\"link,session,obj_id,folder_specification|alias\")",
+            "description": "Links an object to a folder"
+          },
+          {
+            "name": "lock",
+            "signature": "dmAPIExec(\"lock,session,object_id[,validate_stamp]\")",
+            "description": "Locks an object"
+          },
+          {
+            "name": "mark",
+            "signature": "dmAPIExec(\"mark,session,object_id,label{,label}\")",
+            "description": "Marks an object with version labels"
+          },
+          {
+            "name": "mount",
+            "signature": "dmAPIExec(\"mount,session,object_id,path\")",
+            "description": "Mounts a storage area"
+          },
+          {
+            "name": "movestate",
+            "signature": "dmAPIExec(\"movestate,session,object_id,old_position,new_position\")",
+            "description": "Moves a lifecycle state position"
+          },
+          {
+            "name": "next",
+            "signature": "dmAPIExec(\"next,session,collection_identifier\")",
+            "description": "Moves to next row in collection"
+          },
+          {
+            "name": "pause",
+            "signature": "dmAPIExec(\"pause,session,workitem_id\")",
+            "description": "Pauses a work item"
+          },
+          {
+            "name": "promote",
+            "signature": "dmAPIExec(\"promote,session,object_id[,to_state|to_position,test_only_flag,override_flag]\")",
+            "description": "Promotes an object to next lifecycle state"
+          },
+          {
+            "name": "prune",
+            "signature": "dmAPIExec(\"prune,session,object_id[,keepSLabel]\")",
+            "description": "Prunes old versions of an object"
+          },
+          {
+            "name": "publish_dd",
+            "signature": "dmAPIExec(\"publish_dd,session[,locale][,type][,attribute][,force_publish]\")",
+            "description": "Publishes data dictionary changes"
+          },
+          {
+            "name": "purgelocal",
+            "signature": "dmAPIExec(\"purgelocal,session\")",
+            "description": "Purges local cache"
+          },
+          {
+            "name": "refresh",
+            "signature": "dmAPIExec(\"refresh,session,object_id\")",
+            "description": "Refreshes object from repository"
+          },
+          {
+            "name": "reinit",
+            "signature": "dmAPIExec(\"reinit,session[,server_config_name][,send_to_docbroker]\")",
+            "description": "Reinitializes server configuration"
+          },
+          {
+            "name": "remove",
+            "signature": "dmAPIExec(\"remove,session,object_id,attribute[[index]]\")",
+            "description": "Removes a value from repeating attribute"
+          },
+          {
+            "name": "removeactivity",
+            "signature": "dmAPIExec(\"removeactivity,session,process_id,activity_identifier\")",
+            "description": "Removes an activity from a process"
+          },
+          {
+            "name": "removecontent",
+            "signature": "dmAPIExec(\"removecontent,session,object_id[,page_number]\")",
+            "description": "Removes content from an object"
+          },
+          {
+            "name": "removelink",
+            "signature": "dmAPIExec(\"removelink,session,process_id,link_identifier\")",
+            "description": "Removes a link from a process"
+          },
+          {
+            "name": "removenote",
+            "signature": "dmAPIExec(\"removenote,session,annotation_id,object_id\")",
+            "description": "Removes a note from an object"
+          },
+          {
+            "name": "removepackage",
+            "signature": "dmAPIExec(\"removepackage,session,object_id,package_name\")",
+            "description": "Removes a package from a workflow"
+          },
+          {
+            "name": "removepart",
+            "signature": "dmAPIExec(\"removepart,session,document_id,containment_id|order_no[,orderno_flag]\")",
+            "description": "Removes a part from virtual document"
+          },
+          {
+            "name": "removeport",
+            "signature": "dmAPIExec(\"removeport,session,object_id,port_name\")",
+            "description": "Removes a port from an activity"
+          },
+          {
+            "name": "removestate",
+            "signature": "dmAPIExec(\"removestate,session,object_id[,position|state_name]\")",
+            "description": "Removes a lifecycle state"
+          },
+          {
+            "name": "reset",
+            "signature": "dmAPIExec(\"reset,session,object_id\")",
+            "description": "Resets an object or collection"
+          },
+          {
+            "name": "restart",
+            "signature": "dmAPIExec(\"restart,session[,server_config_name][,reset_client]\")",
+            "description": "Restarts a server or workflow"
+          },
+          {
+            "name": "resume",
+            "signature": "dmAPIExec(\"resume,session,object_id[,activity_seq_no]\")",
+            "description": "Resumes a suspended workflow or lifecycle"
+          },
+          {
+            "name": "revert",
+            "signature": "dmAPIExec(\"revert,session,object_id[,acl_only]\")",
+            "description": "Reverts unsaved changes"
+          },
+          {
+            "name": "revoke",
+            "signature": "dmAPIExec(\"revoke,session,object_id,accessor_name|alias[,permit_type][,unused][,basic_permit|extended_permit|application_permit]\")",
+            "description": "Revokes permissions on an object"
+          },
+          {
+            "name": "save",
+            "signature": "dmAPIExec(\"save,session,object_id[,save_lock]{,version_label}\")",
+            "description": "Saves changes to an object"
+          },
+          {
+            "name": "seek",
+            "signature": "dmAPIExec(\"seek,session,collection,position[,direction]\")",
+            "description": "Seeks to position in collection"
+          },
+          {
+            "name": "setbatchhint",
+            "signature": "dmAPIExec(\"setbatchhint,session,size\")",
+            "description": "Sets batch processing hint size"
+          },
+          {
+            "name": "setcontentattrs",
+            "signature": "dmAPIExec(\"setcontentattrs,session,object_id,format[,page_number][,page_modifier],parameters\")",
+            "description": "Sets content attributes"
+          },
+          {
+            "name": "setdoc",
+            "signature": "dmAPIExec(\"setdoc,session,object_id,is_virtual_doc\")",
+            "description": "Sets virtual document flag"
+          },
+          {
+            "name": "setfile",
+            "signature": "dmAPIExec(\"setfile,session,object_id,file_name[,page_number|format][,other_file]\")",
+            "description": "Sets content from a file"
+          },
+          {
+            "name": "setoutput",
+            "signature": "dmAPIExec(\"setoutput,session,workitem_id{,output_port_name}\")",
+            "description": "Sets workflow output port"
+          },
+          {
+            "name": "setpath",
+            "signature": "dmAPIExec(\"setpath,session,object_id,file_name[,page_number|format[,other_file]]\")",
+            "description": "Sets content path"
+          },
+          {
+            "name": "setperformers",
+            "signature": "dmAPIExec(\"setperformers,session,object_id,activity_name[,performer_list]\")",
+            "description": "Sets workflow activity performers"
+          },
+          {
+            "name": "setpriority",
+            "signature": "dmAPIExec(\"setpriority,session,workitem_id,priority\")",
+            "description": "Sets work item priority"
+          },
+          {
+            "name": "setsupervisor",
+            "signature": "dmAPIExec(\"setsupervisor,session,workflow_id,new_supervisor\")",
+            "description": "Sets workflow supervisor"
+          },
+          {
+            "name": "shutdown",
+            "signature": "dmAPIExec(\"shutdown,session[,immediate][,delete_entry]\")",
+            "description": "Shuts down the server"
+          },
+          {
+            "name": "signoff",
+            "signature": "dmAPIExec(\"signoff,session,object_id,[user_auth_name],password[,reason]\")",
+            "description": "Signs off on an object (e-signature)"
+          },
+          {
+            "name": "suspend",
+            "signature": "dmAPIExec(\"suspend,session,sysobject_id[,from_state|from_position,test_only_flag,override_flag]\")",
+            "description": "Suspends a lifecycle object"
+          },
+          {
+            "name": "trace",
+            "signature": "dmAPIExec(\"trace,session,severity_level[,logfile],option|facility|all\")",
+            "description": "Enables server tracing"
+          },
+          {
+            "name": "truncate",
+            "signature": "dmAPIExec(\"truncate,session,object_id,attribute\")",
+            "description": "Truncates a repeating attribute"
+          },
+          {
+            "name": "unaudit",
+            "signature": "dmAPIExec(\"unaudit,session[,object_id],event_name[,controlling_app][,policy_id][,state_name]\")",
+            "description": "Removes audit configuration"
+          },
+          {
+            "name": "unfreeze",
+            "signature": "dmAPIExec(\"unfreeze,session,object_id[,thaw_components]\")",
+            "description": "Unfreezes an object"
+          },
+          {
+            "name": "uninstall",
+            "signature": "dmAPIExec(\"uninstall,session,object_id[,notify_flag]\")",
+            "description": "Uninstalls a workflow"
+          },
+          {
+            "name": "unlink",
+            "signature": "dmAPIExec(\"unlink,session,object_id,location|alias\")",
+            "description": "Unlinks object from folder"
+          },
+          {
+            "name": "unlock",
+            "signature": "dmAPIExec(\"unlock,session,object_id[,send_mail][,compound_arch_value][,special_app_value]\")",
+            "description": "Unlocks an object"
+          },
+          {
+            "name": "unmark",
+            "signature": "dmAPIExec(\"unmark,session,object_id,label{,label}\")",
+            "description": "Removes version labels"
+          },
+          {
+            "name": "unprint",
+            "signature": "dmAPIExec(\"unprint,session[,printer_name],job_id\")",
+            "description": "Cancels a print job"
+          },
+          {
+            "name": "unregister",
+            "signature": "dmAPIExec(\"unregister,session,object_id,event[,user]\")",
+            "description": "Unregisters from events"
+          },
+          {
+            "name": "updatepart",
+            "signature": "dmAPIExec(\"updatepart,session,virtdoc_id,containment_id[,version_label][,order_no][,use_node_ver_label][,follow_assembly][,copy_child][,containment_type,containment_desc]\")",
+            "description": "Updates virtual document part"
+          },
+          {
+            "name": "useacl",
+            "signature": "dmAPIExec(\"useacl,session,object_id,folder|user|type|none\")",
+            "description": "Sets ACL inheritance mode"
+          },
+          {
+            "name": "validate",
+            "signature": "dmAPIExec(\"validate,session,object_id[,check_activity]\")",
+            "description": "Validates a workflow"
+          },
+          {
+            "name": "verifyaudit",
+            "signature": "dmAPIExec(\"verifyaudit,session,object_id\")",
+            "description": "Verifies audit trail integrity"
+          }
+        ]
+      },
+      "get": {
+        "description": "Commands that return values (dmAPIGet)",
+        "methods": [
+          {
+            "name": "adddigsignature",
+            "signature": "dmAPIGet(\"adddigsignature,session,object_id[,user_name][,reason]\")",
+            "description": "Adds digital signature"
+          },
+          {
+            "name": "addesignature",
+            "signature": "dmAPIGet(\"addesignature,session,object_id[,user_auth_name],password[,justification][,format_to_sign][,hash_algorithm][,presignature_hash],sig_method_name[,app_properties][,passthrough_arg1][,passthrough_arg2]\")",
+            "description": "Adds electronic signature"
+          },
+          {
+            "name": "addpackage",
+            "signature": "dmAPIGet(\"addpackage,session,object_id,start_activity_name,input_port_name,package_name,package_type[,note_id[,keep_permanent]]{,component_ID}{,component_name}\")",
+            "description": "Adds package to workflow"
+          },
+          {
+            "name": "appendpart",
+            "signature": "dmAPIGet(\"appendpart,session,document_id,component_id[,version_label][,use_node_ver_label][,follow_assembly][,copy_child][,containment_type,containment_desc]\")",
+            "description": "Appends part to virtual document"
+          },
+          {
+            "name": "appendstate",
+            "signature": "dmAPIGet(\"appendstate,session,object_id\")",
+            "description": "Appends lifecycle state"
+          },
+          {
+            "name": "apply",
+            "signature": "dmAPIGet(\"apply,session,object_id,function_name{,argument,datatype,value}\")",
+            "description": "Applies server method"
+          },
+          {
+            "name": "archive",
+            "signature": "dmAPIGet(\"archive,session,predicate[,operator][,priority][,send_mail][,due_date]\")",
+            "description": "Archives objects"
+          },
+          {
+            "name": "branch",
+            "signature": "dmAPIGet(\"branch,session,object_id[,version_label]\")",
+            "description": "Creates version branch"
+          },
+          {
+            "name": "cachequery",
+            "signature": "dmAPIGet(\"cachequery,session,dql_query\")",
+            "description": "Executes cached query"
+          },
+          {
+            "name": "checkin",
+            "signature": "dmAPIGet(\"checkin,session,object_id[,save_lock]{,version_label}\")",
+            "description": "Checks in object"
+          },
+          {
+            "name": "checkout",
+            "signature": "dmAPIGet(\"checkout,session,object_id[,version_label][,compound_arch_value][,special_app_value]\")",
+            "description": "Checks out object"
+          },
+          {
+            "name": "connect",
+            "signature": "dmAPIGet(\"connect,repository,user_auth_name,password|ticket[,domain][,user_arg][,secure_mode][,application_token][,application_id][,force_authenticate]\")",
+            "description": "Connects to repository"
+          },
+          {
+            "name": "count",
+            "signature": "dmAPIGet(\"count,session,object_id\")",
+            "description": "Gets count of items"
+          },
+          {
+            "name": "create",
+            "signature": "dmAPIGet(\"create,session,object_type\")",
+            "description": "Creates new object"
+          },
+          {
+            "name": "createaudit",
+            "signature": "dmAPIGet(\"createaudit,session,audited_obj_id,event_name[,string_1][,string_2][,string_3][,string_4][,string_5][,id_1][,id_2][,id_3][,id_4][,id_5]\")",
+            "description": "Creates audit event"
+          },
+          {
+            "name": "datatype",
+            "signature": "dmAPIGet(\"datatype,session,object_id,attribute\")",
+            "description": "Gets attribute data type"
+          },
+          {
+            "name": "dereference",
+            "signature": "dmAPIGet(\"dereference,session,object_id\")",
+            "description": "Dereferences object ID"
+          },
+          {
+            "name": "describe",
+            "signature": "dmAPIGet(\"describe,session,type|table,name\")",
+            "description": "Describes type or table"
+          },
+          {
+            "name": "dump",
+            "signature": "dmAPIGet(\"dump,session,object_id|type_identifier\")",
+            "description": "Dumps object or type info"
+          },
+          {
+            "name": "encryptpass",
+            "signature": "dmAPIGet(\"encryptpass,session,password\")",
+            "description": "Encrypts password"
+          },
+          {
+            "name": "get",
+            "signature": "dmAPIGet(\"get,session,object_id|type_identifier,attribute[[index]][,pattern]\")",
+            "description": "Gets attribute value"
+          },
+          {
+            "name": "getcontent",
+            "signature": "dmAPIGet(\"getcontent,session,document_id[,format][,page_num][,page_modifier][,get_resource]\")",
+            "description": "Gets content"
+          },
+          {
+            "name": "getconnection",
+            "signature": "dmAPIGet(\"getconnection,session,scoping_value[,connect_flag]\")",
+            "description": "Gets connection info"
+          },
+          {
+            "name": "getdocbasemap",
+            "signature": "dmAPIGet(\"getdocbasemap,session[,protocol,host_name,port_number]\")",
+            "description": "Gets repository map"
+          },
+          {
+            "name": "getevents",
+            "signature": "dmAPIGet(\"getevents,session\")",
+            "description": "Gets pending events"
+          },
+          {
+            "name": "getfile",
+            "signature": "dmAPIGet(\"getfile,session,object_id[,file_name][,format][,page_number][,get_resource][,page_modifier]\")",
+            "description": "Gets file content"
+          },
+          {
+            "name": "getlastcoll",
+            "signature": "dmAPIGet(\"getlastcoll,session\")",
+            "description": "Gets last collection"
+          },
+          {
+            "name": "getlogin",
+            "signature": "dmAPIGet(\"getlogin,session[,user]\")",
+            "description": "Gets login ticket"
+          },
+          {
+            "name": "getmessage",
+            "signature": "dmAPIGet(\"getmessage[,session][,severity_level]\")",
+            "description": "Gets server message"
+          },
+          {
+            "name": "getpath",
+            "signature": "dmAPIGet(\"getpath,session,object_id[,page][,format][,page_modifier][,get_resource]\")",
+            "description": "Gets content file path"
+          },
+          {
+            "name": "getservermap",
+            "signature": "dmAPIGet(\"getservermap,session|apisession,repository[,protocol][,host_name][,port_number]\")",
+            "description": "Gets server map"
+          },
+          {
+            "name": "id",
+            "signature": "dmAPIGet(\"id,session,qualification\")",
+            "description": "Gets object ID by qualification"
+          },
+          {
+            "name": "insertpart",
+            "signature": "dmAPIGet(\"insertpart,session,document_id,component_id[,version_label],containment_id|order_no[,orderno_flag][,use_node_ver_label][,follow_assembly][,copy_child][,containment_type,containment_desc]\")",
+            "description": "Inserts part in virtual document"
+          },
+          {
+            "name": "insertstate",
+            "signature": "dmAPIGet(\"insertstate,session,policy_id[,position|state_name]\")",
+            "description": "Inserts lifecycle state"
+          },
+          {
+            "name": "iscached",
+            "signature": "dmAPIGet(\"iscached,session,typecache,cache_key\")",
+            "description": "Checks if item is cached"
+          },
+          {
+            "name": "listconnection",
+            "signature": "dmAPIGet(\"listconnection,session\")",
+            "description": "Lists connections"
+          },
+          {
+            "name": "listmessage",
+            "signature": "dmAPIGet(\"listmessage,session[,severity_level]\")",
+            "description": "Lists server messages"
+          },
+          {
+            "name": "locate",
+            "signature": "dmAPIGet(\"locate,session,object_id,attribute,value\")",
+            "description": "Locates value in repeating attribute"
+          },
+          {
+            "name": "lpq",
+            "signature": "dmAPIGet(\"lpq,session[,printer]\")",
+            "description": "Lists print queue"
+          },
+          {
+            "name": "offset",
+            "signature": "dmAPIGet(\"offset,session,object_id,attribute\")",
+            "description": "Gets attribute offset"
+          },
+          {
+            "name": "print",
+            "signature": "dmAPIGet(\"print,session,object_id[,printer][,print_cover][,save_output][,num_copies][,starting_content_page][,ending_content_page]\")",
+            "description": "Prints content"
+          },
+          {
+            "name": "query",
+            "signature": "dmAPIGet(\"query,session,dql_query\")",
+            "description": "Executes DQL query"
+          },
+          {
+            "name": "queue",
+            "signature": "dmAPIGet(\"queue,session,object_id,queue_owner,event,priority[,send_mail],[due_date],message\")",
+            "description": "Queues work item"
+          },
+          {
+            "name": "readquery",
+            "signature": "dmAPIGet(\"readquery,session,dql_query\")",
+            "description": "Executes read-only query"
+          },
+          {
+            "name": "repeat",
+            "signature": "dmAPIGet(\"repeat,session,workitem_id{,user_name|group_name}\")",
+            "description": "Repeats work item"
+          },
+          {
+            "name": "repeating",
+            "signature": "dmAPIGet(\"repeating,session,object_id,attribute\")",
+            "description": "Gets repeating attribute flag"
+          },
+          {
+            "name": "resolvealias",
+            "signature": "dmAPIGet(\"resolvealias,session,[object_id],%[alias_set_name.]alias_name\")",
+            "description": "Resolves alias value"
+          },
+          {
+            "name": "restore",
+            "signature": "dmAPIGet(\"restore,session[,predicate][,dump_file][,operator][,priority][,send_mail][,due_date]\")",
+            "description": "Restores archived objects"
+          },
+          {
+            "name": "retrieve",
+            "signature": "dmAPIGet(\"retrieve,session,qualification\")",
+            "description": "Retrieves object by qualification"
+          },
+          {
+            "name": "saveasnew",
+            "signature": "dmAPIGet(\"saveasnew,session,object_id,share_content[,keep_storage_areas]\")",
+            "description": "Saves as new object"
+          },
+          {
+            "name": "type",
+            "signature": "dmAPIGet(\"type,session,object_type[,attribute][,bus_policy_id,state]\")",
+            "description": "Gets type information"
+          },
+          {
+            "name": "values",
+            "signature": "dmAPIGet(\"values,session,object_id,attribute\")",
+            "description": "Gets all values of repeating attribute"
+          },
+          {
+            "name": "vdmpath",
+            "signature": "dmAPIGet(\"vdmpath,session,component_id[,root_id][,shortest_path]{,version_list}\")",
+            "description": "Gets virtual document path"
+          },
+          {
+            "name": "vdmpathdql",
+            "signature": "dmAPIGet(\"vdmpathdql,session,component_id[,root_id][,shortest_path][,type][,binding_condition][,nodesort_by]\")",
+            "description": "Gets virtual document path via DQL"
+          }
+        ]
+      },
+      "set": {
+        "description": "Commands that set values (dmAPISet)",
+        "methods": [
+          {
+            "name": "append",
+            "signature": "dmAPISet(\"append,session,object_id,attribute[,pattern]\", \"value\")",
+            "description": "Appends value to repeating attribute"
+          },
+          {
+            "name": "appendcontent",
+            "signature": "dmAPISet(\"appendcontent,session,object_id[,length][,set_resource]\", \"content\")",
+            "description": "Appends content to object"
+          },
+          {
+            "name": "insert",
+            "signature": "dmAPISet(\"insert,session,object_id,attribute[[index]][,pattern]\", \"value\")",
+            "description": "Inserts value in repeating attribute"
+          },
+          {
+            "name": "insertcontent",
+            "signature": "dmAPISet(\"insertcontent,session,object_id[,page_number][,length][,set_resource]\", \"content\")",
+            "description": "Inserts content at position"
+          },
+          {
+            "name": "register",
+            "signature": "dmAPISet(\"register,session,object_id,event[,priority][,send_mail]\", \"message\")",
+            "description": "Registers for event notification"
+          },
+          {
+            "name": "set",
+            "signature": "dmAPISet(\"set,session,object_id,attribute[[index]][,pattern]\", \"value|alias\")",
+            "description": "Sets attribute value"
+          },
+          {
+            "name": "setcontent",
+            "signature": "dmAPISet(\"setcontent,session,object_id[,format][,page_number][,length][,set_resource]\", \"content\")",
+            "description": "Sets object content"
+          }
+        ]
+      }
+    }
+  }
+}

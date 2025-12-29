@@ -8,6 +8,7 @@ import { registerApiPanel } from './apiPanel';
 import { TypeCache } from './typeCache';
 import { registerTypeBrowser } from './typeBrowser';
 import { registerDqlSemanticTokens } from './dqlSemanticTokens';
+import { registerApiMethodReference } from './apiMethodReference';
 
 let connectionManager: ConnectionManager;
 let dqlExecutor: DqlExecutor;
@@ -102,6 +103,9 @@ export function activate(context: vscode.ExtensionContext) {
     // Register Type Browser and semantic tokens
     registerTypeBrowser(context, typeCache, connectionManager);
     registerDqlSemanticTokens(context, typeCache);
+
+    // Register API method reference (autocomplete and hover for dmAPI methods)
+    registerApiMethodReference(context);
 
     // Auto-refresh type cache on connection
     connectionManager.onConnectionChange(async (connected) => {

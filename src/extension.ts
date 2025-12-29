@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
 import { DqlExecutor } from './dqlExecutor';
 import { ResultsPanel } from './resultsPanel';
+import { registerObjectBrowser } from './objectBrowser';
 
 let connectionManager: ConnectionManager;
 let dqlExecutor: DqlExecutor;
@@ -82,6 +83,9 @@ export function activate(context: vscode.ExtensionContext) {
             statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
         }
     });
+
+    // Register Object Browser tree view
+    registerObjectBrowser(context, connectionManager);
 }
 
 export function deactivate() {

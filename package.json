@@ -18,11 +18,7 @@
     "content management",
     "ecm"
   ],
-  "activationEvents": [
-    "onLanguage:dql",
-    "onCommand:dctm.connect",
-    "onCommand:dctm.executeDql"
-  ],
+  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "languages": [
@@ -65,6 +61,49 @@
         "command": "dctm.showConnections",
         "title": "Show Connections",
         "category": "Documentum"
+      },
+      {
+        "command": "dctm.refreshObjectBrowser",
+        "title": "Refresh Object Browser",
+        "category": "Documentum",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "dctm.connectFromTree",
+        "title": "Connect",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.showObjectProperties",
+        "title": "Show Properties",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.refreshFolder",
+        "title": "Refresh",
+        "category": "Documentum",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "dctm.queryType",
+        "title": "Query All Objects",
+        "category": "Documentum"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "documentumExplorer",
+          "name": "Documentum Explorer",
+          "icon": "$(database)",
+          "contextualTitle": "Documentum"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "documentumExplorer",
+        "contents": "No Documentum connections configured.\n[Add Connection](command:workbench.action.openSettings?%22documentum.connections%22)"
       }
     ],
     "configuration": {
@@ -169,6 +208,35 @@
           "command": "dctm.executeDql",
           "when": "editorLangId == dql",
           "group": "documentum"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "dctm.refreshObjectBrowser",
+          "when": "view == documentumExplorer",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "dctm.connectFromTree",
+          "when": "view == documentumExplorer && viewItem == connection",
+          "group": "inline"
+        },
+        {
+          "command": "dctm.showObjectProperties",
+          "when": "view == documentumExplorer && viewItem =~ /^(document|folder|cabinet)$/",
+          "group": "1_properties"
+        },
+        {
+          "command": "dctm.refreshFolder",
+          "when": "view == documentumExplorer && viewItem =~ /^(folder|cabinet|cabinets-container)$/",
+          "group": "2_actions"
+        },
+        {
+          "command": "dctm.queryType",
+          "when": "view == documentumExplorer && viewItem == type",
+          "group": "1_query"
         }
       ]
     },

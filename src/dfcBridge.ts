@@ -88,7 +88,7 @@ export class DfcBridge {
      * Start the DFC Bridge process
      * TODO: Implement auto-start of Java process
      */
-    private async startBridge(profile?: DfcProfile): Promise<void> {
+    private async startBridge(_profile?: DfcProfile): Promise<void> {
         // For now, require manual start
         // In future: spawn Java process with profile's DFC JARs on classpath
         throw new Error(

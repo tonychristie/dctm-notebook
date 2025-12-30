@@ -6,10 +6,11 @@ import {
 } from '../../apiExecutor';
 
 // Mock ConnectionManager for testing
-const mockConnectionManager = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockConnectionManager: any = {
     getActiveConnection: () => null,
     getDfcBridge: () => null
-} as any;
+};
 
 suite('ApiExecutor Test Suite', () => {
     let apiExecutor: ApiExecutor;

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { TypeCache, TypeInfo, TypeAttribute } from './typeCache';
+import { TypeCache, TypeAttribute } from './typeCache';
 import { ConnectionManager } from './connectionManager';
 
 /**

@@ -542,8 +542,8 @@ export class ApiExecutor {
      * Execute via REST API (limited functionality)
      */
     private async executeRest(
-        connection: ActiveConnection,
-        request: ApiMethodRequest
+        _connection: ActiveConnection,
+        _request: ApiMethodRequest
     ): Promise<ApiMethodResponse> {
         // REST API has limited method execution support
         // Most operations need to be translated to specific REST endpoints

@@ -1,12 +1,13 @@
 import * as assert from 'assert';
-import { TypeCache, TypeInfo, TypeAttribute } from '../../typeCache';
+import { TypeCache, TypeInfo } from '../../typeCache';
 
 // Mock ConnectionManager for testing
-const mockConnectionManager = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockConnectionManager: any = {
     getActiveConnection: () => null,
     getDfcBridge: () => null,
     onConnectionChange: () => {}
-} as any;
+};
 
 suite('TypeCache Test Suite', () => {
     let typeCache: TypeCache;
@@ -126,15 +127,19 @@ suite('TypeCache with Mock Data', () => {
     class TestableTypeCache extends TypeCache {
         // Expose internal methods for testing
         public addMockType(name: string, info: TypeInfo): void {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (this as any).typeMap.set(name.toLowerCase(), info);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (this as any).typeNames.add(name.toLowerCase());
         }
 
         public addMockRootType(name: string): void {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (this as any).rootTypes.push(name.toLowerCase());
         }
 
         public setLastRefresh(date: Date): void {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (this as any).lastRefresh = date;
         }
     }

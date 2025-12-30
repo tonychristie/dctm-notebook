@@ -149,6 +149,51 @@ suite('ApiMethodReference Test Suite', () => {
             const items = reference.getCompletionItems('xyznonexistent');
             assert.strictEqual(items.length, 0);
         });
+
+        test('filters by exec category', () => {
+            const items = reference.getCompletionItems('', 'exec');
+            const execMethods = reference.getMethodsByCategory('exec');
+            assert.strictEqual(items.length, execMethods.length);
+            // Verify no get/set methods are included
+            const labels = items.map(i => i.label);
+            assert.ok(!labels.includes('connect')); // connect is a 'get' method
+            assert.ok(!labels.includes('set')); // set is a 'set' method
+        });
+
+        test('filters by get category', () => {
+            const items = reference.getCompletionItems('', 'get');
+            const getMethods = reference.getMethodsByCategory('get');
+            assert.strictEqual(items.length, getMethods.length);
+            // Verify no exec/set methods are included
+            const labels = items.map(i => i.label);
+            assert.ok(!labels.includes('save')); // save is an 'exec' method
+            assert.ok(!labels.includes('set')); // set is a 'set' method
+        });
+
+        test('filters by set category', () => {
+            const items = reference.getCompletionItems('', 'set');
+            const setMethods = reference.getMethodsByCategory('set');
+            assert.strictEqual(items.length, setMethods.length);
+            // Verify no exec/get methods are included
+            const labels = items.map(i => i.label);
+            assert.ok(!labels.includes('save')); // save is an 'exec' method
+            assert.ok(!labels.includes('connect')); // connect is a 'get' method
+        });
+
+        test('filters by category and prefix together', () => {
+            const items = reference.getCompletionItems('check', 'exec');
+            // Should only return exec methods containing 'check'
+            assert.ok(items.length > 0);
+            const labels = items.map(i => i.label);
+            for (const label of labels) {
+                const method = reference.findMethod(label as string);
+                assert.ok(method);
+                assert.ok(
+                    (label as string).toLowerCase().includes('check') ||
+                    method.description.toLowerCase().includes('check')
+                );
+            }
+        });
     });
 
     suite('getHoverInfo', () => {

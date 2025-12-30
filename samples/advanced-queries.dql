@@ -1,0 +1,55 @@
+-- Advanced DQL Query Examples
+
+-- Using query hints for performance
+/*+ SQL_DEF_RESULT_SET */
+SELECT r_object_id, object_name
+FROM dm_document
+WHERE folder('/System', DESCEND)
+
+-- Full-text search
+SELECT r_object_id, object_name, SCORE
+FROM dm_document
+SEARCH DOCUMENT CONTAINS 'important'
+
+-- Join folders with documents
+SELECT d.r_object_id, d.object_name, f.object_name as folder_name
+FROM dm_document d, dm_folder f
+WHERE d.i_folder_id = f.r_object_id
+
+-- Get path for a document
+SELECT r_object_id, object_name,
+       (SELECT r_folder_path FROM dm_folder WHERE r_object_id = d.i_folder_id) as path
+FROM dm_document d
+WHERE object_name = 'test.doc'
+
+-- Query with repeating attributes
+SELECT r_object_id, object_name, keywords[*]
+FROM dm_document
+WHERE ANY keywords = 'confidential'
+
+-- Date filtering
+SELECT r_object_id, object_name, r_modify_date
+FROM dm_document
+WHERE r_modify_date > DATE('2024-01-01')
+ORDER BY r_modify_date DESC
+
+-- Type hierarchy query
+SELECT name, super_name
+FROM dm_type
+WHERE super_name = 'dm_document'
+
+-- ACL information
+SELECT acl_name, acl_class, owner_name
+FROM dm_acl
+WHERE acl_class = 3
+
+-- User group membership
+SELECT group_name, users_names[*]
+FROM dm_group
+WHERE group_name LIKE 'admin%'
+
+-- Version history
+SELECT r_object_id, r_version_label, r_modify_date, r_modifier
+FROM dm_document (ALL)
+WHERE i_chronicle_id = '0900000180001234'
+ORDER BY r_modify_date DESC

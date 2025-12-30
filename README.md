@@ -32,6 +32,69 @@ Supported method categories:
 - **Execute Methods**: Execute API methods on repository objects
 - **Quick Actions**: Checkout, Checkin, Cancel Checkout from context menus
 
+## Using the API Panel
+
+The API Panel allows you to execute DFC methods on repository objects interactively.
+
+### Opening the API Panel
+
+1. **From Command Palette**: Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac), type "Documentum: Open API Panel"
+2. **From Object Browser**: Right-click any object and select "Execute API Method" - the object ID is pre-filled
+
+### Executing Methods
+
+1. **Enter Object ID** (optional): If you're executing methods on a specific object, enter its `r_object_id`. Leave empty for session-level operations like `getSessionId`.
+
+2. **Select a Method**:
+   - Browse methods by category (Object Operations, Query, Version Control, etc.)
+   - Or type in the search box to find methods by name or description
+
+3. **Fill Parameters**: If the method requires parameters, input fields appear automatically. Required parameters are marked with `*`.
+
+4. **Click Execute**: Results appear in the Result panel below with execution time.
+
+### Example Workflows
+
+#### Check Out a Document
+
+1. In Object Browser, right-click a document
+2. Select "Checkout" from the context menu
+3. Or use API Panel:
+   - Enter the document's `r_object_id`
+   - Select `checkout` method
+   - Click Execute
+
+#### Query Object Properties
+
+1. Open API Panel
+2. Enter object ID (e.g., `0900000180001234`)
+3. Select `getString` method
+4. Enter attribute name (e.g., `object_name`)
+5. Click Execute to see the value
+
+#### Get Session Information
+
+1. Open API Panel
+2. Leave Object ID empty
+3. Select `getSessionId` method
+4. Click Execute to see current session ID
+
+### Available Method Categories
+
+| Category | Description | Example Methods |
+|----------|-------------|-----------------|
+| Object Operations | Basic object manipulation | `save`, `destroy`, `fetch`, `revert` |
+| Query | Execute queries and get values | `query`, `next`, `getString`, `getInt` |
+| Version Control | Document versioning | `checkout`, `checkin`, `cancelCheckout` |
+| Links & Relations | Folder and relation management | `link`, `unlink`, `getPath` |
+| Attributes | Get/set object attributes | `get`, `set`, `append`, `remove` |
+
+### Keyboard Shortcuts
+
+| Action | Shortcut |
+|--------|----------|
+| Execute DQL Query | `Ctrl+Shift+E` / `Cmd+Shift+E` |
+
 ## Requirements
 
 - VS Code 1.85.0 or higher
@@ -212,6 +275,15 @@ This extension contributes the following settings:
 * `documentum.dfc.profiles`: DFC profile configurations
 * `documentum.bridge.port`: Port for DFC Bridge microservice (default: 9876)
 * `documentum.bridge.autoStart`: Automatically start DFC Bridge when connecting
+
+## Sample Files
+
+The `samples/` directory contains example DQL files to help you get started:
+
+- `basic-queries.dql` - Common queries: listing cabinets, searching documents, counting by format
+- `advanced-queries.dql` - Complex queries: full-text search, joins, version history, ACLs
+
+Open these files to see syntax highlighting in action and use them as templates for your own queries.
 
 ## Data Files
 

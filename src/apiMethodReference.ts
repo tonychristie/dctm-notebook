@@ -141,11 +141,26 @@ export class ApiMethodReference {
 
     /**
      * Get completion items for API methods
+     * @param prefix Optional prefix to filter method names
+     * @param category Optional category to filter by ('exec', 'get', or 'set')
      */
-    getCompletionItems(prefix: string = ''): vscode.CompletionItem[] {
-        const methods = prefix
-            ? this.searchMethods(prefix)
-            : this.getAllMethods();
+    getCompletionItems(prefix: string = '', category?: 'exec' | 'get' | 'set'): vscode.CompletionItem[] {
+        let methods: ServerApiMethod[];
+
+        if (category) {
+            // Filter by category first
+            methods = this.getMethodsByCategory(category);
+            if (prefix) {
+                const lowerPrefix = prefix.toLowerCase();
+                methods = methods.filter(m =>
+                    m.name.toLowerCase().includes(lowerPrefix) ||
+                    m.description.toLowerCase().includes(lowerPrefix)
+                );
+            }
+        } else {
+            // No category filter - search all methods
+            methods = prefix ? this.searchMethods(prefix) : this.getAllMethods();
+        }
 
         return methods.map(method => {
             const item = new vscode.CompletionItem(
@@ -226,12 +241,22 @@ export class ApiMethodCompletionProvider implements vscode.CompletionItemProvide
         const beforeCursor = lineText.substring(0, position.character);
 
         // Match dmAPI patterns like: dmAPIExec("methodname or dmAPI*("
-        const apiPattern = /dmAPI(?:Exec|Get|Set)?\s*\(\s*["']?(\w*)$/i;
+        // Capture the API type (Exec, Get, Set) to filter completions
+        const apiPattern = /dmAPI(Exec|Get|Set)?\s*\(\s*["']?(\w*)$/i;
         const match = beforeCursor.match(apiPattern);
 
         if (match) {
-            // We're inside an API call - provide method completions
-            return this.reference.getCompletionItems(match[1] || prefix);
+            // Determine category from API type (if specified)
+            let category: 'exec' | 'get' | 'set' | undefined;
+            if (match[1]) {
+                const apiType = match[1].toLowerCase();
+                if (apiType === 'exec' || apiType === 'get' || apiType === 'set') {
+                    category = apiType;
+                }
+            }
+
+            // We're inside an API call - provide method completions filtered by category
+            return this.reference.getCompletionItems(match[2] || prefix, category);
         }
 
         // Also provide completions after common keywords like 'exec', 'api' etc.

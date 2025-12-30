@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ApiExecutor, ApiMethodResponse, COMMON_DFC_METHODS, MethodInfo } from './apiExecutor';
+import { ApiExecutor, ApiMethodResponse, COMMON_DFC_METHODS } from './apiExecutor';
 
 /**
  * Message types from webview to extension

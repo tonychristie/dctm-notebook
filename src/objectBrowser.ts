@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { ConnectionManager, ActiveConnection } from './connectionManager';
-import { DfcBridge } from './dfcBridge';
 import {
     ObjectBrowserItem,
     AnyNodeData,
@@ -12,7 +11,6 @@ import {
     TypeNodeData,
     UserNodeData,
     GroupNodeData,
-    NodeType,
     createNodeId,
     escapeDqlString
 } from './objectBrowserNodes';
@@ -95,7 +93,7 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
     /**
      * Get parent of an item (optional, enables reveal API)
      */
-    getParent(element: ObjectBrowserItem): vscode.ProviderResult<ObjectBrowserItem> {
+    getParent(_element: ObjectBrowserItem): vscode.ProviderResult<ObjectBrowserItem> {
         // TODO: Implement if needed for reveal functionality
         return null;
     }
@@ -262,7 +260,7 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
         try {
             // Get root types (dm_sysobject and its immediate subtypes)
             const query = "SELECT name, super_name FROM dm_type WHERE super_name = 'dm_sysobject' ORDER BY name";
-            const results = await this.executeDql(connection, query);
+            await this.executeDql(connection, query);
 
             const items: ObjectBrowserItem[] = [];
 

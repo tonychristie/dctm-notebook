@@ -3,15 +3,17 @@ import { DqlSemanticTokensProvider } from '../../dqlSemanticTokens';
 import { TypeCache } from '../../typeCache';
 
 // Mock ConnectionManager for testing
-const mockConnectionManager = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockConnectionManager: any = {
     getActiveConnection: () => null,
     getDfcBridge: () => null,
     onConnectionChange: () => {}
-} as any;
+};
 
 // Testable subclass that exposes private methods
 class TestableDqlSemanticTokensProvider extends DqlSemanticTokensProvider {
     public testIsTypeContext(line: string, position: number): boolean {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return (this as any).isTypeContext(line, position);
     }
 }
@@ -180,7 +182,7 @@ suite('DqlSemanticTokensProvider Test Suite', () => {
         test('in string literal context', () => {
             // Note: This test verifies the position check, not string detection
             // The actual string literal handling would need more context
-            const line = 'SELECT * FROM dm_document WHERE name = \'dm_folder\'';
+            const _line = 'SELECT * FROM dm_document WHERE name = \'dm_folder\'';
             // Position of dm_folder in string - context check alone won't prevent this
             // but the semantic token provider should not match quoted strings
             // This is a limitation - the current implementation doesn't handle quotes
@@ -210,7 +212,6 @@ suite('DqlSemanticTokensProvider Test Suite', () => {
         test('FROM at end of line', () => {
             const line = 'SELECT * FROM';
             // No type name yet, but if there was one at the end after FROM
-            const position = line.length;
             // This should return true since beforeWord ends with 'from'
             assert.strictEqual(provider.testIsTypeContext(line + ' dm_document', line.length + 1), true);
         });

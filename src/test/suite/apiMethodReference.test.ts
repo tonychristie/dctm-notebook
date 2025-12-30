@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as path from 'path';
-import { ApiMethodReference, ServerApiMethod } from '../../apiMethodReference';
+import { ApiMethodReference } from '../../apiMethodReference';
 
 suite('ApiMethodReference Test Suite', () => {
     let reference: ApiMethodReference;
@@ -95,6 +95,7 @@ suite('ApiMethodReference Test Suite', () => {
         });
 
         test('returns empty array for invalid category', () => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const methods = reference.getMethodsByCategory('invalid' as any);
             assert.strictEqual(methods.length, 0);
         });

@@ -1,4 +1,3 @@
-import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
 
 export interface DqlResult {

@@ -21,6 +21,15 @@
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "documentum",
+          "title": "Documentum",
+          "icon": "resources/documentum.svg"
+        }
+      ]
+    },
     "languages": [
       {
         "id": "dql",
@@ -159,17 +168,15 @@
       }
     ],
     "views": {
-      "explorer": [
+      "documentum": [
         {
           "id": "documentumExplorer",
-          "name": "Documentum Explorer",
-          "icon": "$(database)",
-          "contextualTitle": "Documentum"
+          "name": "Explorer",
+          "contextualTitle": "Documentum Explorer"
         },
         {
           "id": "documentumTypeBrowser",
           "name": "Type Browser",
-          "icon": "$(symbol-class)",
           "contextualTitle": "Documentum Types"
         }
       ]

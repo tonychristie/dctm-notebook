@@ -70,17 +70,17 @@ export class TypeCache {
     }
 
     /**
-     * Get type info by name
+     * Get type info by name (case-insensitive)
      */
     getType(typeName: string): TypeInfo | undefined {
-        return this.typeMap.get(typeName);
+        return this.typeMap.get(typeName.toLowerCase());
     }
 
     /**
-     * Get child types of a given type
+     * Get child types of a given type (case-insensitive)
      */
     getChildTypes(typeName: string): string[] {
-        const type = this.typeMap.get(typeName);
+        const type = this.typeMap.get(typeName.toLowerCase());
         return type?.children || [];
     }
 
@@ -92,10 +92,10 @@ export class TypeCache {
     }
 
     /**
-     * Get attributes for a type (optionally including inherited)
+     * Get attributes for a type (optionally including inherited, case-insensitive)
      */
     getAttributes(typeName: string, includeInherited: boolean = true): TypeAttribute[] {
-        const type = this.typeMap.get(typeName);
+        const type = this.typeMap.get(typeName.toLowerCase());
         if (!type) {
             return [];
         }

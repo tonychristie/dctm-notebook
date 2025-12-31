@@ -153,8 +153,13 @@ export class DfcBridge {
             throw new Error(response.data?.message || 'DQL execution failed');
         }
 
+        // Bridge returns columns as ColumnInfo objects, extract just the names
+        const columns = (response.data.columns || []).map(
+            (col: { name: string }) => col.name
+        );
+
         return {
-            columns: response.data.columns || [],
+            columns,
             rows: response.data.rows || [],
             rowCount: response.data.rowCount || 0,
             executionTime

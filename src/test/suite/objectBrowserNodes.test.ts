@@ -68,7 +68,8 @@ suite('ObjectBrowserNodes Test Suite', () => {
         test('handles SQL injection attempt', () => {
             const malicious = "'; DROP TABLE dm_document; --";
             const escaped = escapeDqlString(malicious);
-            assert.strictEqual(escaped, "'''; DROP TABLE dm_document; --");
+            // Single quote becomes two quotes: ' -> ''
+            assert.strictEqual(escaped, "''; DROP TABLE dm_document; --");
         });
 
         test('handles consecutive quotes', () => {

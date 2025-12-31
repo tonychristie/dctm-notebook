@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "cells": [
+    {
+      "kind": "markdown",
+      "language": "markdown",
+      "content": "# Documentum Notebook Example\n\nThis notebook demonstrates the DQL and API execution capabilities.\n\n## Prerequisites\n- Connect to a Documentum repository using **Documentum: Connect**\n- Ensure the DFC Bridge is running"
+    },
+    {
+      "kind": "code",
+      "language": "dql",
+      "content": "-- Query for documents in the repository\nSELECT r_object_id, object_name, r_creation_date, owner_name\nFROM dm_document\nWHERE FOLDER('/Temp')\nORDER BY r_creation_date DESC"
+    },
+    {
+      "kind": "markdown",
+      "language": "markdown",
+      "content": "## Repository Information\n\nUse API commands to get repository configuration."
+    },
+    {
+      "kind": "code",
+      "language": "dmapi",
+      "content": "-- Get docbase configuration\ndmAPIGet(\"getdocbaseconfig,session\")"
+    },
+    {
+      "kind": "code",
+      "language": "dql",
+      "content": "-- Count documents by type\nSELECT r_object_type, COUNT(*) as doc_count\nFROM dm_sysobject\nGROUP BY r_object_type\nORDER BY doc_count DESC"
+    },
+    {
+      "kind": "markdown",
+      "language": "markdown",
+      "content": "## Type System\n\nExplore the Documentum type hierarchy."
+    },
+    {
+      "kind": "code",
+      "language": "dql",
+      "content": "-- List custom types\nSELECT name, super_name, attr_count\nFROM dm_type\nWHERE super_name = 'dm_document'\nORDER BY name"
+    }
+  ],
+  "metadata": {
+    "connection": null,
+    "repository": null
+  }
+}

@@ -30,6 +30,17 @@
         }
       ]
     },
+    "notebooks": [
+      {
+        "type": "dctmbook",
+        "displayName": "Documentum Notebook",
+        "selector": [
+          {
+            "filenamePattern": "*.dctmbook"
+          }
+        ]
+      }
+    ],
     "languages": [
       {
         "id": "dql",
@@ -39,6 +50,17 @@
         ],
         "extensions": [
           ".dql"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "dmapi",
+        "aliases": [
+          "DMAPI",
+          "Documentum API"
+        ],
+        "extensions": [
+          ".dmapi"
         ],
         "configuration": "./language-configuration.json"
       }
@@ -165,6 +187,24 @@
         "command": "dctm.generateTypeQuery",
         "title": "Generate DQL Query",
         "category": "Documentum"
+      },
+      {
+        "command": "dctm.notebook.insertDqlCell",
+        "title": "Insert DQL Cell",
+        "category": "Documentum Notebook",
+        "icon": "$(add)"
+      },
+      {
+        "command": "dctm.notebook.insertApiCell",
+        "title": "Insert API Cell",
+        "category": "Documentum Notebook",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "dctm.notebook.insertMarkdownCell",
+        "title": "Insert Markdown Cell",
+        "category": "Documentum Notebook",
+        "icon": "$(markdown)"
       }
     ],
     "views": {

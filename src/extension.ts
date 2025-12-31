@@ -9,6 +9,7 @@ import { TypeCache } from './typeCache';
 import { registerTypeBrowser } from './typeBrowser';
 import { registerDqlSemanticTokens } from './dqlSemanticTokens';
 import { registerApiMethodReference } from './apiMethodReference';
+import { registerNotebook } from './notebook';
 
 let connectionManager: ConnectionManager;
 let dqlExecutor: DqlExecutor;
@@ -105,7 +106,10 @@ export function activate(context: vscode.ExtensionContext) {
     registerDqlSemanticTokens(context, typeCache);
 
     // Register API method reference (autocomplete and hover for dmAPI methods)
-    registerApiMethodReference(context);
+    const apiReference = registerApiMethodReference(context);
+
+    // Register notebook support for .dctmbook files
+    registerNotebook(context, connectionManager, dqlExecutor, apiExecutor, apiReference);
 
     // Auto-refresh type cache on connection
     connectionManager.onConnectionChange(async (connected) => {

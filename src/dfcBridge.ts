@@ -106,7 +106,7 @@ export class DfcBridge {
             throw new Error('DFC Bridge not initialized. Call ensureRunning() first.');
         }
 
-        const response = await this.client.post('/connect', {
+        const response = await this.client.post('/api/v1/connect', {
             docbroker: params.docbroker,
             port: params.port,
             repository: params.repository,
@@ -129,7 +129,7 @@ export class DfcBridge {
             return;
         }
 
-        await this.client.post('/disconnect', { sessionId });
+        await this.client.post('/api/v1/disconnect', { sessionId });
     }
 
     /**
@@ -142,7 +142,7 @@ export class DfcBridge {
 
         const startTime = Date.now();
 
-        const response = await this.client.post('/dql', {
+        const response = await this.client.post('/api/v1/dql', {
             sessionId,
             query
         });
@@ -169,7 +169,7 @@ export class DfcBridge {
             throw new Error('DFC Bridge not initialized');
         }
 
-        const response = await this.client.get(`/session/${sessionId}`);
+        const response = await this.client.get(`/api/v1/session/${sessionId}`);
         return response.data;
     }
 
@@ -187,7 +187,7 @@ export class DfcBridge {
             throw new Error('DFC Bridge not initialized');
         }
 
-        const response = await this.client.post('/api', {
+        const response = await this.client.post('/api/v1/api', {
             sessionId,
             objectType,
             method,

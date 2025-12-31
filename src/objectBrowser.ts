@@ -391,7 +391,7 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
             return { rows: result.rows };
         } else {
             // REST connection
-            const response = await connection.client!.post('/dql', { query });
+            const response = await connection.client!.post('/api/v1/dql', { query });
             return { rows: response.data.entries || [] };
         }
     }

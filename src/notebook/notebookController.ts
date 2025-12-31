@@ -251,7 +251,8 @@ export class DctmNotebookController {
             const parts = dmApiMatch[2].split(',').map(s => s.trim());
             const method = parts[0];
             // Skip session (parts[1]) as we use the active connection
-            const args = parts.slice(2);
+            // Args are strings from the dmAPI command string
+            const args: unknown[] = parts.slice(2);
 
             return {
                 method,
@@ -262,9 +263,11 @@ export class DctmNotebookController {
         // Match simple format: method arg1 arg2
         const parts = trimmed.split(/\s+/);
         if (parts.length > 0) {
+            // Args are strings from the command line format
+            const args: unknown[] = parts.slice(1);
             return {
                 method: parts[0],
-                args: parts.slice(1)
+                args
             };
         }
 

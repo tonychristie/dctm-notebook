@@ -203,6 +203,38 @@ export class DfcBridge {
     }
 
     /**
+     * Execute a dmAPI command via session.apiGet(), apiExec(), or apiSet()
+     *
+     * These are server-level API calls distinct from DFC object method invocations.
+     *
+     * @param sessionId Active session ID
+     * @param apiType Type of API call: 'get', 'exec', or 'set'
+     * @param command The dmAPI command string (e.g., "getservermap,session")
+     * @returns The API response with result and execution time
+     */
+    async executeDmApi(
+        sessionId: string,
+        apiType: 'get' | 'exec' | 'set',
+        command: string
+    ): Promise<{
+        result: unknown;
+        resultType: string;
+        executionTimeMs: number;
+    }> {
+        if (!this.client) {
+            throw new Error('DFC Bridge not initialized');
+        }
+
+        const response = await this.client.post('/api/v1/dmapi', {
+            sessionId,
+            apiType,
+            command
+        });
+
+        return response.data;
+    }
+
+    /**
      * Get list of all types in the repository
      */
     async getTypes(sessionId: string): Promise<unknown> {

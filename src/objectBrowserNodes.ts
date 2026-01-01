@@ -201,7 +201,7 @@ export class ObjectBrowserItem extends vscode.TreeItem {
             case 'user':
                 return new vscode.ThemeIcon('person');
             case 'group':
-                return new vscode.ThemeIcon('people');
+                return new vscode.ThemeIcon('organization');
             default:
                 return new vscode.ThemeIcon('circle-outline');
         }

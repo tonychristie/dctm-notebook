@@ -49,6 +49,26 @@ export function registerNotebook(
         dispose: () => controller.dispose()
     });
 
+    // Set up renderer messaging for object ID click handling
+    const rendererMessaging = vscode.notebooks.createRendererMessaging('dctm-result-renderer');
+    const messageDisposable = rendererMessaging.onDidReceiveMessage(async (e) => {
+        const message = e.message as { command: string; objectId?: string };
+        if (message.command === 'dumpObject' && message.objectId) {
+            const connection = connectionManager.getActiveConnection();
+            if (!connection) {
+                vscode.window.showErrorMessage('Not connected to Documentum. Use "Documentum: Connect" first.');
+                return;
+            }
+            try {
+                await ObjectDumpPanel.createOrShow(context.extensionUri, connectionManager, message.objectId);
+            } catch (error) {
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                vscode.window.showErrorMessage(`Failed to dump object: ${errorMsg}`);
+            }
+        }
+    });
+    context.subscriptions.push(messageDisposable);
+
     // Register notebook-specific commands
     registerNotebookCommands(context, connectionManager);
 

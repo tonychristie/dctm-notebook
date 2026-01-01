@@ -327,7 +327,7 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
         }
 
         try {
-            const query = "SELECT user_name, user_login_name FROM dm_user WHERE user_state = 0 ORDER BY user_name ENABLE (RETURN_TOP 100)";
+            const query = "SELECT user_name, user_login_name FROM dm_user WHERE user_state = 0 AND r_is_group = false ORDER BY user_name ENABLE (RETURN_TOP 100)";
             const results = await this.executeDql(connection, query);
 
             return results.rows.map(row => {

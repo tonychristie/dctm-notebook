@@ -85,13 +85,16 @@ export class DctmNotebookController {
                 return;
             }
 
+            // Get output format preference from cell metadata, default to 'html'
+            const outputFormat = (cell.metadata?.outputFormat as string) || 'html';
+
             // Execute based on language
             const language = cell.document.languageId;
 
             if (language === 'dql') {
-                await this.executeDql(content, execution);
+                await this.executeDql(content, execution, outputFormat);
             } else if (language === 'dmapi') {
-                await this.executeApi(content, execution);
+                await this.executeApi(content, execution, outputFormat);
             } else {
                 execution.replaceOutput([
                     new vscode.NotebookCellOutput([
@@ -159,7 +162,8 @@ export class DctmNotebookController {
      */
     private async executeDql(
         query: string,
-        execution: vscode.NotebookCellExecution
+        execution: vscode.NotebookCellExecution,
+        outputFormat: string
     ): Promise<void> {
         try {
             // Strip comments before execution
@@ -170,7 +174,7 @@ export class DctmNotebookController {
                 return;
             }
             const result = await this.dqlExecutor.execute(cleanQuery);
-            const output = this.formatDqlOutput(result);
+            const output = this.formatDqlOutput(result, outputFormat);
 
             execution.replaceOutput([output]);
             execution.end(true, Date.now());
@@ -190,10 +194,7 @@ export class DctmNotebookController {
     /**
      * Format DQL results as notebook output
      */
-    private formatDqlOutput(result: DqlResult): vscode.NotebookCellOutput {
-        // Generate HTML table for display
-        const html = this.generateHtmlTable(result);
-
+    private formatDqlOutput(result: DqlResult, outputFormat: string): vscode.NotebookCellOutput {
         // Plain text summary
         const text = `${result.rowCount} row(s) returned in ${result.executionTime}ms`;
 
@@ -204,14 +205,21 @@ export class DctmNotebookController {
             executionTime: result.executionTime
         };
 
-        // Use custom MIME type first to ensure HTML rendering by our renderer
-        // Then provide standard types as fallbacks
-        return new vscode.NotebookCellOutput([
-            vscode.NotebookCellOutputItem.json(resultData, 'x-application/dctm-result'),
-            vscode.NotebookCellOutputItem.text(html, 'text/html'),
-            vscode.NotebookCellOutputItem.json(resultData, 'application/json'),
-            vscode.NotebookCellOutputItem.text(text, 'text/plain')
-        ]);
+        // Emit output based on format preference
+        // First item in the array is the default rendered view
+        if (outputFormat === 'json') {
+            return new vscode.NotebookCellOutput([
+                vscode.NotebookCellOutputItem.json(resultData, 'application/json'),
+                vscode.NotebookCellOutputItem.text(text, 'text/plain')
+            ]);
+        } else {
+            // Default to HTML
+            const html = this.generateHtmlTable(result);
+            return new vscode.NotebookCellOutput([
+                vscode.NotebookCellOutputItem.text(html, 'text/html'),
+                vscode.NotebookCellOutputItem.text(text, 'text/plain')
+            ]);
+        }
     }
 
     /**
@@ -262,7 +270,8 @@ export class DctmNotebookController {
      */
     private async executeApi(
         command: string,
-        execution: vscode.NotebookCellExecution
+        execution: vscode.NotebookCellExecution,
+        outputFormat: string
     ): Promise<void> {
         try {
             // Strip comments before execution
@@ -288,7 +297,7 @@ export class DctmNotebookController {
                 result = await this.apiExecutor.execute(request);
             }
 
-            const output = this.formatApiOutput(result, command);
+            const output = this.formatApiOutput(result, outputFormat);
 
             execution.replaceOutput([output]);
             execution.end(true, Date.now());
@@ -358,31 +367,35 @@ export class DctmNotebookController {
      */
     private formatApiOutput(
         result: ApiMethodResponse,
-        _command: string
+        outputFormat: string
     ): vscode.NotebookCellOutput {
         const formattedResult = this.formatValue(result.result);
-
-        const html = `
-            <div style="font-family: var(--vscode-font-family); font-size: 12px;">
-                <div style="margin-bottom: 8px; color: var(--vscode-descriptionForeground);">
-                    Result type: ${result.resultType} | Execution time: ${result.executionTimeMs}ms
-                </div>
-                <div style="background: var(--vscode-textCodeBlock-background); padding: 8px; border-radius: 4px; font-family: var(--vscode-editor-font-family);">
-                    <pre style="margin: 0; white-space: pre-wrap;">${this.escapeHtml(formattedResult)}</pre>
-                </div>
-            </div>
-        `;
-
         const text = `${result.resultType}: ${formattedResult}`;
 
-        // Use custom MIME type first to ensure HTML rendering by our renderer
-        // Then provide standard types as fallbacks
-        return new vscode.NotebookCellOutput([
-            vscode.NotebookCellOutputItem.json(result, 'x-application/dctm-result'),
-            vscode.NotebookCellOutputItem.text(html, 'text/html'),
-            vscode.NotebookCellOutputItem.json(result, 'application/json'),
-            vscode.NotebookCellOutputItem.text(text, 'text/plain')
-        ]);
+        // Emit output based on format preference
+        // First item in the array is the default rendered view
+        if (outputFormat === 'json') {
+            return new vscode.NotebookCellOutput([
+                vscode.NotebookCellOutputItem.json(result, 'application/json'),
+                vscode.NotebookCellOutputItem.text(text, 'text/plain')
+            ]);
+        } else {
+            // Default to HTML
+            const html = `
+                <div style="font-family: var(--vscode-font-family); font-size: 12px;">
+                    <div style="margin-bottom: 8px; color: var(--vscode-descriptionForeground);">
+                        Result type: ${result.resultType} | Execution time: ${result.executionTimeMs}ms
+                    </div>
+                    <div style="background: var(--vscode-textCodeBlock-background); padding: 8px; border-radius: 4px; font-family: var(--vscode-editor-font-family);">
+                        <pre style="margin: 0; white-space: pre-wrap;">${this.escapeHtml(formattedResult)}</pre>
+                    </div>
+                </div>
+            `;
+            return new vscode.NotebookCellOutput([
+                vscode.NotebookCellOutputItem.text(html, 'text/html'),
+                vscode.NotebookCellOutputItem.text(text, 'text/plain')
+            ]);
+        }
     }
 
     /**

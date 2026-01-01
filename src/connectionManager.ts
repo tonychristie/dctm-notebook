@@ -1,17 +1,13 @@
 import * as vscode from 'vscode';
-import axios, { AxiosInstance } from 'axios';
 import { DfcBridge } from './dfcBridge';
-import { RestClient } from './restClient';
 
 export interface DocumentumConnection {
     name: string;
-    type: 'dfc' | 'rest';
-    // DFC connection properties
+    // Connection via bridge - bridge handles backend type (DFC or REST)
+    // DFC backend properties (used if bridge is configured for DFC)
     docbroker?: string;
     port?: number;
     dfcProfile?: string;
-    // REST connection properties
-    endpoint?: string;
     // Common properties
     repository: string;
     username?: string;
@@ -25,28 +21,27 @@ export interface DfcProfile {
 
 export interface ActiveConnection {
     config: DocumentumConnection;
-    type: 'dfc' | 'rest';
-    // For REST connections - the axios client (for backward compatibility)
-    client?: AxiosInstance;
-    // For DFC connections
-    sessionId?: string;
-    // Pseudo session ID for REST connections (for interface compatibility)
-    restSessionId?: string;
+    sessionId: string;
 }
 
 type ConnectionChangeCallback = (connected: boolean, name?: string) => void;
 
+/**
+ * Manages Documentum connections via the DFC Bridge.
+ *
+ * The bridge handles the underlying connection type (DFC or REST) based on its
+ * configuration. The extension always talks to the bridge - it doesn't need to
+ * know about the backend type.
+ */
 export class ConnectionManager {
     private context: vscode.ExtensionContext;
     private activeConnection: ActiveConnection | null = null;
     private connectionChangeCallbacks: ConnectionChangeCallback[] = [];
     private dfcBridge: DfcBridge;
-    private restClient: RestClient;
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
         this.dfcBridge = new DfcBridge(context);
-        this.restClient = new RestClient(context);
     }
 
     onConnectionChange(callback: ConnectionChangeCallback): void {
@@ -87,10 +82,10 @@ export class ConnectionManager {
         // Let user pick a connection
         const items = connections.map(c => ({
             label: c.name,
-            description: c.type === 'dfc'
+            description: c.docbroker
                 ? `${c.docbroker}:${c.port || 1489}`
-                : c.endpoint,
-            detail: `${c.type.toUpperCase()} - ${c.repository}`,
+                : 'Bridge connection',
+            detail: c.repository,
             connection: c
         }));
 
@@ -123,19 +118,15 @@ export class ConnectionManager {
             return;
         }
 
-        if (connection.type === 'dfc') {
-            await this.connectDfc(connection, username, password);
-        } else {
-            await this.connectRest(connection, username, password);
-        }
+        await this.connectToBridge(connection, username, password);
     }
 
-    private async connectDfc(
+    private async connectToBridge(
         connection: DocumentumConnection,
         username: string,
         password: string
     ): Promise<void> {
-        // Validate DFC profile exists
+        // Validate DFC profile exists if specified
         const profiles = this.getDfcProfiles();
         const profileName = connection.dfcProfile;
 
@@ -149,15 +140,15 @@ export class ConnectionManager {
         try {
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
-                title: `Connecting to ${connection.name} via DFC...`,
+                title: `Connecting to ${connection.name}...`,
                 cancellable: false
             }, async () => {
-                // Ensure DFC Bridge is running
+                // Ensure bridge is running
                 await this.dfcBridge.ensureRunning(profileName ? profiles[profileName] : undefined);
 
-                // Connect via DFC Bridge
+                // Connect via bridge - bridge handles DFC vs REST internally
                 const sessionId = await this.dfcBridge.connect({
-                    docbroker: connection.docbroker!,
+                    docbroker: connection.docbroker || '',
                     port: connection.port || 1489,
                     repository: connection.repository,
                     username,
@@ -166,56 +157,17 @@ export class ConnectionManager {
 
                 this.activeConnection = {
                     config: connection,
-                    type: 'dfc',
                     sessionId
                 };
 
                 this.notifyConnectionChange(true, connection.name);
                 vscode.window.showInformationMessage(
-                    `Connected to ${connection.name} (${connection.repository}) via DFC`
+                    `Connected to ${connection.name} (${connection.repository})`
                 );
             });
         } catch (error) {
             if (error instanceof Error) {
-                vscode.window.showErrorMessage(`DFC connection failed: ${error.message}`);
-            }
-        }
-    }
-
-    private async connectRest(
-        connection: DocumentumConnection,
-        username: string,
-        password: string
-    ): Promise<void> {
-        try {
-            await vscode.window.withProgress({
-                location: vscode.ProgressLocation.Notification,
-                title: `Connecting to ${connection.name} via REST...`,
-                cancellable: false
-            }, async () => {
-                // Use RestClient for connection
-                const restSessionId = await this.restClient.connect({
-                    endpoint: connection.endpoint!,
-                    repository: connection.repository,
-                    username,
-                    password
-                });
-
-                this.activeConnection = {
-                    config: connection,
-                    type: 'rest',
-                    client: this.restClient.getClient() || undefined,
-                    restSessionId
-                };
-
-                this.notifyConnectionChange(true, connection.name);
-                vscode.window.showInformationMessage(
-                    `Connected to ${connection.name} (${connection.repository}) via REST`
-                );
-            });
-        } catch (error) {
-            if (error instanceof Error) {
-                vscode.window.showErrorMessage(`REST connection failed: ${error.message}`);
+                vscode.window.showErrorMessage(`Connection failed: ${error.message}`);
             }
         }
     }
@@ -224,21 +176,11 @@ export class ConnectionManager {
         if (this.activeConnection) {
             const name = this.activeConnection.config.name;
 
-            // Disconnect based on connection type
-            if (this.activeConnection.type === 'dfc' && this.activeConnection.sessionId) {
-                try {
-                    await this.dfcBridge.disconnect(this.activeConnection.sessionId);
-                } catch (error) {
-                    // Log but don't fail
-                    console.error('Error disconnecting from DFC:', error);
-                }
-            } else if (this.activeConnection.type === 'rest' && this.activeConnection.restSessionId) {
-                try {
-                    await this.restClient.disconnect(this.activeConnection.restSessionId);
-                } catch (error) {
-                    // Log but don't fail
-                    console.error('Error disconnecting from REST:', error);
-                }
+            try {
+                await this.dfcBridge.disconnect(this.activeConnection.sessionId);
+            } catch (error) {
+                // Log but don't fail
+                console.error('Error disconnecting:', error);
             }
 
             this.activeConnection = null;
@@ -253,10 +195,10 @@ export class ConnectionManager {
 
         const items: vscode.QuickPickItem[] = connections.map(c => ({
             label: c.name === currentName ? `$(check) ${c.name}` : c.name,
-            description: c.type === 'dfc'
+            description: c.docbroker
                 ? `${c.docbroker}:${c.port || 1489}`
-                : c.endpoint,
-            detail: `${c.type.toUpperCase()} - ${c.repository}`
+                : 'Bridge connection',
+            detail: c.repository
         }));
 
         items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
@@ -296,40 +238,14 @@ export class ConnectionManager {
         return this.dfcBridge;
     }
 
-    getRestClient(): RestClient {
-        return this.restClient;
-    }
-
     isConnected(): boolean {
         return this.activeConnection !== null;
     }
 
-    isDfcConnection(): boolean {
-        return this.activeConnection?.type === 'dfc';
-    }
-
-    isRestConnection(): boolean {
-        return this.activeConnection?.type === 'rest';
-    }
-
     /**
-     * Get the current session ID (works for both DFC and REST connections)
-     * For DFC: returns the actual session ID
-     * For REST: returns the pseudo session ID
+     * Get the current session ID
      */
     getSessionId(): string | undefined {
-        if (this.activeConnection?.type === 'dfc') {
-            return this.activeConnection.sessionId;
-        } else if (this.activeConnection?.type === 'rest') {
-            return this.activeConnection.restSessionId;
-        }
-        return undefined;
-    }
-
-    /**
-     * Get connection type for feature availability checks
-     */
-    getConnectionType(): 'dfc' | 'rest' | null {
-        return this.activeConnection?.type || null;
+        return this.activeConnection?.sessionId;
     }
 }

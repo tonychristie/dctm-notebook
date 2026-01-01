@@ -379,21 +379,16 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
     }
 
     /**
-     * Execute a DQL query via the appropriate connection method
+     * Execute a DQL query via the bridge.
+     * The bridge handles backend type (DFC or REST) internally.
      */
     private async executeDql(
         connection: ActiveConnection,
         query: string
     ): Promise<{ rows: Record<string, unknown>[] }> {
-        if (connection.type === 'dfc') {
-            const bridge = this.connectionManager.getDfcBridge();
-            const result = await bridge.executeDql(connection.sessionId!, query);
-            return { rows: result.rows };
-        } else {
-            // REST connection
-            const response = await connection.client!.post('/api/v1/dql', { query });
-            return { rows: response.data.entries || [] };
-        }
+        const bridge = this.connectionManager.getDfcBridge();
+        const result = await bridge.executeDql(connection.sessionId, query);
+        return { rows: result.rows };
     }
 
     /**

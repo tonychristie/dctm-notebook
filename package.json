@@ -76,7 +76,9 @@
       {
         "language": "dql",
         "scopes": {
-          "type": ["entity.name.type.dql"]
+          "type": [
+            "entity.name.type.dql"
+          ]
         }
       }
     ],
@@ -205,6 +207,12 @@
         "title": "Insert Markdown Cell",
         "category": "Documentum Notebook",
         "icon": "$(markdown)"
+      },
+      {
+        "command": "dctm.notebook.toggleOutputFormat",
+        "title": "Toggle Output Format (HTML/JSON)",
+        "category": "Documentum Notebook",
+        "icon": "$(symbol-misc)"
       }
     ],
     "views": {
@@ -312,7 +320,9 @@
                 "description": "Path to dfc.properties file"
               }
             },
-            "required": ["dfcPath"]
+            "required": [
+              "dfcPath"
+            ]
           }
         },
         "documentum.bridge.port": {
@@ -407,6 +417,13 @@
           "command": "dctm.generateTypeQuery",
           "when": "view == documentumTypeBrowser && viewItem == type",
           "group": "2_actions"
+        }
+      ],
+      "notebook/cell/title": [
+        {
+          "command": "dctm.notebook.toggleOutputFormat",
+          "when": "notebookType == dctmbook && notebookCellType == code",
+          "group": "inline@1"
         }
       ]
     },

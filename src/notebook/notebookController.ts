@@ -85,13 +85,16 @@ export class DctmNotebookController {
                 return;
             }
 
+            // Get output format preference from cell metadata, default to 'html'
+            const outputFormat = (cell.metadata?.outputFormat as string) || 'html';
+
             // Execute based on language
             const language = cell.document.languageId;
 
             if (language === 'dql') {
-                await this.executeDql(content, execution);
+                await this.executeDql(content, execution, outputFormat);
             } else if (language === 'dmapi') {
-                await this.executeApi(content, execution);
+                await this.executeApi(content, execution, outputFormat);
             } else {
                 execution.replaceOutput([
                     new vscode.NotebookCellOutput([
@@ -116,15 +119,62 @@ export class DctmNotebookController {
     }
 
     /**
+     * Strip comments from DQL queries.
+     * Handles both line comments (--) and block comments.
+     */
+    private stripDqlComments(query: string): string {
+        // Remove block comments (/* ... */) - non-greedy match across lines
+        let stripped = query.replace(/\/\*[\s\S]*?\*\//g, '');
+
+        // Remove line comments (-- to end of line)
+        stripped = stripped.replace(/--.*$/gm, '');
+
+        // Clean up extra whitespace and empty lines
+        stripped = stripped
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0)
+            .join('\n');
+
+        return stripped.trim();
+    }
+
+    /**
+     * Strip comments from dmAPI commands.
+     * Handles line comments (--)
+     */
+    private stripDmApiComments(command: string): string {
+        // Remove line comments (-- to end of line)
+        let stripped = command.replace(/--.*$/gm, '');
+
+        // Clean up extra whitespace and empty lines
+        stripped = stripped
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0)
+            .join('\n');
+
+        return stripped.trim();
+    }
+
+    /**
      * Execute a DQL query and render results
      */
     private async executeDql(
         query: string,
-        execution: vscode.NotebookCellExecution
+        execution: vscode.NotebookCellExecution,
+        outputFormat: string
     ): Promise<void> {
         try {
-            const result = await this.dqlExecutor.execute(query);
-            const output = this.formatDqlOutput(result);
+            // Strip comments before execution
+            const cleanQuery = this.stripDqlComments(query);
+            if (!cleanQuery) {
+                execution.replaceOutput([]);
+                execution.end(true, Date.now());
+                return;
+            }
+            const result = await this.dqlExecutor.execute(cleanQuery);
+            const output = this.formatDqlOutput(result, outputFormat);
 
             execution.replaceOutput([output]);
             execution.end(true, Date.now());
@@ -144,23 +194,32 @@ export class DctmNotebookController {
     /**
      * Format DQL results as notebook output
      */
-    private formatDqlOutput(result: DqlResult): vscode.NotebookCellOutput {
-        // Generate HTML table for display
-        const html = this.generateHtmlTable(result);
-
+    private formatDqlOutput(result: DqlResult, outputFormat: string): vscode.NotebookCellOutput {
         // Plain text summary
         const text = `${result.rowCount} row(s) returned in ${result.executionTime}ms`;
 
-        return new vscode.NotebookCellOutput([
-            vscode.NotebookCellOutputItem.text(html, 'text/html'),
-            vscode.NotebookCellOutputItem.json({
-                columns: result.columns,
-                rows: result.rows,
-                rowCount: result.rowCount,
-                executionTime: result.executionTime
-            }),
-            vscode.NotebookCellOutputItem.text(text, 'text/plain')
-        ]);
+        const resultData = {
+            columns: result.columns,
+            rows: result.rows,
+            rowCount: result.rowCount,
+            executionTime: result.executionTime
+        };
+
+        // Emit output based on format preference
+        // First item in the array is the default rendered view
+        if (outputFormat === 'json') {
+            return new vscode.NotebookCellOutput([
+                vscode.NotebookCellOutputItem.json(resultData, 'application/json'),
+                vscode.NotebookCellOutputItem.text(text, 'text/plain')
+            ]);
+        } else {
+            // Default to HTML
+            const html = this.generateHtmlTable(result);
+            return new vscode.NotebookCellOutput([
+                vscode.NotebookCellOutputItem.text(html, 'text/html'),
+                vscode.NotebookCellOutputItem.text(text, 'text/plain')
+            ]);
+        }
     }
 
     /**
@@ -175,7 +234,7 @@ export class DctmNotebookController {
         }
 
         const headerCells = result.columns
-            .map(col => `<th style="text-align: left; padding: 6px 12px; border-bottom: 2px solid var(--vscode-panel-border); font-weight: 600;">${this.escapeHtml(col)}</th>`)
+            .map(col => `<th style="text-align: left; padding: 6px 12px; border-bottom: 2px solid var(--vscode-panel-border); font-weight: 600; white-space: nowrap;">${this.escapeHtml(col)}</th>`)
             .join('');
 
         const bodyRows = result.rows.map(row => {
@@ -184,7 +243,7 @@ export class DctmNotebookController {
                 const displayValue = value === null || value === undefined
                     ? '<span style="color: var(--vscode-descriptionForeground); font-style: italic;">NULL</span>'
                     : this.escapeHtml(String(value));
-                return `<td style="padding: 4px 12px; border-bottom: 1px solid var(--vscode-panel-border); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayValue}</td>`;
+                return `<td style="padding: 4px 12px; border-bottom: 1px solid var(--vscode-panel-border); white-space: nowrap; vertical-align: top;">${displayValue}</td>`;
             }).join('');
             return `<tr>${cells}</tr>`;
         }).join('');
@@ -195,7 +254,7 @@ export class DctmNotebookController {
                     ${result.rowCount} row(s) in ${result.executionTime}ms
                 </div>
                 <div style="overflow-x: auto; max-height: 400px; overflow-y: auto;">
-                    <table style="width: 100%; border-collapse: collapse;">
+                    <table style="border-collapse: collapse; table-layout: auto;">
                         <thead style="position: sticky; top: 0; background: var(--vscode-editor-background);">
                             <tr>${headerCells}</tr>
                         </thead>
@@ -211,10 +270,18 @@ export class DctmNotebookController {
      */
     private async executeApi(
         command: string,
-        execution: vscode.NotebookCellExecution
+        execution: vscode.NotebookCellExecution,
+        outputFormat: string
     ): Promise<void> {
         try {
-            const trimmed = command.trim();
+            // Strip comments before execution
+            const cleanCommand = this.stripDmApiComments(command);
+            if (!cleanCommand) {
+                execution.replaceOutput([]);
+                execution.end(true, Date.now());
+                return;
+            }
+            const trimmed = cleanCommand.trim();
 
             // Check if this is a dmAPI command (dmAPIGet, dmAPIExec, dmAPISet)
             const dmApiMatch = trimmed.match(/^dmAPI(Get|Exec|Set)\s*\(\s*["'](.+?)["']\s*\)$/i);
@@ -230,7 +297,7 @@ export class DctmNotebookController {
                 result = await this.apiExecutor.execute(request);
             }
 
-            const output = this.formatApiOutput(result, command);
+            const output = this.formatApiOutput(result, outputFormat);
 
             execution.replaceOutput([output]);
             execution.end(true, Date.now());
@@ -300,28 +367,35 @@ export class DctmNotebookController {
      */
     private formatApiOutput(
         result: ApiMethodResponse,
-        _command: string
+        outputFormat: string
     ): vscode.NotebookCellOutput {
         const formattedResult = this.formatValue(result.result);
-
-        const html = `
-            <div style="font-family: var(--vscode-font-family); font-size: 12px;">
-                <div style="margin-bottom: 8px; color: var(--vscode-descriptionForeground);">
-                    Result type: ${result.resultType} | Execution time: ${result.executionTimeMs}ms
-                </div>
-                <div style="background: var(--vscode-textCodeBlock-background); padding: 8px; border-radius: 4px; font-family: var(--vscode-editor-font-family);">
-                    <pre style="margin: 0; white-space: pre-wrap;">${this.escapeHtml(formattedResult)}</pre>
-                </div>
-            </div>
-        `;
-
         const text = `${result.resultType}: ${formattedResult}`;
 
-        return new vscode.NotebookCellOutput([
-            vscode.NotebookCellOutputItem.text(html, 'text/html'),
-            vscode.NotebookCellOutputItem.json(result),
-            vscode.NotebookCellOutputItem.text(text, 'text/plain')
-        ]);
+        // Emit output based on format preference
+        // First item in the array is the default rendered view
+        if (outputFormat === 'json') {
+            return new vscode.NotebookCellOutput([
+                vscode.NotebookCellOutputItem.json(result, 'application/json'),
+                vscode.NotebookCellOutputItem.text(text, 'text/plain')
+            ]);
+        } else {
+            // Default to HTML
+            const html = `
+                <div style="font-family: var(--vscode-font-family); font-size: 12px;">
+                    <div style="margin-bottom: 8px; color: var(--vscode-descriptionForeground);">
+                        Result type: ${result.resultType} | Execution time: ${result.executionTimeMs}ms
+                    </div>
+                    <div style="background: var(--vscode-textCodeBlock-background); padding: 8px; border-radius: 4px; font-family: var(--vscode-editor-font-family);">
+                        <pre style="margin: 0; white-space: pre-wrap;">${this.escapeHtml(formattedResult)}</pre>
+                    </div>
+                </div>
+            `;
+            return new vscode.NotebookCellOutput([
+                vscode.NotebookCellOutputItem.text(html, 'text/html'),
+                vscode.NotebookCellOutputItem.text(text, 'text/plain')
+            ]);
+        }
     }
 
     /**

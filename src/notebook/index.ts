@@ -141,9 +141,52 @@ function registerNotebookCommands(
         }
     );
 
+    // Command to toggle output format between HTML and JSON
+    const toggleOutputFormat = vscode.commands.registerCommand(
+        'dctm.notebook.toggleOutputFormat',
+        async (cell?: vscode.NotebookCell) => {
+            const editor = vscode.window.activeNotebookEditor;
+            if (!editor || editor.notebook.notebookType !== 'dctmbook') {
+                return;
+            }
+
+            // Get the cell - either passed as argument or from current selection
+            let targetCell = cell;
+            if (!targetCell) {
+                const selection = editor.selection;
+                if (selection && selection.start < editor.notebook.cellCount) {
+                    targetCell = editor.notebook.cellAt(selection.start);
+                }
+            }
+
+            if (!targetCell || targetCell.kind !== vscode.NotebookCellKind.Code) {
+                return;
+            }
+
+            // Get current format from metadata, default to 'html'
+            const currentFormat = targetCell.metadata?.outputFormat as string || 'html';
+            const newFormat = currentFormat === 'html' ? 'json' : 'html';
+
+            // Update cell metadata
+            const edit = new vscode.WorkspaceEdit();
+            const newMetadata = { ...targetCell.metadata, outputFormat: newFormat };
+            edit.set(editor.notebook.uri, [
+                vscode.NotebookEdit.updateCellMetadata(targetCell.index, newMetadata)
+            ]);
+
+            await vscode.workspace.applyEdit(edit);
+
+            // Show notification
+            vscode.window.showInformationMessage(
+                `Output format set to ${newFormat.toUpperCase()}. Re-run cell to apply.`
+            );
+        }
+    );
+
     context.subscriptions.push(
         insertDqlCell,
         insertApiCell,
-        insertMarkdownCell
+        insertMarkdownCell,
+        toggleOutputFormat
     );
 }

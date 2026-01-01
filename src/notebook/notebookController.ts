@@ -223,7 +223,7 @@ export class DctmNotebookController {
     }
 
     /**
-     * Generate an HTML table for DQL results
+     * Generate an HTML table for DQL results with sorting, copying, and context menu
      */
     private generateHtmlTable(result: DqlResult): string {
         if (result.rows.length === 0) {
@@ -233,34 +233,412 @@ export class DctmNotebookController {
             </div>`;
         }
 
-        const headerCells = result.columns
-            .map(col => `<th style="text-align: left; padding: 6px 12px; border-bottom: 2px solid var(--vscode-panel-border); font-weight: 600; white-space: nowrap;">${this.escapeHtml(col)}</th>`)
-            .join('');
+        // Embed the data as JSON for client-side sorting
+        const dataJson = JSON.stringify({
+            columns: result.columns,
+            rows: result.rows
+        });
 
-        const bodyRows = result.rows.map(row => {
-            const cells = result.columns.map(col => {
-                const value = row[col];
-                const displayValue = value === null || value === undefined
-                    ? '<span style="color: var(--vscode-descriptionForeground); font-style: italic;">NULL</span>'
-                    : this.escapeHtml(String(value));
-                return `<td style="padding: 4px 12px; border-bottom: 1px solid var(--vscode-panel-border); white-space: nowrap; vertical-align: top;">${displayValue}</td>`;
-            }).join('');
-            return `<tr>${cells}</tr>`;
-        }).join('');
+        const tableId = `dql-table-${Date.now()}`;
 
         return `
-            <div style="font-family: var(--vscode-font-family); font-size: 12px;">
-                <div style="margin-bottom: 8px; color: var(--vscode-descriptionForeground);">
-                    ${result.rowCount} row(s) in ${result.executionTime}ms
+            <div style="font-family: var(--vscode-font-family); font-size: 12px;" class="dql-result-container">
+                <style>
+                    .dql-result-container table {
+                        border-collapse: collapse;
+                        table-layout: auto;
+                        width: 100%;
+                    }
+                    .dql-result-container th {
+                        text-align: left;
+                        padding: 6px 12px;
+                        border-bottom: 2px solid var(--vscode-panel-border);
+                        font-weight: 600;
+                        white-space: nowrap;
+                        cursor: pointer;
+                        user-select: none;
+                        position: relative;
+                    }
+                    .dql-result-container th:hover {
+                        background: var(--vscode-list-hoverBackground);
+                    }
+                    .dql-result-container th .sort-indicator {
+                        margin-left: 4px;
+                        opacity: 0.5;
+                    }
+                    .dql-result-container th.sorted-asc .sort-indicator::after { content: ' ▲'; }
+                    .dql-result-container th.sorted-desc .sort-indicator::after { content: ' ▼'; }
+                    .dql-result-container td {
+                        padding: 4px 12px;
+                        border-bottom: 1px solid var(--vscode-panel-border);
+                        vertical-align: top;
+                        max-width: 400px;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        cursor: pointer;
+                    }
+                    .dql-result-container td:hover {
+                        background: var(--vscode-list-hoverBackground);
+                    }
+                    .dql-result-container td.selected {
+                        background: var(--vscode-list-activeSelectionBackground);
+                        color: var(--vscode-list-activeSelectionForeground);
+                    }
+                    .dql-result-container tr:hover td {
+                        background: var(--vscode-list-hoverBackground);
+                    }
+                    .dql-result-container .null-value {
+                        color: var(--vscode-descriptionForeground);
+                        font-style: italic;
+                    }
+                    .dql-result-container .object-id {
+                        color: var(--vscode-textLink-foreground);
+                        text-decoration: underline;
+                        cursor: pointer;
+                    }
+                    .dql-result-container .context-menu {
+                        position: fixed;
+                        background: var(--vscode-menu-background);
+                        border: 1px solid var(--vscode-menu-border);
+                        border-radius: 4px;
+                        padding: 4px 0;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                        z-index: 1000;
+                        min-width: 150px;
+                    }
+                    .dql-result-container .context-menu-item {
+                        padding: 6px 12px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                    }
+                    .dql-result-container .context-menu-item:hover {
+                        background: var(--vscode-menu-selectionBackground);
+                        color: var(--vscode-menu-selectionForeground);
+                    }
+                    .dql-result-container .context-menu-separator {
+                        height: 1px;
+                        background: var(--vscode-menu-separatorBackground);
+                        margin: 4px 0;
+                    }
+                    .dql-result-container .toolbar {
+                        display: flex;
+                        gap: 8px;
+                        margin-bottom: 8px;
+                        align-items: center;
+                    }
+                    .dql-result-container .toolbar button {
+                        background: var(--vscode-button-secondaryBackground);
+                        color: var(--vscode-button-secondaryForeground);
+                        border: none;
+                        padding: 4px 8px;
+                        border-radius: 2px;
+                        cursor: pointer;
+                        font-size: 11px;
+                    }
+                    .dql-result-container .toolbar button:hover {
+                        background: var(--vscode-button-secondaryHoverBackground);
+                    }
+                    .dql-result-container .status {
+                        color: var(--vscode-descriptionForeground);
+                        flex-grow: 1;
+                    }
+                    .dql-result-container .copy-notification {
+                        position: fixed;
+                        bottom: 20px;
+                        right: 20px;
+                        background: var(--vscode-notifications-background);
+                        color: var(--vscode-notifications-foreground);
+                        padding: 8px 16px;
+                        border-radius: 4px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                        z-index: 1001;
+                        opacity: 0;
+                        transition: opacity 0.2s;
+                    }
+                    .dql-result-container .copy-notification.show {
+                        opacity: 1;
+                    }
+                </style>
+                <div class="toolbar">
+                    <span class="status">${result.rowCount} row(s) in ${result.executionTime}ms</span>
+                    <button onclick="copyAllRows_${tableId}()" title="Copy all rows as TSV">Copy All</button>
+                    <button onclick="copySelectedRow_${tableId}()" title="Copy selected row">Copy Row</button>
                 </div>
                 <div style="overflow-x: auto; max-height: 400px; overflow-y: auto;">
-                    <table style="border-collapse: collapse; table-layout: auto;">
+                    <table id="${tableId}">
                         <thead style="position: sticky; top: 0; background: var(--vscode-editor-background);">
-                            <tr>${headerCells}</tr>
+                            <tr id="${tableId}-header"></tr>
                         </thead>
-                        <tbody>${bodyRows}</tbody>
+                        <tbody id="${tableId}-body"></tbody>
                     </table>
                 </div>
+                <div id="${tableId}-context-menu" class="context-menu" style="display: none;"></div>
+                <div id="${tableId}-notification" class="copy-notification"></div>
+                <script>
+                    (function() {
+                        const tableId = '${tableId}';
+                        const data = ${dataJson};
+                        let sortColumn = null;
+                        let sortDirection = 'asc';
+                        let selectedCell = null;
+                        let selectedRow = null;
+
+                        function escapeHtml(text) {
+                            if (text === null || text === undefined) return '';
+                            const div = document.createElement('div');
+                            div.textContent = String(text);
+                            return div.innerHTML;
+                        }
+
+                        function isObjectId(value) {
+                            if (typeof value !== 'string') return false;
+                            return /^[0-9a-f]{16}$/i.test(value);
+                        }
+
+                        function renderTable() {
+                            const headerRow = document.getElementById(tableId + '-header');
+                            const tbody = document.getElementById(tableId + '-body');
+
+                            // Render headers
+                            headerRow.innerHTML = data.columns.map((col, idx) => {
+                                let sortClass = '';
+                                if (sortColumn === idx) {
+                                    sortClass = sortDirection === 'asc' ? 'sorted-asc' : 'sorted-desc';
+                                }
+                                return '<th class="' + sortClass + '" onclick="sortTable_${tableId}(' + idx + ')">' +
+                                    escapeHtml(col) + '<span class="sort-indicator"></span></th>';
+                            }).join('');
+
+                            // Sort rows if needed
+                            let rows = [...data.rows];
+                            if (sortColumn !== null) {
+                                const col = data.columns[sortColumn];
+                                rows.sort((a, b) => {
+                                    let aVal = a[col];
+                                    let bVal = b[col];
+                                    if (aVal === null || aVal === undefined) aVal = '';
+                                    if (bVal === null || bVal === undefined) bVal = '';
+                                    if (typeof aVal === 'number' && typeof bVal === 'number') {
+                                        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+                                    }
+                                    aVal = String(aVal).toLowerCase();
+                                    bVal = String(bVal).toLowerCase();
+                                    if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+                                    if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+                                    return 0;
+                                });
+                            }
+
+                            // Render body
+                            tbody.innerHTML = rows.map((row, rowIdx) => {
+                                const cells = data.columns.map((col, colIdx) => {
+                                    const value = row[col];
+                                    let displayValue, cellClass = '';
+                                    if (value === null || value === undefined) {
+                                        displayValue = '<span class="null-value">NULL</span>';
+                                    } else if (isObjectId(value) && (col === 'r_object_id' || col.endsWith('_id'))) {
+                                        displayValue = '<span class="object-id" data-object-id="' + escapeHtml(value) + '">' + escapeHtml(value) + '</span>';
+                                    } else {
+                                        displayValue = escapeHtml(String(value));
+                                    }
+                                    return '<td data-row="' + rowIdx + '" data-col="' + colIdx + '" data-value="' +
+                                        escapeHtml(value === null || value === undefined ? '' : String(value)) +
+                                        '" title="' + escapeHtml(value === null || value === undefined ? 'NULL' : String(value)) +
+                                        '">' + displayValue + '</td>';
+                                }).join('');
+                                return '<tr data-row-idx="' + rowIdx + '">' + cells + '</tr>';
+                            }).join('');
+
+                            // Store sorted rows for copying
+                            window['sortedRows_' + tableId] = rows;
+                        }
+
+                        window['sortTable_${tableId}'] = function(colIdx) {
+                            if (sortColumn === colIdx) {
+                                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+                            } else {
+                                sortColumn = colIdx;
+                                sortDirection = 'asc';
+                            }
+                            renderTable();
+                        };
+
+                        window['copyAllRows_${tableId}'] = function() {
+                            const rows = window['sortedRows_' + tableId] || data.rows;
+                            const header = data.columns.join('\\t');
+                            const body = rows.map(row =>
+                                data.columns.map(col => {
+                                    const val = row[col];
+                                    return val === null || val === undefined ? '' : String(val);
+                                }).join('\\t')
+                            ).join('\\n');
+                            const text = header + '\\n' + body;
+                            navigator.clipboard.writeText(text).then(() => {
+                                showNotification('Copied ' + rows.length + ' rows to clipboard');
+                            });
+                        };
+
+                        window['copySelectedRow_${tableId}'] = function() {
+                            if (selectedRow === null) {
+                                showNotification('No row selected');
+                                return;
+                            }
+                            const rows = window['sortedRows_' + tableId] || data.rows;
+                            const row = rows[selectedRow];
+                            if (!row) return;
+                            const text = data.columns.map(col => {
+                                const val = row[col];
+                                return val === null || val === undefined ? '' : String(val);
+                            }).join('\\t');
+                            navigator.clipboard.writeText(text).then(() => {
+                                showNotification('Row copied to clipboard');
+                            });
+                        };
+
+                        function showNotification(msg) {
+                            const notif = document.getElementById(tableId + '-notification');
+                            notif.textContent = msg;
+                            notif.classList.add('show');
+                            setTimeout(() => notif.classList.remove('show'), 2000);
+                        }
+
+                        function showContextMenu(e, cellValue, isObjectId, rowIdx, colIdx) {
+                            e.preventDefault();
+                            const menu = document.getElementById(tableId + '-context-menu');
+                            menu.innerHTML = '';
+
+                            // Copy cell
+                            const copyCell = document.createElement('div');
+                            copyCell.className = 'context-menu-item';
+                            copyCell.textContent = 'Copy Cell';
+                            copyCell.onclick = () => {
+                                navigator.clipboard.writeText(cellValue).then(() => {
+                                    showNotification('Cell copied');
+                                });
+                                hideContextMenu();
+                            };
+                            menu.appendChild(copyCell);
+
+                            // Copy row
+                            const copyRow = document.createElement('div');
+                            copyRow.className = 'context-menu-item';
+                            copyRow.textContent = 'Copy Row';
+                            copyRow.onclick = () => {
+                                selectedRow = rowIdx;
+                                window['copySelectedRow_${tableId}']();
+                                hideContextMenu();
+                            };
+                            menu.appendChild(copyRow);
+
+                            // Copy column
+                            const copyCol = document.createElement('div');
+                            copyCol.className = 'context-menu-item';
+                            copyCol.textContent = 'Copy Column';
+                            copyCol.onclick = () => {
+                                const rows = window['sortedRows_' + tableId] || data.rows;
+                                const col = data.columns[colIdx];
+                                const values = rows.map(r => {
+                                    const v = r[col];
+                                    return v === null || v === undefined ? '' : String(v);
+                                }).join('\\n');
+                                navigator.clipboard.writeText(values).then(() => {
+                                    showNotification('Column copied');
+                                });
+                                hideContextMenu();
+                            };
+                            menu.appendChild(copyCol);
+
+                            // Dump object (for object IDs)
+                            if (isObjectId) {
+                                const sep = document.createElement('div');
+                                sep.className = 'context-menu-separator';
+                                menu.appendChild(sep);
+
+                                const dumpObj = document.createElement('div');
+                                dumpObj.className = 'context-menu-item';
+                                dumpObj.textContent = 'Dump Object';
+                                dumpObj.onclick = () => {
+                                    // Use VS Code command API via postMessage (will be handled by extension)
+                                    const vscode = acquireVsCodeApi ? acquireVsCodeApi() : null;
+                                    if (vscode) {
+                                        vscode.postMessage({ command: 'dumpObject', objectId: cellValue });
+                                    }
+                                    hideContextMenu();
+                                };
+                                menu.appendChild(dumpObj);
+                            }
+
+                            menu.style.left = e.pageX + 'px';
+                            menu.style.top = e.pageY + 'px';
+                            menu.style.display = 'block';
+                        }
+
+                        function hideContextMenu() {
+                            document.getElementById(tableId + '-context-menu').style.display = 'none';
+                        }
+
+                        // Event listeners
+                        document.getElementById(tableId + '-body').addEventListener('click', function(e) {
+                            const td = e.target.closest('td');
+                            if (!td) return;
+
+                            // Clear previous selection
+                            document.querySelectorAll('#' + tableId + ' td.selected').forEach(el => el.classList.remove('selected'));
+
+                            // Select this cell
+                            td.classList.add('selected');
+                            selectedCell = { row: parseInt(td.dataset.row), col: parseInt(td.dataset.col) };
+                            selectedRow = parseInt(td.dataset.row);
+
+                            // Handle object ID click
+                            const objIdSpan = e.target.closest('.object-id');
+                            if (objIdSpan) {
+                                const objId = objIdSpan.dataset.objectId;
+                                const vscode = typeof acquireVsCodeApi !== 'undefined' ? acquireVsCodeApi() : null;
+                                if (vscode) {
+                                    vscode.postMessage({ command: 'dumpObject', objectId: objId });
+                                }
+                            }
+                        });
+
+                        document.getElementById(tableId + '-body').addEventListener('contextmenu', function(e) {
+                            const td = e.target.closest('td');
+                            if (!td) return;
+
+                            const value = td.dataset.value;
+                            const rowIdx = parseInt(td.dataset.row);
+                            const colIdx = parseInt(td.dataset.col);
+                            const objIdSpan = td.querySelector('.object-id');
+                            const isObjId = !!objIdSpan;
+
+                            selectedRow = rowIdx;
+                            showContextMenu(e, value, isObjId, rowIdx, colIdx);
+                        });
+
+                        document.addEventListener('click', function(e) {
+                            if (!e.target.closest('.context-menu')) {
+                                hideContextMenu();
+                            }
+                        });
+
+                        // Keyboard shortcuts
+                        document.addEventListener('keydown', function(e) {
+                            if (e.ctrlKey && e.key === 'c' && selectedCell) {
+                                const td = document.querySelector('#' + tableId + ' td[data-row="' + selectedCell.row + '"][data-col="' + selectedCell.col + '"]');
+                                if (td) {
+                                    navigator.clipboard.writeText(td.dataset.value).then(() => {
+                                        showNotification('Cell copied');
+                                    });
+                                }
+                            }
+                        });
+
+                        // Initial render
+                        renderTable();
+                    })();
+                </script>
             </div>
         `;
     }

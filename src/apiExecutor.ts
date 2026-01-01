@@ -489,7 +489,8 @@ export class ApiExecutor {
     }
 
     /**
-     * Execute a DFC API method
+     * Execute a DFC API method via the bridge.
+     * The bridge handles backend type (DFC or REST) internally.
      */
     async execute(request: ApiMethodRequest): Promise<ApiMethodResponse> {
         const connection = this.connectionManager.getActiveConnection();
@@ -497,24 +498,14 @@ export class ApiExecutor {
             throw new Error('No active connection');
         }
 
-        if (connection.type === 'dfc') {
-            return this.executeDfc(connection, request);
-        } else {
-            return this.executeRest(connection, request);
+        if (!connection.sessionId) {
+            throw new Error('No active session');
         }
-    }
 
-    /**
-     * Execute via DFC Bridge
-     */
-    private async executeDfc(
-        connection: ActiveConnection,
-        request: ApiMethodRequest
-    ): Promise<ApiMethodResponse> {
         const bridge = this.connectionManager.getDfcBridge();
 
         const response = await bridge.executeApi(
-            connection.sessionId!,
+            connection.sessionId,
             request.typeName || '',
             request.method,
             {
@@ -536,21 +527,6 @@ export class ApiExecutor {
             resultType: apiResponse.resultType || 'unknown',
             executionTimeMs: apiResponse.executionTimeMs || 0
         };
-    }
-
-    /**
-     * Execute via REST API (limited functionality)
-     */
-    private async executeRest(
-        _connection: ActiveConnection,
-        _request: ApiMethodRequest
-    ): Promise<ApiMethodResponse> {
-        // REST API has limited method execution support
-        // Most operations need to be translated to specific REST endpoints
-        throw new Error(
-            'API method execution is only supported via DFC connection. ' +
-            'REST connections support limited operations through specific endpoints.'
-        );
     }
 
     /**

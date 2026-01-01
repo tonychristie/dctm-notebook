@@ -116,6 +116,45 @@ export class DctmNotebookController {
     }
 
     /**
+     * Strip comments from DQL queries.
+     * Handles both line comments (--) and block comments.
+     */
+    private stripDqlComments(query: string): string {
+        // Remove block comments (/* ... */) - non-greedy match across lines
+        let stripped = query.replace(/\/\*[\s\S]*?\*\//g, '');
+
+        // Remove line comments (-- to end of line)
+        stripped = stripped.replace(/--.*$/gm, '');
+
+        // Clean up extra whitespace and empty lines
+        stripped = stripped
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0)
+            .join('\n');
+
+        return stripped.trim();
+    }
+
+    /**
+     * Strip comments from dmAPI commands.
+     * Handles line comments (--)
+     */
+    private stripDmApiComments(command: string): string {
+        // Remove line comments (-- to end of line)
+        let stripped = command.replace(/--.*$/gm, '');
+
+        // Clean up extra whitespace and empty lines
+        stripped = stripped
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0)
+            .join('\n');
+
+        return stripped.trim();
+    }
+
+    /**
      * Execute a DQL query and render results
      */
     private async executeDql(
@@ -123,7 +162,14 @@ export class DctmNotebookController {
         execution: vscode.NotebookCellExecution
     ): Promise<void> {
         try {
-            const result = await this.dqlExecutor.execute(query);
+            // Strip comments before execution
+            const cleanQuery = this.stripDqlComments(query);
+            if (!cleanQuery) {
+                execution.replaceOutput([]);
+                execution.end(true, Date.now());
+                return;
+            }
+            const result = await this.dqlExecutor.execute(cleanQuery);
             const output = this.formatDqlOutput(result);
 
             execution.replaceOutput([output]);
@@ -151,14 +197,19 @@ export class DctmNotebookController {
         // Plain text summary
         const text = `${result.rowCount} row(s) returned in ${result.executionTime}ms`;
 
+        const resultData = {
+            columns: result.columns,
+            rows: result.rows,
+            rowCount: result.rowCount,
+            executionTime: result.executionTime
+        };
+
+        // Use custom MIME type first to ensure HTML rendering by our renderer
+        // Then provide standard types as fallbacks
         return new vscode.NotebookCellOutput([
+            vscode.NotebookCellOutputItem.json(resultData, 'x-application/dctm-result'),
             vscode.NotebookCellOutputItem.text(html, 'text/html'),
-            vscode.NotebookCellOutputItem.json({
-                columns: result.columns,
-                rows: result.rows,
-                rowCount: result.rowCount,
-                executionTime: result.executionTime
-            }),
+            vscode.NotebookCellOutputItem.json(resultData, 'application/json'),
             vscode.NotebookCellOutputItem.text(text, 'text/plain')
         ]);
     }
@@ -175,7 +226,7 @@ export class DctmNotebookController {
         }
 
         const headerCells = result.columns
-            .map(col => `<th style="text-align: left; padding: 6px 12px; border-bottom: 2px solid var(--vscode-panel-border); font-weight: 600;">${this.escapeHtml(col)}</th>`)
+            .map(col => `<th style="text-align: left; padding: 6px 12px; border-bottom: 2px solid var(--vscode-panel-border); font-weight: 600; white-space: nowrap;">${this.escapeHtml(col)}</th>`)
             .join('');
 
         const bodyRows = result.rows.map(row => {
@@ -184,7 +235,7 @@ export class DctmNotebookController {
                 const displayValue = value === null || value === undefined
                     ? '<span style="color: var(--vscode-descriptionForeground); font-style: italic;">NULL</span>'
                     : this.escapeHtml(String(value));
-                return `<td style="padding: 4px 12px; border-bottom: 1px solid var(--vscode-panel-border); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayValue}</td>`;
+                return `<td style="padding: 4px 12px; border-bottom: 1px solid var(--vscode-panel-border); white-space: nowrap; vertical-align: top;">${displayValue}</td>`;
             }).join('');
             return `<tr>${cells}</tr>`;
         }).join('');
@@ -195,7 +246,7 @@ export class DctmNotebookController {
                     ${result.rowCount} row(s) in ${result.executionTime}ms
                 </div>
                 <div style="overflow-x: auto; max-height: 400px; overflow-y: auto;">
-                    <table style="width: 100%; border-collapse: collapse;">
+                    <table style="border-collapse: collapse; table-layout: auto;">
                         <thead style="position: sticky; top: 0; background: var(--vscode-editor-background);">
                             <tr>${headerCells}</tr>
                         </thead>
@@ -214,7 +265,14 @@ export class DctmNotebookController {
         execution: vscode.NotebookCellExecution
     ): Promise<void> {
         try {
-            const trimmed = command.trim();
+            // Strip comments before execution
+            const cleanCommand = this.stripDmApiComments(command);
+            if (!cleanCommand) {
+                execution.replaceOutput([]);
+                execution.end(true, Date.now());
+                return;
+            }
+            const trimmed = cleanCommand.trim();
 
             // Check if this is a dmAPI command (dmAPIGet, dmAPIExec, dmAPISet)
             const dmApiMatch = trimmed.match(/^dmAPI(Get|Exec|Set)\s*\(\s*["'](.+?)["']\s*\)$/i);
@@ -317,9 +375,12 @@ export class DctmNotebookController {
 
         const text = `${result.resultType}: ${formattedResult}`;
 
+        // Use custom MIME type first to ensure HTML rendering by our renderer
+        // Then provide standard types as fallbacks
         return new vscode.NotebookCellOutput([
+            vscode.NotebookCellOutputItem.json(result, 'x-application/dctm-result'),
             vscode.NotebookCellOutputItem.text(html, 'text/html'),
-            vscode.NotebookCellOutputItem.json(result),
+            vscode.NotebookCellOutputItem.json(result, 'application/json'),
             vscode.NotebookCellOutputItem.text(text, 'text/plain')
         ]);
     }

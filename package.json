@@ -213,6 +213,12 @@
         "title": "Toggle Output Format (HTML/JSON)",
         "category": "Documentum Notebook",
         "icon": "$(symbol-misc)"
+      },
+      {
+        "command": "dctm.dumpObject",
+        "title": "Dump Object",
+        "category": "Documentum",
+        "icon": "$(symbol-property)"
       }
     ],
     "views": {
@@ -390,6 +396,11 @@
         },
         {
           "command": "dctm.executeApiOnObject",
+          "when": "view == documentumExplorer && viewItem =~ /^(document|folder|cabinet)$/",
+          "group": "3_api"
+        },
+        {
+          "command": "dctm.dumpObject",
           "when": "view == documentumExplorer && viewItem =~ /^(document|folder|cabinet)$/",
           "group": "3_api"
         },

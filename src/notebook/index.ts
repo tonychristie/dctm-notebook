@@ -6,6 +6,7 @@ import { ConnectionManager } from '../connectionManager';
 import { DqlExecutor } from '../dqlExecutor';
 import { ApiExecutor } from '../apiExecutor';
 import { ApiMethodReference } from '../apiMethodReference';
+import { ObjectDumpPanel } from '../objectDumpPanel';
 
 export { DctmNotebookSerializer } from './notebookSerializer';
 export { DctmNotebookController } from './notebookController';
@@ -64,7 +65,7 @@ export function registerNotebook(
  */
 function registerNotebookCommands(
     context: vscode.ExtensionContext,
-    _connectionManager: ConnectionManager
+    connectionManager: ConnectionManager
 ): void {
     // Command to insert a new DQL cell
     const insertDqlCell = vscode.commands.registerCommand(
@@ -183,10 +184,62 @@ function registerNotebookCommands(
         }
     );
 
+    // Command to dump an object by ID (opens Object Dump panel)
+    // Can be called with:
+    // - A string objectId (from notebook context menu)
+    // - A node data object with objectId property (from tree view context menu)
+    // - No argument (prompts for object ID)
+    const dumpObject = vscode.commands.registerCommand(
+        'dctm.dumpObject',
+        async (arg?: string | { objectId?: string }) => {
+            let objectId: string | undefined;
+
+            // Extract objectId from argument
+            if (typeof arg === 'string') {
+                objectId = arg;
+            } else if (arg && typeof arg === 'object' && 'objectId' in arg) {
+                objectId = arg.objectId;
+            }
+
+            // If no objectId provided, prompt for one
+            if (!objectId) {
+                objectId = await vscode.window.showInputBox({
+                    prompt: 'Enter Object ID',
+                    placeHolder: '0900000000000001',
+                    validateInput: (value) => {
+                        if (!/^[0-9a-f]{16}$/i.test(value)) {
+                            return 'Object ID must be a 16-character hex string';
+                        }
+                        return null;
+                    }
+                });
+            }
+
+            if (!objectId) {
+                return;
+            }
+
+            // Check connection
+            const connection = connectionManager.getActiveConnection();
+            if (!connection) {
+                vscode.window.showErrorMessage('Not connected to Documentum. Use "Documentum: Connect" first.');
+                return;
+            }
+
+            try {
+                await ObjectDumpPanel.createOrShow(context.extensionUri, connectionManager, objectId);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                vscode.window.showErrorMessage(`Failed to dump object: ${message}`);
+            }
+        }
+    );
+
     context.subscriptions.push(
         insertDqlCell,
         insertApiCell,
         insertMarkdownCell,
-        toggleOutputFormat
+        toggleOutputFormat,
+        dumpObject
     );
 }

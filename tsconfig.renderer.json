@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+        "module": "ES2020",
+        "target": "ES2020",
+        "lib": ["ES2020", "DOM"],
+        "outDir": "./out/notebook",
+        "rootDir": "./src/notebook",
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "declaration": false,
+        "sourceMap": true
+    },
+    "include": [
+        "src/notebook/renderer.ts"
+    ]
+}

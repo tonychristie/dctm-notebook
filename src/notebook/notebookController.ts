@@ -214,8 +214,22 @@ export class DctmNotebookController {
         execution: vscode.NotebookCellExecution
     ): Promise<void> {
         try {
-            const request = this.parseApiCommand(command);
-            const result = await this.apiExecutor.execute(request);
+            const trimmed = command.trim();
+
+            // Check if this is a dmAPI command (dmAPIGet, dmAPIExec, dmAPISet)
+            const dmApiMatch = trimmed.match(/^dmAPI(Get|Exec|Set)\s*\(\s*["'](.+?)["']\s*\)$/i);
+
+            let result: ApiMethodResponse;
+
+            if (dmApiMatch) {
+                // Use the new dmAPI endpoint for server-level API calls
+                result = await this.executeDmApiCommand(dmApiMatch[1].toLowerCase() as 'get' | 'exec' | 'set', dmApiMatch[2]);
+            } else {
+                // Use the object API endpoint for method invocations
+                const request = this.parseApiCommand(command);
+                result = await this.apiExecutor.execute(request);
+            }
+
             const output = this.formatApiOutput(result, command);
 
             execution.replaceOutput([output]);
@@ -234,31 +248,38 @@ export class DctmNotebookController {
     }
 
     /**
+     * Execute a dmAPI command via the bridge's /dmapi endpoint
+     *
+     * @param apiType The type of dmAPI call: 'get', 'exec', or 'set'
+     * @param commandString The full command string from inside the quotes
+     */
+    private async executeDmApiCommand(
+        apiType: 'get' | 'exec' | 'set',
+        commandString: string
+    ): Promise<ApiMethodResponse> {
+        const connection = this.connectionManager.getActiveConnection();
+        if (!connection || !connection.sessionId) {
+            throw new Error('No active connection');
+        }
+
+        const bridge = this.connectionManager.getDfcBridge();
+        const result = await bridge.executeDmApi(connection.sessionId, apiType, commandString);
+
+        return {
+            result: result.result,
+            resultType: result.resultType,
+            executionTimeMs: result.executionTimeMs
+        };
+    }
+
+    /**
      * Parse an API command string into a request object
      *
-     * Supports formats:
-     * - dmAPIGet("method,session,arg1,arg2")
-     * - dmAPIExec("method,session,arg1,arg2")
-     * - dmAPISet("method,session,arg1,arg2,value")
-     * - method arg1 arg2 (simple format)
+     * Supports simple format: method arg1 arg2
+     * (dmAPI format is handled separately in executeApi)
      */
     private parseApiCommand(command: string): ApiMethodRequest {
         const trimmed = command.trim();
-
-        // Match dmAPI format: dmAPIGet("method,session,args...")
-        const dmApiMatch = trimmed.match(/^dmAPI(Get|Exec|Set)\s*\(\s*["'](.+?)["']\s*\)$/i);
-        if (dmApiMatch) {
-            const parts = dmApiMatch[2].split(',').map(s => s.trim());
-            const method = parts[0];
-            // Skip session (parts[1]) as we use the active connection
-            // Args are strings from the dmAPI command string
-            const args: unknown[] = parts.slice(2);
-
-            return {
-                method,
-                args
-            };
-        }
 
         // Match simple format: method arg1 arg2
         const parts = trimmed.split(/\s+/);

@@ -213,10 +213,9 @@ export class DctmNotebookController {
                 vscode.NotebookCellOutputItem.text(text, 'text/plain')
             ]);
         } else {
-            // Default to HTML
-            const html = this.generateHtmlTable(result);
+            // Use custom renderer for interactive table with object ID click support
             return new vscode.NotebookCellOutput([
-                vscode.NotebookCellOutputItem.text(html, 'text/html'),
+                vscode.NotebookCellOutputItem.json(resultData, 'application/x-dctm-result'),
                 vscode.NotebookCellOutputItem.text(text, 'text/plain')
             ]);
         }

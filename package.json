@@ -41,6 +41,17 @@
         ]
       }
     ],
+    "notebookRenderer": [
+      {
+        "id": "dctm-result-renderer",
+        "displayName": "Documentum Result Renderer",
+        "entrypoint": "./out/notebook/renderer.js",
+        "requiresMessaging": "always",
+        "mimeTypes": [
+          "application/x-dctm-result"
+        ]
+      }
+    ],
     "languages": [
       {
         "id": "dql",
@@ -449,7 +460,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && tsc -p ./tsconfig.renderer.json",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
@@ -459,6 +470,7 @@
     "@types/mocha": "^10.0.6",
     "@types/node": "18.x",
     "@types/vscode": "^1.85.0",
+    "@types/vscode-notebook-renderer": "^1.72.4",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
     "@vscode/test-cli": "^0.0.4",

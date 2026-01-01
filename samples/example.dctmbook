@@ -24,7 +24,7 @@
     {
       "kind": "code",
       "language": "dql",
-      "content": "-- Count documents by type\nSELECT r_object_type, COUNT(*) as doc_count\nFROM dm_sysobject\nGROUP BY r_object_type\nORDER BY doc_count DESC"
+      "content": "-- Count documents by type\nSELECT r_object_type, COUNT(*) as doc_count\nFROM dm_sysobject\nGROUP BY r_object_type\nORDER BY 2 DESC"
     },
     {
       "kind": "markdown",

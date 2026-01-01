@@ -246,8 +246,9 @@ export class DctmNotebookController {
                 <style>
                     .dql-result-container table {
                         border-collapse: collapse;
-                        table-layout: auto;
-                        width: 100%;
+                        table-layout: fixed;
+                        width: auto;
+                        min-width: 100%;
                     }
                     .dql-result-container th {
                         text-align: left;
@@ -255,9 +256,9 @@ export class DctmNotebookController {
                         border-bottom: 2px solid var(--vscode-panel-border);
                         font-weight: 600;
                         white-space: nowrap;
-                        cursor: pointer;
                         user-select: none;
                         position: relative;
+                        min-width: 60px;
                     }
                     .dql-result-container th:hover {
                         background: var(--vscode-list-hoverBackground);
@@ -268,12 +269,31 @@ export class DctmNotebookController {
                     }
                     .dql-result-container th.sorted-asc .sort-indicator::after { content: ' ▲'; }
                     .dql-result-container th.sorted-desc .sort-indicator::after { content: ' ▼'; }
+                    .dql-result-container th .resize-handle {
+                        position: absolute;
+                        right: 0;
+                        top: 0;
+                        bottom: 0;
+                        width: 5px;
+                        cursor: col-resize;
+                        background: transparent;
+                    }
+                    .dql-result-container th .resize-handle:hover,
+                    .dql-result-container th .resize-handle.resizing {
+                        background: var(--vscode-focusBorder);
+                    }
+                    .dql-result-container th .header-content {
+                        cursor: pointer;
+                        display: inline-block;
+                    }
                     .dql-result-container td {
                         padding: 4px 12px;
                         border-bottom: 1px solid var(--vscode-panel-border);
                         vertical-align: top;
-                        white-space: pre-wrap;
-                        word-break: break-word;
+                        max-width: 300px;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: nowrap;
                         cursor: pointer;
                     }
                     .dql-result-container td:hover {
@@ -396,18 +416,25 @@ export class DctmNotebookController {
                             return /^[0-9a-f]{16}$/i.test(value);
                         }
 
+                        // Column resize state
+                        let resizing = null;
+                        let startX = 0;
+                        let startWidth = 0;
+
                         function renderTable() {
                             const headerRow = document.getElementById(tableId + '-header');
                             const tbody = document.getElementById(tableId + '-body');
 
-                            // Render headers
+                            // Render headers with resize handles
                             headerRow.innerHTML = data.columns.map((col, idx) => {
                                 let sortClass = '';
                                 if (sortColumn === idx) {
                                     sortClass = sortDirection === 'asc' ? 'sorted-asc' : 'sorted-desc';
                                 }
-                                return '<th class="' + sortClass + '" onclick="sortTable_${tableId}(' + idx + ')">' +
-                                    escapeHtml(col) + '<span class="sort-indicator"></span></th>';
+                                return '<th class="' + sortClass + '" data-col-idx="' + idx + '">' +
+                                    '<span class="header-content" onclick="sortTable_${tableId}(' + idx + ')">' +
+                                    escapeHtml(col) + '<span class="sort-indicator"></span></span>' +
+                                    '<span class="resize-handle" data-col-idx="' + idx + '"></span></th>';
                             }).join('');
 
                             // Sort rows if needed
@@ -452,7 +479,51 @@ export class DctmNotebookController {
 
                             // Store sorted rows for copying
                             window['sortedRows_' + tableId] = rows;
+
+                            // Attach resize handlers after rendering
+                            attachResizeHandlers();
                         }
+
+                        function attachResizeHandlers() {
+                            const handles = document.querySelectorAll('#' + tableId + ' .resize-handle');
+                            handles.forEach(handle => {
+                                handle.addEventListener('mousedown', function(e) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    const colIdx = parseInt(this.getAttribute('data-col-idx'));
+                                    const th = this.parentElement;
+                                    resizing = { colIdx, th };
+                                    startX = e.pageX;
+                                    startWidth = th.offsetWidth;
+                                    this.classList.add('resizing');
+                                    document.body.style.cursor = 'col-resize';
+                                    document.body.style.userSelect = 'none';
+                                });
+                            });
+                        }
+
+                        document.addEventListener('mousemove', function(e) {
+                            if (!resizing) return;
+                            const diff = e.pageX - startX;
+                            const newWidth = Math.max(60, startWidth + diff);
+                            resizing.th.style.width = newWidth + 'px';
+                            resizing.th.style.minWidth = newWidth + 'px';
+                            resizing.th.style.maxWidth = newWidth + 'px';
+                            // Also update td cells in this column
+                            const tds = document.querySelectorAll('#' + tableId + ' td:nth-child(' + (resizing.colIdx + 1) + ')');
+                            tds.forEach(td => {
+                                td.style.maxWidth = newWidth + 'px';
+                            });
+                        });
+
+                        document.addEventListener('mouseup', function(e) {
+                            if (!resizing) return;
+                            const handle = resizing.th.querySelector('.resize-handle');
+                            if (handle) handle.classList.remove('resizing');
+                            document.body.style.cursor = '';
+                            document.body.style.userSelect = '';
+                            resizing = null;
+                        });
 
                         window['sortTable_${tableId}'] = function(colIdx) {
                             if (sortColumn === colIdx) {

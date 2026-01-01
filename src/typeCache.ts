@@ -118,7 +118,8 @@ export class TypeCache {
     }
 
     /**
-     * Refresh cache from DFC Bridge
+     * Refresh cache from the bridge.
+     * The bridge handles backend type (DFC or REST) internally.
      */
     async refresh(): Promise<void> {
         if (this.refreshing) {
@@ -126,8 +127,8 @@ export class TypeCache {
         }
 
         const connection = this.connectionManager.getActiveConnection();
-        if (!connection || connection.type !== 'dfc') {
-            throw new Error('No active DFC connection');
+        if (!connection || !connection.sessionId) {
+            throw new Error('No active connection');
         }
 
         this.refreshing = true;
@@ -199,11 +200,12 @@ export class TypeCache {
     }
 
     /**
-     * Fetch detailed type info including attributes
+     * Fetch detailed type info including attributes.
+     * The bridge handles backend type (DFC or REST) internally.
      */
     async fetchTypeDetails(typeName: string): Promise<TypeInfo | undefined> {
         const connection = this.connectionManager.getActiveConnection();
-        if (!connection || connection.type !== 'dfc') {
+        if (!connection || !connection.sessionId) {
             return undefined;
         }
 

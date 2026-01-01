@@ -777,20 +777,12 @@ export class DctmNotebookController {
             throw new Error('No active connection');
         }
 
-        // Check connection type - REST connections don't support dmAPI
-        if (this.connectionManager.isRestConnection()) {
-            // This will throw a helpful error message
-            const restClient = this.connectionManager.getRestClient();
-            await restClient.executeDmApi(connection.restSessionId!, apiType, commandString);
-            // The above always throws, but TypeScript needs this for type safety
-            throw new Error('Unreachable');
-        }
-
-        // DFC connection path
         if (!connection.sessionId) {
-            throw new Error('No active DFC session');
+            throw new Error('No active session');
         }
 
+        // Execute via bridge - bridge handles backend type (DFC or REST)
+        // If REST backend is configured, bridge will return appropriate error for dmAPI
         const bridge = this.connectionManager.getDfcBridge();
         const result = await bridge.executeDmApi(connection.sessionId, apiType, commandString);
 

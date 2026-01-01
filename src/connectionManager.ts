@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import axios, { AxiosInstance } from 'axios';
 import { DfcBridge } from './dfcBridge';
+import { RestClient } from './restClient';
 
 export interface DocumentumConnection {
     name: string;
@@ -25,10 +26,12 @@ export interface DfcProfile {
 export interface ActiveConnection {
     config: DocumentumConnection;
     type: 'dfc' | 'rest';
-    // For REST connections
+    // For REST connections - the axios client (for backward compatibility)
     client?: AxiosInstance;
     // For DFC connections
     sessionId?: string;
+    // Pseudo session ID for REST connections (for interface compatibility)
+    restSessionId?: string;
 }
 
 type ConnectionChangeCallback = (connected: boolean, name?: string) => void;
@@ -38,10 +41,12 @@ export class ConnectionManager {
     private activeConnection: ActiveConnection | null = null;
     private connectionChangeCallbacks: ConnectionChangeCallback[] = [];
     private dfcBridge: DfcBridge;
+    private restClient: RestClient;
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
         this.dfcBridge = new DfcBridge(context);
+        this.restClient = new RestClient(context);
     }
 
     onConnectionChange(callback: ConnectionChangeCallback): void {
@@ -188,39 +193,28 @@ export class ConnectionManager {
                 title: `Connecting to ${connection.name} via REST...`,
                 cancellable: false
             }, async () => {
-                const client = axios.create({
-                    baseURL: connection.endpoint,
-                    auth: { username, password },
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json'
-                    }
+                // Use RestClient for connection
+                const restSessionId = await this.restClient.connect({
+                    endpoint: connection.endpoint!,
+                    repository: connection.repository,
+                    username,
+                    password
                 });
 
-                // Test connection by fetching repository info
-                const response = await client.get(`/repositories/${connection.repository}`);
+                this.activeConnection = {
+                    config: connection,
+                    type: 'rest',
+                    client: this.restClient.getClient() || undefined,
+                    restSessionId
+                };
 
-                if (response.status === 200) {
-                    this.activeConnection = {
-                        config: connection,
-                        type: 'rest',
-                        client
-                    };
-
-                    this.notifyConnectionChange(true, connection.name);
-                    vscode.window.showInformationMessage(
-                        `Connected to ${connection.name} (${connection.repository}) via REST`
-                    );
-                }
+                this.notifyConnectionChange(true, connection.name);
+                vscode.window.showInformationMessage(
+                    `Connected to ${connection.name} (${connection.repository}) via REST`
+                );
             });
         } catch (error) {
-            if (axios.isAxiosError(error)) {
-                if (error.response?.status === 401) {
-                    vscode.window.showErrorMessage('Authentication failed. Check your credentials.');
-                } else {
-                    vscode.window.showErrorMessage(`REST connection failed: ${error.message}`);
-                }
-            } else if (error instanceof Error) {
+            if (error instanceof Error) {
                 vscode.window.showErrorMessage(`REST connection failed: ${error.message}`);
             }
         }
@@ -230,13 +224,20 @@ export class ConnectionManager {
         if (this.activeConnection) {
             const name = this.activeConnection.config.name;
 
-            // Disconnect from DFC Bridge if it's a DFC connection
+            // Disconnect based on connection type
             if (this.activeConnection.type === 'dfc' && this.activeConnection.sessionId) {
                 try {
                     await this.dfcBridge.disconnect(this.activeConnection.sessionId);
                 } catch (error) {
                     // Log but don't fail
                     console.error('Error disconnecting from DFC:', error);
+                }
+            } else if (this.activeConnection.type === 'rest' && this.activeConnection.restSessionId) {
+                try {
+                    await this.restClient.disconnect(this.activeConnection.restSessionId);
+                } catch (error) {
+                    // Log but don't fail
+                    console.error('Error disconnecting from REST:', error);
                 }
             }
 
@@ -295,11 +296,40 @@ export class ConnectionManager {
         return this.dfcBridge;
     }
 
+    getRestClient(): RestClient {
+        return this.restClient;
+    }
+
     isConnected(): boolean {
         return this.activeConnection !== null;
     }
 
     isDfcConnection(): boolean {
         return this.activeConnection?.type === 'dfc';
+    }
+
+    isRestConnection(): boolean {
+        return this.activeConnection?.type === 'rest';
+    }
+
+    /**
+     * Get the current session ID (works for both DFC and REST connections)
+     * For DFC: returns the actual session ID
+     * For REST: returns the pseudo session ID
+     */
+    getSessionId(): string | undefined {
+        if (this.activeConnection?.type === 'dfc') {
+            return this.activeConnection.sessionId;
+        } else if (this.activeConnection?.type === 'rest') {
+            return this.activeConnection.restSessionId;
+        }
+        return undefined;
+    }
+
+    /**
+     * Get connection type for feature availability checks
+     */
+    getConnectionType(): 'dfc' | 'rest' | null {
+        return this.activeConnection?.type || null;
     }
 }

@@ -272,9 +272,8 @@ export class DctmNotebookController {
                         padding: 4px 12px;
                         border-bottom: 1px solid var(--vscode-panel-border);
                         vertical-align: top;
-                        max-width: 400px;
-                        overflow: hidden;
-                        text-overflow: ellipsis;
+                        white-space: pre-wrap;
+                        word-break: break-word;
                         cursor: pointer;
                     }
                     .dql-result-container td:hover {

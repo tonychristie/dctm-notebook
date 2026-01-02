@@ -19,6 +19,9 @@ export class DqlExecutor {
         this.connectionManager = connectionManager;
     }
 
+    /**
+     * Execute a DQL query using the global active connection.
+     */
     async execute(query: string): Promise<DqlResult> {
         const connection = this.connectionManager.getActiveConnection();
 
@@ -26,12 +29,23 @@ export class DqlExecutor {
             throw new Error('Not connected to Documentum. Use "Documentum: Connect" first.');
         }
 
-        if (!connection.sessionId) {
+        return this.executeWithSession(query, connection.sessionId);
+    }
+
+    /**
+     * Execute a DQL query using a specific session ID.
+     * Used for notebook-bound connections where each notebook has its own session.
+     *
+     * @param query The DQL query to execute
+     * @param sessionId The session ID to use for execution
+     */
+    async executeWithSession(query: string, sessionId: string): Promise<DqlResult> {
+        if (!sessionId) {
             throw new Error('No active session');
         }
 
         const bridge = this.connectionManager.getDfcBridge();
-        const result = await bridge.executeDql(connection.sessionId, query);
+        const result = await bridge.executeDql(sessionId, query);
 
         return {
             columns: result.columns,

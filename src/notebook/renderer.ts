@@ -281,14 +281,18 @@ function renderDqlResult(
 
     // Helper functions
     function escapeHtml(text: unknown): string {
-        if (text === null || text === undefined) return '';
+        if (text === null || text === undefined) {
+            return '';
+        }
         const div = document.createElement('div');
         div.textContent = String(text);
         return div.innerHTML;
     }
 
     function isObjectId(value: unknown): boolean {
-        if (typeof value !== 'string') return false;
+        if (typeof value !== 'string') {
+            return false;
+        }
         return /^[0-9a-f]{16}$/i.test(value);
     }
 
@@ -325,7 +329,9 @@ function renderDqlResult(
             return;
         }
         const row = sortedRows[selectedRow];
-        if (!row) return;
+        if (!row) {
+            return;
+        }
         const text = data.columns.map(col => {
             const val = row[col];
             return val === null || val === undefined ? '' : String(val);
@@ -370,15 +376,23 @@ function renderDqlResult(
             sortedRows.sort((a, b) => {
                 let aVal = a[col];
                 let bVal = b[col];
-                if (aVal === null || aVal === undefined) aVal = '';
-                if (bVal === null || bVal === undefined) bVal = '';
+                if (aVal === null || aVal === undefined) {
+                    aVal = '';
+                }
+                if (bVal === null || bVal === undefined) {
+                    bVal = '';
+                }
                 if (typeof aVal === 'number' && typeof bVal === 'number') {
                     return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
                 }
                 const aStr = String(aVal).toLowerCase();
                 const bStr = String(bVal).toLowerCase();
-                if (aStr < bStr) return sortDirection === 'asc' ? -1 : 1;
-                if (aStr > bStr) return sortDirection === 'asc' ? 1 : -1;
+                if (aStr < bStr) {
+                    return sortDirection === 'asc' ? -1 : 1;
+                }
+                if (aStr > bStr) {
+                    return sortDirection === 'asc' ? 1 : -1;
+                }
                 return 0;
             });
         }
@@ -424,7 +438,9 @@ function renderDqlResult(
         // Cell click handler
         tbody.onclick = (e: MouseEvent) => {
             const td = (e.target as HTMLElement).closest('td');
-            if (!td) return;
+            if (!td) {
+                return;
+            }
 
             // Clear previous selection
             tbody.querySelectorAll('td.selected').forEach(el => el.classList.remove('selected'));
@@ -450,7 +466,9 @@ function renderDqlResult(
         // Context menu handler
         tbody.oncontextmenu = (e: MouseEvent) => {
             const td = (e.target as HTMLElement).closest('td');
-            if (!td) return;
+            if (!td) {
+                return;
+            }
 
             e.preventDefault();
             const value = td.getAttribute('data-value') || '';
@@ -534,7 +552,9 @@ function renderDqlResult(
 
     // Global event handlers
     document.addEventListener('mousemove', (e: MouseEvent) => {
-        if (!resizing) return;
+        if (!resizing) {
+            return;
+        }
         const diff = e.pageX - startX;
         const newWidth = Math.max(60, startWidth + diff);
         resizing.th.style.width = newWidth + 'px';
@@ -548,9 +568,13 @@ function renderDqlResult(
     });
 
     document.addEventListener('mouseup', () => {
-        if (!resizing) return;
+        if (!resizing) {
+            return;
+        }
         const handle = resizing.th.querySelector('.resize-handle');
-        if (handle) handle.classList.remove('resizing');
+        if (handle) {
+            handle.classList.remove('resizing');
+        }
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         resizing = null;

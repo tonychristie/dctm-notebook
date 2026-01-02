@@ -133,6 +133,18 @@
         "icon": "$(debug-disconnect)"
       },
       {
+        "command": "dctm.switchUser",
+        "title": "Switch User",
+        "category": "Documentum",
+        "icon": "$(account)"
+      },
+      {
+        "command": "dctm.switchUserFromTree",
+        "title": "Switch User",
+        "category": "Documentum",
+        "icon": "$(account)"
+      },
+      {
         "command": "dctm.showObjectProperties",
         "title": "Show Properties",
         "category": "Documentum"
@@ -407,6 +419,11 @@
           "command": "dctm.disconnectFromTree",
           "when": "view == documentumExplorer && viewItem == connection-connected",
           "group": "inline"
+        },
+        {
+          "command": "dctm.switchUserFromTree",
+          "when": "view == documentumExplorer && viewItem == connection-connected",
+          "group": "1_connection"
         },
         {
           "command": "dctm.showObjectProperties",

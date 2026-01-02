@@ -70,4 +70,87 @@ suite('ObjectDumpView Test Suite', () => {
             assert.strictEqual(sanitizeInput('   '), '');
         });
     });
+
+    suite('Dump history', () => {
+        // Test the history management logic
+        class DumpHistory {
+            private history: string[] = [];
+            private maxSize: number;
+
+            constructor(maxSize: number = 20) {
+                this.maxSize = maxSize;
+            }
+
+            add(objectId: string): void {
+                // Remove if already in history
+                const existingIndex = this.history.indexOf(objectId);
+                if (existingIndex !== -1) {
+                    this.history.splice(existingIndex, 1);
+                }
+                // Add to front
+                this.history.unshift(objectId);
+                // Trim to max size
+                if (this.history.length > this.maxSize) {
+                    this.history = this.history.slice(0, this.maxSize);
+                }
+            }
+
+            clear(): void {
+                this.history = [];
+            }
+
+            getHistory(): string[] {
+                return [...this.history];
+            }
+
+            size(): number {
+                return this.history.length;
+            }
+        }
+
+        test('starts empty', () => {
+            const history = new DumpHistory();
+            assert.strictEqual(history.size(), 0);
+            assert.deepStrictEqual(history.getHistory(), []);
+        });
+
+        test('adds items to front', () => {
+            const history = new DumpHistory();
+            history.add('0900000000000001');
+            history.add('0900000000000002');
+            assert.deepStrictEqual(history.getHistory(), ['0900000000000002', '0900000000000001']);
+        });
+
+        test('moves existing item to front', () => {
+            const history = new DumpHistory();
+            history.add('0900000000000001');
+            history.add('0900000000000002');
+            history.add('0900000000000001'); // Re-add first item
+            assert.deepStrictEqual(history.getHistory(), ['0900000000000001', '0900000000000002']);
+            assert.strictEqual(history.size(), 2);
+        });
+
+        test('limits to max size', () => {
+            const history = new DumpHistory(3);
+            history.add('0900000000000001');
+            history.add('0900000000000002');
+            history.add('0900000000000003');
+            history.add('0900000000000004');
+            assert.strictEqual(history.size(), 3);
+            assert.deepStrictEqual(history.getHistory(), [
+                '0900000000000004',
+                '0900000000000003',
+                '0900000000000002'
+            ]);
+        });
+
+        test('clears history', () => {
+            const history = new DumpHistory();
+            history.add('0900000000000001');
+            history.add('0900000000000002');
+            history.clear();
+            assert.strictEqual(history.size(), 0);
+            assert.deepStrictEqual(history.getHistory(), []);
+        });
+    });
 });

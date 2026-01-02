@@ -123,7 +123,14 @@
       {
         "command": "dctm.connectFromTree",
         "title": "Connect",
-        "category": "Documentum"
+        "category": "Documentum",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "dctm.disconnectFromTree",
+        "title": "Disconnect",
+        "category": "Documentum",
+        "icon": "$(debug-disconnect)"
       },
       {
         "command": "dctm.showObjectProperties",
@@ -393,7 +400,12 @@
       "view/item/context": [
         {
           "command": "dctm.connectFromTree",
-          "when": "view == documentumExplorer && viewItem == connection",
+          "when": "view == documentumExplorer && viewItem == connection-disconnected",
+          "group": "inline"
+        },
+        {
+          "command": "dctm.disconnectFromTree",
+          "when": "view == documentumExplorer && viewItem == connection-connected",
           "group": "inline"
         },
         {

@@ -113,7 +113,8 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
                 type: 'connection',
                 connectionName: conn.name,
                 repository: conn.repository,
-                connected: isConnected
+                connected: isConnected,
+                username: isConnected ? activeConnection?.username : undefined
             };
 
             return new ObjectBrowserItem(
@@ -441,6 +442,15 @@ export function registerObjectBrowser(
         }
     );
     context.subscriptions.push(disconnectFromTreeCommand);
+
+    // Register switch user from tree command
+    const switchUserFromTreeCommand = vscode.commands.registerCommand(
+        'dctm.switchUserFromTree',
+        async () => {
+            await connectionManager.switchUser();
+        }
+    );
+    context.subscriptions.push(switchUserFromTreeCommand);
 
     // Register show properties command
     const showPropertiesCommand = vscode.commands.registerCommand(

@@ -22,9 +22,10 @@ export interface DfcProfile {
 export interface ActiveConnection {
     config: DocumentumConnection;
     sessionId: string;
+    username: string;
 }
 
-type ConnectionChangeCallback = (connected: boolean, name?: string) => void;
+type ConnectionChangeCallback = (connected: boolean, name?: string, username?: string) => void;
 
 /**
  * Manages Documentum connections via the DFC Bridge.
@@ -48,8 +49,8 @@ export class ConnectionManager {
         this.connectionChangeCallbacks.push(callback);
     }
 
-    private notifyConnectionChange(connected: boolean, name?: string): void {
-        this.connectionChangeCallbacks.forEach(cb => cb(connected, name));
+    private notifyConnectionChange(connected: boolean, name?: string, username?: string): void {
+        this.connectionChangeCallbacks.forEach(cb => cb(connected, name, username));
     }
 
     getConnections(): DocumentumConnection[] {
@@ -157,12 +158,13 @@ export class ConnectionManager {
 
                 this.activeConnection = {
                     config: connection,
-                    sessionId
+                    sessionId,
+                    username
                 };
 
-                this.notifyConnectionChange(true, connection.name);
+                this.notifyConnectionChange(true, connection.name, username);
                 vscode.window.showInformationMessage(
-                    `Connected to ${connection.name} (${connection.repository})`
+                    `Connected to ${connection.name} as ${username}`
                 );
             });
         } catch (error) {
@@ -205,6 +207,7 @@ export class ConnectionManager {
         items.push({ label: '$(add) Add New Connection...', description: 'Open settings' });
 
         if (this.activeConnection) {
+            items.push({ label: '$(account) Switch User...', description: `Login as different user to ${currentName}` });
             items.push({ label: '$(debug-disconnect) Disconnect', description: currentName });
         }
 
@@ -223,6 +226,8 @@ export class ConnectionManager {
                 'workbench.action.openSettings',
                 'documentum.connections'
             );
+        } else if (selected.label.includes('Switch User')) {
+            await this.switchUser();
         } else if (selected.label.includes('Disconnect')) {
             await this.disconnect();
         } else {
@@ -247,5 +252,49 @@ export class ConnectionManager {
      */
     getSessionId(): string | undefined {
         return this.activeConnection?.sessionId;
+    }
+
+    /**
+     * Get the current username
+     */
+    getUsername(): string | undefined {
+        return this.activeConnection?.username;
+    }
+
+    /**
+     * Switch user - disconnect from current session and prompt for new credentials
+     * on the same connection configuration
+     */
+    async switchUser(): Promise<void> {
+        if (!this.activeConnection) {
+            vscode.window.showWarningMessage('No active connection to switch user');
+            return;
+        }
+
+        const connection = this.activeConnection.config;
+
+        // Disconnect first
+        await this.disconnect();
+
+        // Prompt for new credentials
+        const username = await vscode.window.showInputBox({
+            prompt: `Enter username for ${connection.name}`,
+            placeHolder: 'dmadmin'
+        });
+
+        if (!username) {
+            return;
+        }
+
+        const password = await vscode.window.showInputBox({
+            prompt: 'Enter password',
+            password: true
+        });
+
+        if (!password) {
+            return;
+        }
+
+        await this.connectToBridge(connection, username, password);
     }
 }

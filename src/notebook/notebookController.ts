@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ConnectionManager } from '../connectionManager';
+import { ConnectionManager, ActiveConnection } from '../connectionManager';
 import { DqlExecutor, DqlResult } from '../dqlExecutor';
 import { ApiExecutor, ApiMethodRequest, ApiMethodResponse } from '../apiExecutor';
 
@@ -64,16 +64,31 @@ export class DctmNotebookController {
         execution.start(Date.now());
 
         try {
-            // Check connection
-            const connection = this.connectionManager.getActiveConnection();
+            // Get notebook URI for connection lookup
+            const notebookUri = cell.notebook.uri.toString();
+
+            // Check for notebook-bound connection first, then fall back to global
+            const connection = this.connectionManager.getEffectiveConnection(notebookUri);
             if (!connection) {
-                execution.replaceOutput([
-                    new vscode.NotebookCellOutput([
-                        vscode.NotebookCellOutputItem.error(
-                            new Error('Not connected to Documentum. Use "Documentum: Connect" first.')
-                        )
-                    ])
-                ]);
+                // Check if notebook has a connection binding in metadata but isn't connected yet
+                const boundConnection = cell.notebook.metadata?.connection as string | undefined;
+                if (boundConnection) {
+                    execution.replaceOutput([
+                        new vscode.NotebookCellOutput([
+                            vscode.NotebookCellOutputItem.error(
+                                new Error(`Notebook is bound to "${boundConnection}" but not connected. Use "Documentum: Connect Notebook" to connect.`)
+                            )
+                        ])
+                    ]);
+                } else {
+                    execution.replaceOutput([
+                        new vscode.NotebookCellOutput([
+                            vscode.NotebookCellOutputItem.error(
+                                new Error('Not connected to Documentum. Use "Documentum: Connect" first.')
+                            )
+                        ])
+                    ]);
+                }
                 execution.end(false, Date.now());
                 return;
             }
@@ -92,9 +107,9 @@ export class DctmNotebookController {
             const language = cell.document.languageId;
 
             if (language === 'dql') {
-                await this.executeDql(content, execution, outputFormat);
+                await this.executeDql(content, execution, outputFormat, connection);
             } else if (language === 'dmapi') {
-                await this.executeApi(content, execution, outputFormat);
+                await this.executeApi(content, execution, outputFormat, connection);
             } else {
                 execution.replaceOutput([
                     new vscode.NotebookCellOutput([
@@ -159,11 +174,17 @@ export class DctmNotebookController {
 
     /**
      * Execute a DQL query and render results
+     *
+     * @param query The DQL query to execute
+     * @param execution The notebook cell execution context
+     * @param outputFormat The output format preference ('html' or 'json')
+     * @param connection The active connection to use for execution
      */
     private async executeDql(
         query: string,
         execution: vscode.NotebookCellExecution,
-        outputFormat: string
+        outputFormat: string,
+        connection: ActiveConnection
     ): Promise<void> {
         try {
             // Strip comments before execution
@@ -173,7 +194,8 @@ export class DctmNotebookController {
                 execution.end(true, Date.now());
                 return;
             }
-            const result = await this.dqlExecutor.execute(cleanQuery);
+            // Use the session ID from the provided connection
+            const result = await this.dqlExecutor.executeWithSession(cleanQuery, connection.sessionId);
             const output = this.formatDqlOutput(result, outputFormat);
 
             execution.replaceOutput([output]);
@@ -714,11 +736,17 @@ export class DctmNotebookController {
 
     /**
      * Execute an API command
+     *
+     * @param command The API command to execute
+     * @param execution The notebook cell execution context
+     * @param outputFormat The output format preference ('html' or 'json')
+     * @param connection The active connection to use for execution
      */
     private async executeApi(
         command: string,
         execution: vscode.NotebookCellExecution,
-        outputFormat: string
+        outputFormat: string,
+        connection: ActiveConnection
     ): Promise<void> {
         try {
             // Strip comments before execution
@@ -737,7 +765,11 @@ export class DctmNotebookController {
 
             if (dmApiMatch) {
                 // Use the new dmAPI endpoint for server-level API calls
-                result = await this.executeDmApiCommand(dmApiMatch[1].toLowerCase() as 'get' | 'exec' | 'set', dmApiMatch[2]);
+                result = await this.executeDmApiCommand(
+                    dmApiMatch[1].toLowerCase() as 'get' | 'exec' | 'set',
+                    dmApiMatch[2],
+                    connection
+                );
             } else {
                 // Use the object API endpoint for method invocations
                 const request = this.parseApiCommand(command);
@@ -766,16 +798,13 @@ export class DctmNotebookController {
      *
      * @param apiType The type of dmAPI call: 'get', 'exec', or 'set'
      * @param commandString The full command string from inside the quotes
+     * @param connection The active connection to use for execution
      */
     private async executeDmApiCommand(
         apiType: 'get' | 'exec' | 'set',
-        commandString: string
+        commandString: string,
+        connection: ActiveConnection
     ): Promise<ApiMethodResponse> {
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection) {
-            throw new Error('No active connection');
-        }
-
         if (!connection.sessionId) {
             throw new Error('No active session');
         }

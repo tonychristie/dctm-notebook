@@ -72,12 +72,108 @@ export function registerNotebook(
     // Register notebook-specific commands
     registerNotebookCommands(context, connectionManager);
 
+    // Register notebook connection status bar
+    registerNotebookStatusBar(context, connectionManager);
+
     // Register enhanced dmAPI completion provider if reference is available
     if (apiReference) {
         registerNotebookCompletions(context, apiReference);
     }
 
     console.log('Documentum notebook support registered');
+}
+
+/**
+ * Register status bar item for notebook connection status
+ */
+function registerNotebookStatusBar(
+    context: vscode.ExtensionContext,
+    connectionManager: ConnectionManager
+): void {
+    // Create a status bar item for notebook connection
+    const notebookStatusBar = vscode.window.createStatusBarItem(
+        vscode.StatusBarAlignment.Right,
+        99 // Just after the main connection status bar (100)
+    );
+    notebookStatusBar.command = 'dctm.notebook.connectNotebook';
+    context.subscriptions.push(notebookStatusBar);
+
+    // Function to update the status bar based on active notebook
+    const updateNotebookStatus = () => {
+        const editor = vscode.window.activeNotebookEditor;
+
+        // Hide if no notebook is active or it's not a dctmbook
+        if (!editor || editor.notebook.notebookType !== 'dctmbook') {
+            notebookStatusBar.hide();
+            return;
+        }
+
+        const notebookUri = editor.notebook.uri.toString();
+        const boundConnection = editor.notebook.metadata?.connection as string | undefined;
+        const notebookConnection = connectionManager.getNotebookConnection(notebookUri);
+
+        if (notebookConnection) {
+            // Notebook has its own active connection
+            notebookStatusBar.text = `$(notebook) ${notebookConnection.config.name} (${notebookConnection.username})`;
+            notebookStatusBar.tooltip = `Notebook connected to ${notebookConnection.config.name} as ${notebookConnection.username}. Click to manage.`;
+            notebookStatusBar.backgroundColor = undefined;
+            notebookStatusBar.command = 'dctm.notebook.disconnectNotebook';
+        } else if (boundConnection) {
+            // Notebook is bound but not connected
+            notebookStatusBar.text = `$(notebook) ${boundConnection} (disconnected)`;
+            notebookStatusBar.tooltip = `Notebook bound to ${boundConnection} but not connected. Click to connect.`;
+            notebookStatusBar.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+            notebookStatusBar.command = 'dctm.notebook.connectNotebook';
+        } else {
+            // Notebook uses global connection
+            const globalConn = connectionManager.getActiveConnection();
+            if (globalConn) {
+                notebookStatusBar.text = `$(notebook) Using global: ${globalConn.config.name}`;
+                notebookStatusBar.tooltip = `Notebook using global connection. Click to bind to a specific connection.`;
+                notebookStatusBar.backgroundColor = undefined;
+            } else {
+                notebookStatusBar.text = `$(notebook) No connection`;
+                notebookStatusBar.tooltip = `Notebook has no connection. Click to bind to a connection.`;
+                notebookStatusBar.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+            }
+            notebookStatusBar.command = 'dctm.notebook.bindConnection';
+        }
+
+        notebookStatusBar.show();
+    };
+
+    // Update when active editor changes
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveNotebookEditor(() => {
+            updateNotebookStatus();
+        })
+    );
+
+    // Clean up notebook connection when notebook is closed
+    context.subscriptions.push(
+        vscode.workspace.onDidCloseNotebookDocument(async (notebook) => {
+            if (notebook.notebookType === 'dctmbook') {
+                const notebookUri = notebook.uri.toString();
+                if (connectionManager.hasNotebookConnection(notebookUri)) {
+                    await connectionManager.disconnectNotebook(notebookUri);
+                    console.log(`Disconnected notebook session for ${notebook.uri.fsPath}`);
+                }
+            }
+        })
+    );
+
+    // Update when notebook connection changes
+    connectionManager.onNotebookConnectionChange(() => {
+        updateNotebookStatus();
+    });
+
+    // Update when global connection changes
+    connectionManager.onConnectionChange(() => {
+        updateNotebookStatus();
+    });
+
+    // Initial update
+    updateNotebookStatus();
 }
 
 /**
@@ -255,11 +351,218 @@ function registerNotebookCommands(
         }
     );
 
+    // Command to bind notebook to a specific connection
+    const bindConnection = vscode.commands.registerCommand(
+        'dctm.notebook.bindConnection',
+        async () => {
+            const editor = vscode.window.activeNotebookEditor;
+            if (!editor || editor.notebook.notebookType !== 'dctmbook') {
+                vscode.window.showWarningMessage('No Documentum notebook is active');
+                return;
+            }
+
+            const connections = connectionManager.getConnections();
+            if (connections.length === 0) {
+                vscode.window.showWarningMessage(
+                    'No connections configured. Add connections in settings first.'
+                );
+                return;
+            }
+
+            // Show picker with available connections
+            const currentBinding = editor.notebook.metadata?.connection as string | undefined;
+            const items = connections.map(c => ({
+                label: c.name === currentBinding ? `$(check) ${c.name}` : c.name,
+                description: c.repository,
+                detail: c.docbroker ? `${c.docbroker}:${c.port || 1489}` : 'Bridge connection',
+                connectionName: c.name
+            }));
+
+            const selected = await vscode.window.showQuickPick(items, {
+                placeHolder: currentBinding
+                    ? `Currently bound to: ${currentBinding}`
+                    : 'Select a connection to bind to this notebook'
+            });
+
+            if (!selected) {
+                return;
+            }
+
+            // Update notebook metadata
+            const edit = new vscode.WorkspaceEdit();
+            const newMetadata = {
+                ...editor.notebook.metadata,
+                connection: selected.connectionName
+            };
+            edit.set(editor.notebook.uri, [
+                vscode.NotebookEdit.updateNotebookMetadata(newMetadata)
+            ]);
+
+            await vscode.workspace.applyEdit(edit);
+            vscode.window.showInformationMessage(
+                `Notebook bound to "${selected.connectionName}". Use "Connect Notebook" to establish connection.`
+            );
+        }
+    );
+
+    // Command to unbind notebook from its connection
+    const unbindConnection = vscode.commands.registerCommand(
+        'dctm.notebook.unbindConnection',
+        async () => {
+            const editor = vscode.window.activeNotebookEditor;
+            if (!editor || editor.notebook.notebookType !== 'dctmbook') {
+                vscode.window.showWarningMessage('No Documentum notebook is active');
+                return;
+            }
+
+            const currentBinding = editor.notebook.metadata?.connection as string | undefined;
+            if (!currentBinding) {
+                vscode.window.showInformationMessage('Notebook is not bound to any connection');
+                return;
+            }
+
+            // Disconnect if there's an active notebook connection
+            const notebookUri = editor.notebook.uri.toString();
+            if (connectionManager.hasNotebookConnection(notebookUri)) {
+                await connectionManager.disconnectNotebook(notebookUri);
+            }
+
+            // Remove the connection binding from metadata
+            const edit = new vscode.WorkspaceEdit();
+            const newMetadata = { ...editor.notebook.metadata };
+            delete newMetadata.connection;
+            edit.set(editor.notebook.uri, [
+                vscode.NotebookEdit.updateNotebookMetadata(newMetadata)
+            ]);
+
+            await vscode.workspace.applyEdit(edit);
+            vscode.window.showInformationMessage(
+                `Notebook unbound from "${currentBinding}". Will use global connection.`
+            );
+        }
+    );
+
+    // Command to connect notebook using its bound connection
+    const connectNotebook = vscode.commands.registerCommand(
+        'dctm.notebook.connectNotebook',
+        async () => {
+            const editor = vscode.window.activeNotebookEditor;
+            if (!editor || editor.notebook.notebookType !== 'dctmbook') {
+                vscode.window.showWarningMessage('No Documentum notebook is active');
+                return;
+            }
+
+            const notebookUri = editor.notebook.uri.toString();
+            const boundConnection = editor.notebook.metadata?.connection as string | undefined;
+
+            if (!boundConnection) {
+                // No binding - ask if they want to bind first
+                const action = await vscode.window.showWarningMessage(
+                    'Notebook is not bound to a connection. Bind to a connection first?',
+                    'Bind Connection',
+                    'Use Global'
+                );
+                if (action === 'Bind Connection') {
+                    await vscode.commands.executeCommand('dctm.notebook.bindConnection');
+                }
+                return;
+            }
+
+            // Check if already connected
+            if (connectionManager.hasNotebookConnection(notebookUri)) {
+                const conn = connectionManager.getNotebookConnection(notebookUri);
+                vscode.window.showInformationMessage(
+                    `Already connected to ${conn?.config.name} as ${conn?.username}`
+                );
+                return;
+            }
+
+            // Get the connection config
+            const connections = connectionManager.getConnections();
+            const connection = connections.find(c => c.name === boundConnection);
+            if (!connection) {
+                vscode.window.showErrorMessage(
+                    `Connection "${boundConnection}" not found. Update the notebook binding.`
+                );
+                return;
+            }
+
+            // Prompt for credentials
+            const username = connection.username || await vscode.window.showInputBox({
+                prompt: `Enter username for ${connection.name}`,
+                placeHolder: 'dmadmin'
+            });
+
+            if (!username) {
+                return;
+            }
+
+            const password = await vscode.window.showInputBox({
+                prompt: 'Enter password',
+                password: true
+            });
+
+            if (!password) {
+                return;
+            }
+
+            try {
+                await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: `Connecting notebook to ${connection.name}...`,
+                    cancellable: false
+                }, async () => {
+                    await connectionManager.connectNotebook(
+                        notebookUri,
+                        boundConnection,
+                        username,
+                        password
+                    );
+                });
+
+                vscode.window.showInformationMessage(
+                    `Notebook connected to ${connection.name} as ${username}`
+                );
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                vscode.window.showErrorMessage(`Failed to connect notebook: ${message}`);
+            }
+        }
+    );
+
+    // Command to disconnect notebook
+    const disconnectNotebook = vscode.commands.registerCommand(
+        'dctm.notebook.disconnectNotebook',
+        async () => {
+            const editor = vscode.window.activeNotebookEditor;
+            if (!editor || editor.notebook.notebookType !== 'dctmbook') {
+                vscode.window.showWarningMessage('No Documentum notebook is active');
+                return;
+            }
+
+            const notebookUri = editor.notebook.uri.toString();
+            if (!connectionManager.hasNotebookConnection(notebookUri)) {
+                vscode.window.showInformationMessage('Notebook is not connected');
+                return;
+            }
+
+            const conn = connectionManager.getNotebookConnection(notebookUri);
+            await connectionManager.disconnectNotebook(notebookUri);
+            vscode.window.showInformationMessage(
+                `Notebook disconnected from ${conn?.config.name}`
+            );
+        }
+    );
+
     context.subscriptions.push(
         insertDqlCell,
         insertApiCell,
         insertMarkdownCell,
         toggleOutputFormat,
-        dumpObject
+        dumpObject,
+        bindConnection,
+        unbindConnection,
+        connectNotebook,
+        disconnectNotebook
     );
 }

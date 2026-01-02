@@ -249,6 +249,30 @@
         "title": "Dump Object",
         "category": "Documentum",
         "icon": "$(symbol-property)"
+      },
+      {
+        "command": "dctm.notebook.bindConnection",
+        "title": "Bind to Connection",
+        "category": "Documentum Notebook",
+        "icon": "$(link)"
+      },
+      {
+        "command": "dctm.notebook.unbindConnection",
+        "title": "Unbind Connection",
+        "category": "Documentum Notebook",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "dctm.notebook.connectNotebook",
+        "title": "Connect Notebook",
+        "category": "Documentum Notebook",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "dctm.notebook.disconnectNotebook",
+        "title": "Disconnect Notebook",
+        "category": "Documentum Notebook",
+        "icon": "$(debug-disconnect)"
       }
     ],
     "views": {
@@ -481,6 +505,41 @@
           "command": "dctm.notebook.toggleOutputFormat",
           "when": "notebookType == dctmbook && notebookCellType == code",
           "group": "inline@1"
+        }
+      ],
+      "notebook/toolbar": [
+        {
+          "command": "dctm.notebook.bindConnection",
+          "when": "notebookType == dctmbook",
+          "group": "navigation@1"
+        },
+        {
+          "command": "dctm.notebook.connectNotebook",
+          "when": "notebookType == dctmbook",
+          "group": "navigation@2"
+        },
+        {
+          "command": "dctm.notebook.disconnectNotebook",
+          "when": "notebookType == dctmbook",
+          "group": "navigation@3"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "dctm.notebook.bindConnection",
+          "when": "notebookType == dctmbook"
+        },
+        {
+          "command": "dctm.notebook.unbindConnection",
+          "when": "notebookType == dctmbook"
+        },
+        {
+          "command": "dctm.notebook.connectNotebook",
+          "when": "notebookType == dctmbook"
+        },
+        {
+          "command": "dctm.notebook.disconnectNotebook",
+          "when": "notebookType == dctmbook"
         }
       ]
     },

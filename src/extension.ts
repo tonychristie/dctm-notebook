@@ -135,8 +135,11 @@ export function activate(context: vscode.ExtensionContext) {
     });
 }
 
-export function deactivate() {
+export async function deactivate() {
     if (connectionManager) {
-        connectionManager.disconnect();
+        // Disconnect all notebook sessions first
+        await connectionManager.disconnectAllNotebooks();
+        // Then disconnect the global connection
+        await connectionManager.disconnect();
     }
 }

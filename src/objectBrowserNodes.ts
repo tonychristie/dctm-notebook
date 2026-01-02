@@ -33,6 +33,7 @@ export interface ConnectionNodeData extends NodeData {
     connectionName: string;
     repository: string;
     connected: boolean;
+    username?: string;
 }
 
 /**
@@ -160,7 +161,8 @@ export class ObjectBrowserItem extends vscode.TreeItem {
         switch (this.data.type) {
             case 'connection':
                 const connData = this.data as ConnectionNodeData;
-                return `${connData.connectionName}\nRepository: ${connData.repository}\nStatus: ${connData.connected ? 'Connected' : 'Disconnected'}`;
+                const userInfo = connData.connected && connData.username ? `\nUser: ${connData.username}` : '';
+                return `${connData.connectionName}\nRepository: ${connData.repository}${userInfo}\nStatus: ${connData.connected ? 'Connected' : 'Disconnected'}`;
             case 'cabinet':
             case 'folder':
                 const folderData = this.data as CabinetNodeData | FolderNodeData;
@@ -257,6 +259,9 @@ export class ObjectBrowserItem extends vscode.TreeItem {
         switch (this.data.type) {
             case 'connection':
                 const connData = this.data as ConnectionNodeData;
+                if (connData.connected && connData.username) {
+                    return `${connData.repository} (${connData.username})`;
+                }
                 return connData.connected ? connData.repository : 'disconnected';
             case 'document':
                 const docData = this.data as DocumentNodeData;

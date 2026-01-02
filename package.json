@@ -243,6 +243,12 @@
           "id": "documentumTypeBrowser",
           "name": "Type Browser",
           "contextualTitle": "Documentum Types"
+        },
+        {
+          "id": "documentumObjectDump",
+          "type": "webview",
+          "name": "Object Dump",
+          "contextualTitle": "Documentum Object Dump"
         }
       ]
     },

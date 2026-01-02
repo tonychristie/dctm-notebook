@@ -10,6 +10,7 @@ import { registerTypeBrowser } from './typeBrowser';
 import { registerDqlSemanticTokens } from './dqlSemanticTokens';
 import { registerApiMethodReference } from './apiMethodReference';
 import { registerNotebook } from './notebook';
+import { registerObjectDumpView } from './objectDumpView';
 
 let connectionManager: ConnectionManager;
 let dqlExecutor: DqlExecutor;
@@ -110,6 +111,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register notebook support for .dctmbook files
     registerNotebook(context, connectionManager, dqlExecutor, apiExecutor, apiReference);
+
+    // Register Object Dump sidebar view
+    registerObjectDumpView(context, connectionManager);
 
     // Auto-refresh type cache on connection
     connectionManager.onConnectionChange(async (connected) => {

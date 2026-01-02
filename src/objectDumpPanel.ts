@@ -29,6 +29,15 @@ export interface ObjectDump {
 }
 
 /**
+ * Navigation history entry
+ */
+export interface NavigationEntry {
+    objectId: string;
+    objectName: string;
+    typeName: string;
+}
+
+/**
  * WebviewPanel for displaying Documentum object dumps with grouped attributes
  * Similar to Repoint's PropertiesView with attribute categorization
  */
@@ -39,6 +48,10 @@ export class ObjectDumpPanel {
     private readonly panel: vscode.WebviewPanel;
     private readonly connectionManager: ConnectionManager;
     private disposables: vscode.Disposable[] = [];
+
+    // Navigation history
+    private navigationHistory: NavigationEntry[] = [];
+    private historyIndex: number = -1;
 
     public static async createOrShow(
         extensionUri: vscode.Uri,
@@ -91,14 +104,20 @@ export class ObjectDumpPanel {
             async (message) => {
                 switch (message.command) {
                     case 'refresh':
-                        await this.loadObject(message.objectId);
+                        await this.loadObject(message.objectId, false);
                         break;
                     case 'copyValue':
                         await vscode.env.clipboard.writeText(message.value);
                         vscode.window.showInformationMessage('Value copied to clipboard');
                         break;
                     case 'dumpObject':
-                        await this.loadObject(message.objectId);
+                        await this.loadObject(message.objectId, true);
+                        break;
+                    case 'goBack':
+                        await this.goBack();
+                        break;
+                    case 'goForward':
+                        await this.goForward();
                         break;
                 }
             },
@@ -109,19 +128,74 @@ export class ObjectDumpPanel {
 
     /**
      * Load and display an object's attributes
+     * @param objectId The object ID to load
+     * @param addToHistory Whether to add this navigation to history (default: true)
      */
-    public async loadObject(objectId: string): Promise<void> {
+    public async loadObject(objectId: string, addToHistory: boolean = true): Promise<void> {
         this.panel.title = `Object: ${objectId}`;
         this.panel.webview.html = this.getLoadingHtml();
 
         try {
             const dump = await this.fetchObjectDump(objectId);
             this.panel.title = `${dump.objectName} (${dump.typeName})`;
+
+            // Update navigation history
+            if (addToHistory) {
+                // Remove any forward history when navigating to a new object
+                if (this.historyIndex < this.navigationHistory.length - 1) {
+                    this.navigationHistory = this.navigationHistory.slice(0, this.historyIndex + 1);
+                }
+
+                // Add new entry to history
+                this.navigationHistory.push({
+                    objectId: dump.objectId,
+                    objectName: dump.objectName,
+                    typeName: dump.typeName
+                });
+                this.historyIndex = this.navigationHistory.length - 1;
+            }
+
             this.panel.webview.html = this.getContentHtml(dump);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.panel.webview.html = this.getErrorHtml(objectId, errorMessage);
         }
+    }
+
+    /**
+     * Navigate back in history
+     */
+    private async goBack(): Promise<void> {
+        if (this.historyIndex > 0) {
+            this.historyIndex--;
+            const entry = this.navigationHistory[this.historyIndex];
+            await this.loadObject(entry.objectId, false);
+        }
+    }
+
+    /**
+     * Navigate forward in history
+     */
+    private async goForward(): Promise<void> {
+        if (this.historyIndex < this.navigationHistory.length - 1) {
+            this.historyIndex++;
+            const entry = this.navigationHistory[this.historyIndex];
+            await this.loadObject(entry.objectId, false);
+        }
+    }
+
+    /**
+     * Check if back navigation is available
+     */
+    private canGoBack(): boolean {
+        return this.historyIndex > 0;
+    }
+
+    /**
+     * Check if forward navigation is available
+     */
+    private canGoForward(): boolean {
+        return this.historyIndex < this.navigationHistory.length - 1;
     }
 
     /**
@@ -442,8 +516,23 @@ export class ObjectDumpPanel {
                     font-size: 11px;
                     margin-right: 8px;
                 }
-                .header-actions button:hover {
+                .header-actions button:hover:not(:disabled) {
                     background: var(--vscode-button-secondaryHoverBackground);
+                }
+                .header-actions button:disabled {
+                    opacity: 0.4;
+                    cursor: not-allowed;
+                }
+                .nav-buttons {
+                    display: inline-flex;
+                    gap: 4px;
+                    margin-right: 12px;
+                    padding-right: 12px;
+                    border-right: 1px solid var(--vscode-panel-border);
+                }
+                .nav-buttons button {
+                    padding: 4px 8px;
+                    min-width: 28px;
                 }
                 .content {
                     padding: 16px;
@@ -585,6 +674,10 @@ export class ObjectDumpPanel {
                     Loaded in ${dump.fetchTime}ms
                 </div>
                 <div class="header-actions">
+                    <span class="nav-buttons">
+                        <button onclick="goBack()" ${this.canGoBack() ? '' : 'disabled'} title="Go back">&#9664;</button>
+                        <button onclick="goForward()" ${this.canGoForward() ? '' : 'disabled'} title="Go forward">&#9654;</button>
+                    </span>
                     <button onclick="refresh()">Refresh</button>
                     <button onclick="copyObjectId()">Copy Object ID</button>
                     <button onclick="collapseAll()">Collapse All</button>
@@ -625,6 +718,14 @@ export class ObjectDumpPanel {
 
                 function copyObjectId() {
                     vscode.postMessage({ command: 'copyValue', value: objectId });
+                }
+
+                function goBack() {
+                    vscode.postMessage({ command: 'goBack' });
+                }
+
+                function goForward() {
+                    vscode.postMessage({ command: 'goForward' });
                 }
 
                 function copyValue(value) {

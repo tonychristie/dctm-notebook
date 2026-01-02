@@ -245,4 +245,145 @@ suite('ObjectDumpPanel Test Suite', () => {
             assert.strictEqual(escapeHtml("O'Brien & Sons"), "O&#039;Brien &amp; Sons");
         });
     });
+
+    suite('Navigation history', () => {
+        // Test the navigation history logic in isolation
+        interface NavigationEntry {
+            objectId: string;
+            objectName: string;
+            typeName: string;
+        }
+
+        class NavigationHistory {
+            private history: NavigationEntry[] = [];
+            private index: number = -1;
+
+            push(entry: NavigationEntry): void {
+                // Remove any forward history when navigating to a new object
+                if (this.index < this.history.length - 1) {
+                    this.history = this.history.slice(0, this.index + 1);
+                }
+                this.history.push(entry);
+                this.index = this.history.length - 1;
+            }
+
+            goBack(): NavigationEntry | undefined {
+                if (this.canGoBack()) {
+                    this.index--;
+                    return this.history[this.index];
+                }
+                return undefined;
+            }
+
+            goForward(): NavigationEntry | undefined {
+                if (this.canGoForward()) {
+                    this.index++;
+                    return this.history[this.index];
+                }
+                return undefined;
+            }
+
+            canGoBack(): boolean {
+                return this.index > 0;
+            }
+
+            canGoForward(): boolean {
+                return this.index < this.history.length - 1;
+            }
+
+            current(): NavigationEntry | undefined {
+                return this.index >= 0 ? this.history[this.index] : undefined;
+            }
+
+            size(): number {
+                return this.history.length;
+            }
+        }
+
+        test('starts empty with no navigation available', () => {
+            const nav = new NavigationHistory();
+            assert.strictEqual(nav.canGoBack(), false);
+            assert.strictEqual(nav.canGoForward(), false);
+            assert.strictEqual(nav.current(), undefined);
+        });
+
+        test('allows forward after going back', () => {
+            const nav = new NavigationHistory();
+            nav.push({ objectId: '1', objectName: 'Object 1', typeName: 'dm_document' });
+            nav.push({ objectId: '2', objectName: 'Object 2', typeName: 'dm_document' });
+
+            assert.strictEqual(nav.canGoBack(), true);
+            assert.strictEqual(nav.canGoForward(), false);
+
+            nav.goBack();
+            assert.strictEqual(nav.canGoForward(), true);
+            assert.strictEqual(nav.current()?.objectId, '1');
+
+            nav.goForward();
+            assert.strictEqual(nav.current()?.objectId, '2');
+            assert.strictEqual(nav.canGoForward(), false);
+        });
+
+        test('clears forward history when navigating to new object', () => {
+            const nav = new NavigationHistory();
+            nav.push({ objectId: '1', objectName: 'Object 1', typeName: 'dm_document' });
+            nav.push({ objectId: '2', objectName: 'Object 2', typeName: 'dm_document' });
+            nav.push({ objectId: '3', objectName: 'Object 3', typeName: 'dm_document' });
+
+            // Go back twice
+            nav.goBack();
+            nav.goBack();
+            assert.strictEqual(nav.current()?.objectId, '1');
+
+            // Navigate to new object - should clear forward history
+            nav.push({ objectId: '4', objectName: 'Object 4', typeName: 'dm_document' });
+
+            assert.strictEqual(nav.canGoForward(), false);
+            assert.strictEqual(nav.size(), 2); // Only 1 and 4
+            assert.strictEqual(nav.current()?.objectId, '4');
+        });
+
+        test('does not go back beyond first entry', () => {
+            const nav = new NavigationHistory();
+            nav.push({ objectId: '1', objectName: 'Object 1', typeName: 'dm_document' });
+
+            assert.strictEqual(nav.canGoBack(), false);
+            assert.strictEqual(nav.goBack(), undefined);
+            assert.strictEqual(nav.current()?.objectId, '1');
+        });
+
+        test('does not go forward beyond last entry', () => {
+            const nav = new NavigationHistory();
+            nav.push({ objectId: '1', objectName: 'Object 1', typeName: 'dm_document' });
+
+            assert.strictEqual(nav.canGoForward(), false);
+            assert.strictEqual(nav.goForward(), undefined);
+            assert.strictEqual(nav.current()?.objectId, '1');
+        });
+
+        test('tracks multiple navigations correctly', () => {
+            const nav = new NavigationHistory();
+            nav.push({ objectId: 'a', objectName: 'A', typeName: 'type' });
+            nav.push({ objectId: 'b', objectName: 'B', typeName: 'type' });
+            nav.push({ objectId: 'c', objectName: 'C', typeName: 'type' });
+            nav.push({ objectId: 'd', objectName: 'D', typeName: 'type' });
+
+            assert.strictEqual(nav.current()?.objectId, 'd');
+            assert.strictEqual(nav.size(), 4);
+
+            // Go back to A
+            nav.goBack();
+            nav.goBack();
+            nav.goBack();
+            assert.strictEqual(nav.current()?.objectId, 'a');
+            assert.strictEqual(nav.canGoBack(), false);
+
+            // Go forward to D
+            nav.goForward();
+            nav.goForward();
+            nav.goForward();
+            assert.strictEqual(nav.current()?.objectId, 'd');
+            assert.strictEqual(nav.canGoForward(), false);
+        });
+    });
 });

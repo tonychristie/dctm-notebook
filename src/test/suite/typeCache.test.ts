@@ -106,7 +106,7 @@ suite('TypeCache Test Suite', () => {
                 assert.fail('Should have thrown error');
             } catch (error) {
                 assert.ok(error instanceof Error);
-                assert.ok((error as Error).message.includes('No active DFC connection'));
+                assert.ok((error as Error).message.includes('No active connection'));
             }
         });
     });

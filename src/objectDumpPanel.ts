@@ -137,7 +137,13 @@ export class ObjectDumpPanel {
 
         try {
             const dump = await this.fetchObjectDump(objectId);
-            this.panel.title = `${dump.objectName} (${dump.typeName})`;
+            // Format: {r_object_id} {object_name} {r_object_type}
+            const titleParts = [dump.objectId];
+            if (dump.objectName) {
+                titleParts.push(dump.objectName);
+            }
+            titleParts.push(dump.typeName);
+            this.panel.title = titleParts.join(' ');
 
             // Update navigation history
             if (addToHistory) {

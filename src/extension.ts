@@ -35,6 +35,10 @@ export function activate(context: vscode.ExtensionContext) {
         await connectionManager.disconnect();
     });
 
+    const switchUserCommand = vscode.commands.registerCommand('dctm.switchUser', async () => {
+        await connectionManager.switchUser();
+    });
+
     const executeDqlCommand = vscode.commands.registerCommand('dctm.executeDql', async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
@@ -70,6 +74,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         connectCommand,
         disconnectCommand,
+        switchUserCommand,
         executeDqlCommand,
         showConnectionsCommand
     );
@@ -86,9 +91,10 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(statusBarItem);
 
     // Update status bar when connection changes
-    connectionManager.onConnectionChange((connected, name) => {
+    connectionManager.onConnectionChange((connected, name, username) => {
         if (connected) {
-            statusBarItem.text = `$(database) Documentum: ${name}`;
+            const displayText = username ? `${name} (${username})` : name;
+            statusBarItem.text = `$(database) Documentum: ${displayText}`;
             statusBarItem.backgroundColor = undefined;
         } else {
             statusBarItem.text = '$(database) Documentum: Disconnected';

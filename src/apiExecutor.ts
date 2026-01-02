@@ -1,4 +1,4 @@
-import { ConnectionManager, ActiveConnection } from './connectionManager';
+import { ConnectionManager } from './connectionManager';
 
 /**
  * Request to execute a DFC API method

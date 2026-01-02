@@ -433,6 +433,15 @@ export function registerObjectBrowser(
     );
     context.subscriptions.push(connectFromTreeCommand);
 
+    // Register disconnect from tree command
+    const disconnectFromTreeCommand = vscode.commands.registerCommand(
+        'dctm.disconnectFromTree',
+        async () => {
+            await connectionManager.disconnect();
+        }
+    );
+    context.subscriptions.push(disconnectFromTreeCommand);
+
     // Register show properties command
     const showPropertiesCommand = vscode.commands.registerCommand(
         'dctm.showObjectProperties',

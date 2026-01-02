@@ -129,7 +129,7 @@ export class ObjectBrowserItem extends vscode.TreeItem {
         public readonly collapsibleState: vscode.TreeItemCollapsibleState
     ) {
         super(data.name, collapsibleState);
-        this.contextValue = data.type;
+        this.contextValue = this.getContextValue();
         this.id = data.id;
         this.tooltip = this.getTooltip();
         this.iconPath = this.getIcon();
@@ -143,6 +143,17 @@ export class ObjectBrowserItem extends vscode.TreeItem {
                 arguments: [data]
             };
         }
+    }
+
+    /**
+     * Get context value for menus - connections include connected/disconnected suffix
+     */
+    private getContextValue(): string {
+        if (this.data.type === 'connection') {
+            const connData = this.data as ConnectionNodeData;
+            return connData.connected ? 'connection-connected' : 'connection-disconnected';
+        }
+        return this.data.type;
     }
 
     private getTooltip(): string {

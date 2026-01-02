@@ -28,17 +28,39 @@ export interface ActiveConnection {
 type ConnectionChangeCallback = (connected: boolean, name?: string, username?: string) => void;
 
 /**
+ * Callback type for notebook connection changes.
+ * Called when a notebook's bound connection is established or disconnected.
+ */
+type NotebookConnectionChangeCallback = (
+    notebookUri: string,
+    connected: boolean,
+    connectionName?: string,
+    username?: string
+) => void;
+
+/**
  * Manages Documentum connections via the DFC Bridge.
  *
  * The bridge handles the underlying connection type (DFC or REST) based on its
  * configuration. The extension always talks to the bridge - it doesn't need to
  * know about the backend type.
+ *
+ * Supports two types of connections:
+ * 1. Global active connection - used by default for all operations
+ * 2. Notebook-bound connections - per-notebook sessions identified by notebook URI
  */
 export class ConnectionManager {
     private context: vscode.ExtensionContext;
     private activeConnection: ActiveConnection | null = null;
     private connectionChangeCallbacks: ConnectionChangeCallback[] = [];
+    private notebookConnectionCallbacks: NotebookConnectionChangeCallback[] = [];
     private dfcBridge: DfcBridge;
+
+    /**
+     * Notebook-bound connections: Map from notebook URI to ActiveConnection.
+     * Allows multiple notebooks to have their own independent sessions.
+     */
+    private notebookConnections: Map<string, ActiveConnection> = new Map();
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
@@ -296,5 +318,155 @@ export class ConnectionManager {
         }
 
         await this.connectToBridge(connection, username, password);
+    }
+
+    // =========================================================================
+    // Notebook-bound connection management
+    // =========================================================================
+
+    /**
+     * Register a callback for notebook connection changes.
+     */
+    onNotebookConnectionChange(callback: NotebookConnectionChangeCallback): void {
+        this.notebookConnectionCallbacks.push(callback);
+    }
+
+    private notifyNotebookConnectionChange(
+        notebookUri: string,
+        connected: boolean,
+        connectionName?: string,
+        username?: string
+    ): void {
+        this.notebookConnectionCallbacks.forEach(cb =>
+            cb(notebookUri, connected, connectionName, username)
+        );
+    }
+
+    /**
+     * Connect a notebook to a specific connection configuration.
+     * Creates an independent session for the notebook.
+     *
+     * @param notebookUri The notebook's URI (used as the key)
+     * @param connectionName Name of the connection configuration to use
+     * @param username Username for authentication
+     * @param password Password for authentication
+     * @returns The session ID for the new connection
+     */
+    async connectNotebook(
+        notebookUri: string,
+        connectionName: string,
+        username: string,
+        password: string
+    ): Promise<string> {
+        const connections = this.getConnections();
+        const connection = connections.find(c => c.name === connectionName);
+
+        if (!connection) {
+            throw new Error(`Connection "${connectionName}" not found`);
+        }
+
+        // Validate DFC profile exists if specified
+        const profiles = this.getDfcProfiles();
+        const profileName = connection.dfcProfile;
+
+        if (profileName && !profiles[profileName]) {
+            throw new Error(`DFC profile "${profileName}" not found`);
+        }
+
+        // Ensure bridge is running
+        await this.dfcBridge.ensureRunning(profileName ? profiles[profileName] : undefined);
+
+        // Connect via bridge
+        const sessionId = await this.dfcBridge.connect({
+            docbroker: connection.docbroker || '',
+            port: connection.port || 1489,
+            repository: connection.repository,
+            username,
+            password
+        });
+
+        const activeConnection: ActiveConnection = {
+            config: connection,
+            sessionId,
+            username
+        };
+
+        // Store the notebook connection
+        this.notebookConnections.set(notebookUri, activeConnection);
+        this.notifyNotebookConnectionChange(notebookUri, true, connectionName, username);
+
+        return sessionId;
+    }
+
+    /**
+     * Disconnect a notebook's bound connection.
+     *
+     * @param notebookUri The notebook's URI
+     */
+    async disconnectNotebook(notebookUri: string): Promise<void> {
+        const connection = this.notebookConnections.get(notebookUri);
+        if (connection) {
+            try {
+                await this.dfcBridge.disconnect(connection.sessionId);
+            } catch (error) {
+                console.error('Error disconnecting notebook session:', error);
+            }
+
+            this.notebookConnections.delete(notebookUri);
+            this.notifyNotebookConnectionChange(notebookUri, false);
+        }
+    }
+
+    /**
+     * Get the connection for a specific notebook.
+     * Returns null if the notebook doesn't have a bound connection.
+     *
+     * @param notebookUri The notebook's URI
+     */
+    getNotebookConnection(notebookUri: string): ActiveConnection | null {
+        return this.notebookConnections.get(notebookUri) || null;
+    }
+
+    /**
+     * Check if a notebook has a bound connection.
+     *
+     * @param notebookUri The notebook's URI
+     */
+    hasNotebookConnection(notebookUri: string): boolean {
+        return this.notebookConnections.has(notebookUri);
+    }
+
+    /**
+     * Get the effective connection for a notebook.
+     * Returns the notebook's bound connection if it exists,
+     * otherwise falls back to the global active connection.
+     *
+     * @param notebookUri The notebook's URI (optional)
+     */
+    getEffectiveConnection(notebookUri?: string): ActiveConnection | null {
+        if (notebookUri) {
+            const notebookConnection = this.notebookConnections.get(notebookUri);
+            if (notebookConnection) {
+                return notebookConnection;
+            }
+        }
+        return this.activeConnection;
+    }
+
+    /**
+     * Get all active notebook connections.
+     * Returns a map of notebook URI to connection info.
+     */
+    getAllNotebookConnections(): Map<string, ActiveConnection> {
+        return new Map(this.notebookConnections);
+    }
+
+    /**
+     * Disconnect all notebook connections.
+     * Called during extension deactivation.
+     */
+    async disconnectAllNotebooks(): Promise<void> {
+        const uris = Array.from(this.notebookConnections.keys());
+        await Promise.all(uris.map(uri => this.disconnectNotebook(uri)));
     }
 }

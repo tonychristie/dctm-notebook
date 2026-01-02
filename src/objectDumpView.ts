@@ -12,6 +12,8 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
     private view?: vscode.WebviewView;
     private readonly extensionUri: vscode.Uri;
     private readonly connectionManager: ConnectionManager;
+    private dumpHistory: string[] = [];
+    private readonly maxHistorySize = 20;
 
     constructor(extensionUri: vscode.Uri, connectionManager: ConnectionManager) {
         this.extensionUri = extensionUri;
@@ -37,6 +39,10 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
             switch (message.command) {
                 case 'dumpObject':
                     await this.dumpObject(message.objectId);
+                    break;
+                case 'clearHistory':
+                    this.dumpHistory = [];
+                    this.updateHistory();
                     break;
             }
         });
@@ -82,9 +88,41 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
                 this.connectionManager,
                 trimmedId
             );
+            // Add to history (move to top if already exists)
+            this.addToHistory(trimmedId.toLowerCase());
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             vscode.window.showErrorMessage(`Failed to dump object: ${message}`);
+        }
+    }
+
+    /**
+     * Add an object ID to the history list
+     */
+    private addToHistory(objectId: string): void {
+        // Remove if already in history
+        const existingIndex = this.dumpHistory.indexOf(objectId);
+        if (existingIndex !== -1) {
+            this.dumpHistory.splice(existingIndex, 1);
+        }
+        // Add to front
+        this.dumpHistory.unshift(objectId);
+        // Trim to max size
+        if (this.dumpHistory.length > this.maxHistorySize) {
+            this.dumpHistory = this.dumpHistory.slice(0, this.maxHistorySize);
+        }
+        this.updateHistory();
+    }
+
+    /**
+     * Send updated history to the webview
+     */
+    private updateHistory(): void {
+        if (this.view) {
+            this.view.webview.postMessage({
+                command: 'updateHistory',
+                history: this.dumpHistory
+            });
         }
     }
 
@@ -187,6 +225,51 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
                     color: var(--vscode-descriptionForeground);
                     margin-top: 4px;
                 }
+                .history-section {
+                    margin-top: 16px;
+                    border-top: 1px solid var(--vscode-panel-border);
+                    padding-top: 12px;
+                }
+                .history-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 8px;
+                }
+                .history-header .section-title {
+                    margin-bottom: 0;
+                }
+                .clear-btn {
+                    width: auto;
+                    padding: 2px 8px;
+                    font-size: 11px;
+                    background: var(--vscode-button-secondaryBackground);
+                    color: var(--vscode-button-secondaryForeground);
+                }
+                .clear-btn:hover {
+                    background: var(--vscode-button-secondaryHoverBackground);
+                }
+                .history-list {
+                    list-style: none;
+                    padding: 0;
+                    margin: 0;
+                }
+                .history-item {
+                    padding: 4px 8px;
+                    font-family: var(--vscode-editor-font-family);
+                    font-size: 12px;
+                    cursor: pointer;
+                    border-radius: 2px;
+                    color: var(--vscode-textLink-foreground);
+                }
+                .history-item:hover {
+                    background: var(--vscode-list-hoverBackground);
+                }
+                .history-empty {
+                    font-size: 11px;
+                    color: var(--vscode-descriptionForeground);
+                    font-style: italic;
+                }
             </style>
         </head>
         <body>
@@ -208,11 +291,21 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
                 </div>
             </div>
 
+            <div id="historySection" class="history-section" style="display: none;">
+                <div class="history-header">
+                    <div class="section-title">Recent</div>
+                    <button class="clear-btn" onclick="clearHistory()">Clear</button>
+                </div>
+                <ul id="historyList" class="history-list"></ul>
+            </div>
+
             <script>
                 const vscode = acquireVsCodeApi();
                 const objectIdInput = document.getElementById('objectId');
                 const dumpBtn = document.getElementById('dumpBtn');
                 const statusEl = document.getElementById('status');
+                const historySection = document.getElementById('historySection');
+                const historyList = document.getElementById('historyList');
 
                 // Handle dump button click
                 dumpBtn.addEventListener('click', () => {
@@ -229,6 +322,29 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
                     }
                 });
 
+                // Clear history
+                function clearHistory() {
+                    vscode.postMessage({ command: 'clearHistory' });
+                }
+
+                // Dump a specific object from history
+                function dumpFromHistory(objectId) {
+                    objectIdInput.value = objectId;
+                    vscode.postMessage({ command: 'dumpObject', objectId: objectId });
+                }
+
+                // Update history list display
+                function updateHistoryDisplay(history) {
+                    if (history.length === 0) {
+                        historySection.style.display = 'none';
+                    } else {
+                        historySection.style.display = 'block';
+                        historyList.innerHTML = history.map(id =>
+                            '<li class="history-item" onclick="dumpFromHistory(\\''+id+'\\')">'+id+'</li>'
+                        ).join('');
+                    }
+                }
+
                 // Handle messages from extension
                 window.addEventListener('message', (event) => {
                     const message = event.data;
@@ -240,6 +356,9 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
                             statusEl.textContent = message.connected
                                 ? 'Connected to ' + message.repositoryName
                                 : 'Not connected';
+                            break;
+                        case 'updateHistory':
+                            updateHistoryDisplay(message.history);
                             break;
                     }
                 });

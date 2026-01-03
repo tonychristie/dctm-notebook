@@ -828,9 +828,26 @@ export function registerApiPanel(
     context.subscriptions.push(executeApiOnObjectCommand);
 
     // Quick execute common operations
+    // When called from context menu, receives ObjectBrowserItem; when called programmatically, may receive string
     const checkoutCommand = vscode.commands.registerCommand(
         'dctm.checkout',
-        async (objectId: string) => {
+        async (arg?: unknown) => {
+            let objectId: string | undefined;
+
+            if (typeof arg === 'string') {
+                objectId = arg;
+            } else if (arg && typeof arg === 'object') {
+                const item = arg as { data?: { objectId?: string } };
+                if (item.data && typeof item.data.objectId === 'string') {
+                    objectId = item.data.objectId;
+                }
+            }
+
+            if (!objectId) {
+                vscode.window.showErrorMessage('No object selected');
+                return;
+            }
+
             try {
                 const result = await apiExecutor.execute({
                     objectId,
@@ -850,7 +867,23 @@ export function registerApiPanel(
 
     const checkinCommand = vscode.commands.registerCommand(
         'dctm.checkin',
-        async (objectId: string) => {
+        async (arg?: unknown) => {
+            let objectId: string | undefined;
+
+            if (typeof arg === 'string') {
+                objectId = arg;
+            } else if (arg && typeof arg === 'object') {
+                const item = arg as { data?: { objectId?: string } };
+                if (item.data && typeof item.data.objectId === 'string') {
+                    objectId = item.data.objectId;
+                }
+            }
+
+            if (!objectId) {
+                vscode.window.showErrorMessage('No object selected');
+                return;
+            }
+
             const versionLabel = await vscode.window.showInputBox({
                 prompt: 'Enter version label',
                 placeHolder: 'CURRENT',
@@ -881,7 +914,23 @@ export function registerApiPanel(
 
     const cancelCheckoutCommand = vscode.commands.registerCommand(
         'dctm.cancelCheckout',
-        async (objectId: string) => {
+        async (arg?: unknown) => {
+            let objectId: string | undefined;
+
+            if (typeof arg === 'string') {
+                objectId = arg;
+            } else if (arg && typeof arg === 'object') {
+                const item = arg as { data?: { objectId?: string } };
+                if (item.data && typeof item.data.objectId === 'string') {
+                    objectId = item.data.objectId;
+                }
+            }
+
+            if (!objectId) {
+                vscode.window.showErrorMessage('No object selected');
+                return;
+            }
+
             const confirm = await vscode.window.showWarningMessage(
                 'Are you sure you want to cancel checkout? Unsaved changes will be lost.',
                 'Yes',

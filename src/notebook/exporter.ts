@@ -6,6 +6,20 @@
 
 import * as vscode from 'vscode';
 import * as ExcelJS from 'exceljs';
+import * as os from 'os';
+import * as path from 'path';
+
+/**
+ * Get the default directory for saving exported files.
+ * Uses the first workspace folder if available, otherwise falls back to home directory.
+ */
+function getDefaultSaveDirectory(): string {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders && workspaceFolders.length > 0) {
+        return workspaceFolders[0].uri.fsPath;
+    }
+    return os.homedir();
+}
 
 /**
  * Check if a value appears to be a date
@@ -74,9 +88,10 @@ export async function exportToExcel(
     columns: string[],
     rows: Record<string, unknown>[]
 ): Promise<void> {
-    // Show save dialog
+    // Show save dialog with default location
+    const defaultPath = path.join(getDefaultSaveDirectory(), 'query_results.xlsx');
     const uri = await vscode.window.showSaveDialog({
-        defaultUri: vscode.Uri.file('query_results.xlsx'),
+        defaultUri: vscode.Uri.file(defaultPath),
         filters: {
             'Excel Files': ['xlsx']
         },
@@ -181,9 +196,10 @@ export async function exportToJson(
     columns: string[],
     rows: Record<string, unknown>[]
 ): Promise<void> {
-    // Show save dialog
+    // Show save dialog with default location
+    const defaultPath = path.join(getDefaultSaveDirectory(), 'query_results.json');
     const uri = await vscode.window.showSaveDialog({
-        defaultUri: vscode.Uri.file('query_results.json'),
+        defaultUri: vscode.Uri.file(defaultPath),
         filters: {
             'JSON Files': ['json']
         },

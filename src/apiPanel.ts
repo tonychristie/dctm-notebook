@@ -5,7 +5,7 @@ import { ApiExecutor, ApiMethodResponse, COMMON_DFC_METHODS } from './apiExecuto
  * Message types from webview to extension
  */
 interface WebviewMessage {
-    type: 'execute' | 'getMethodInfo' | 'searchMethods' | 'getCategories';
+    type: 'execute' | 'getMethodInfo' | 'searchMethods' | 'getCategories' | 'dumpObject';
     objectId?: string;
     method?: string;
     args?: unknown[];
@@ -116,6 +116,12 @@ export class ApiPanel {
 
             case 'getCategories':
                 this.sendCategories();
+                break;
+
+            case 'dumpObject':
+                if (message.objectId) {
+                    vscode.commands.executeCommand('dctm.dumpObject', message.objectId);
+                }
                 break;
         }
     }
@@ -432,6 +438,14 @@ export class ApiPanel {
             color: var(--vscode-descriptionForeground);
             float: right;
         }
+        .object-id {
+            color: var(--vscode-textLink-foreground);
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .object-id:hover {
+            color: var(--vscode-textLink-activeForeground);
+        }
     </style>
 </head>
 <body>
@@ -650,9 +664,11 @@ export class ApiPanel {
             panel.style.display = 'block';
 
             if (message.success) {
+                const formattedResult = formatResult(message.result);
+                const resultWithLinks = formatResultWithLinks(formattedResult);
                 content.innerHTML = \`<span class="success">Success</span>\\n\\n\` +
-                    \`Type: \${message.resultType}\\n\\n\` +
-                    \`Result:\\n\${formatResult(message.result)}\`;
+                    \`Type: \${escapeHtml(message.resultType)}\\n\\n\` +
+                    \`Result:\\n\${resultWithLinks}\`;
                 timeSpan.textContent = \`\${message.executionTimeMs}ms\`;
 
                 addToHistory(selectedMethod.name, message.result, true, message.executionTimeMs);
@@ -662,6 +678,19 @@ export class ApiPanel {
 
                 addToHistory(selectedMethod.name, message.error, false, 0);
             }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatResultWithLinks(text) {
+            // Replace 16-character hex strings with clickable links
+            return text.replace(/\\b([0-9a-f]{16})\\b/gi, (match) => {
+                return \`<span class="object-id" data-object-id="\${escapeHtml(match)}">\${escapeHtml(match)}</span>\`;
+            });
         }
 
         function formatResult(result) {
@@ -725,6 +754,20 @@ export class ApiPanel {
         // Initial render
         renderCategories();
         renderMethodList(getAllMethods());
+
+        // Event delegation for object ID clicks
+        document.addEventListener('click', (e) => {
+            const target = e.target;
+            if (target.classList && target.classList.contains('object-id')) {
+                const objectId = target.getAttribute('data-object-id');
+                if (objectId) {
+                    vscode.postMessage({
+                        type: 'dumpObject',
+                        objectId: objectId
+                    });
+                }
+            }
+        });
     </script>
 </body>
 </html>`;

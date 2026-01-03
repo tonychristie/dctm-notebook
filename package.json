@@ -156,11 +156,6 @@
         "icon": "$(refresh)"
       },
       {
-        "command": "dctm.queryType",
-        "title": "Query All Objects",
-        "category": "Documentum"
-      },
-      {
         "command": "dctm.openApiPanel",
         "title": "Open API Panel",
         "category": "Documentum",
@@ -217,6 +212,74 @@
       },
       {
         "command": "dctm.generateTypeQuery",
+        "title": "Generate DQL Query",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.refreshUserBrowser",
+        "title": "Refresh User Browser",
+        "category": "Documentum",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "dctm.openUserPanel",
+        "title": "Open User Details",
+        "category": "Documentum",
+        "icon": "$(person)"
+      },
+      {
+        "command": "dctm.searchUsers",
+        "title": "Search Users",
+        "category": "Documentum",
+        "icon": "$(search)"
+      },
+      {
+        "command": "dctm.clearUserSearch",
+        "title": "Clear User Search",
+        "category": "Documentum",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "dctm.showUserDetails",
+        "title": "Show User Details",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.generateUserQuery",
+        "title": "Generate DQL Query",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.refreshGroupBrowser",
+        "title": "Refresh Group Browser",
+        "category": "Documentum",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "dctm.openGroupPanel",
+        "title": "Open Group Details",
+        "category": "Documentum",
+        "icon": "$(organization)"
+      },
+      {
+        "command": "dctm.searchGroups",
+        "title": "Search Groups",
+        "category": "Documentum",
+        "icon": "$(search)"
+      },
+      {
+        "command": "dctm.clearGroupSearch",
+        "title": "Clear Group Search",
+        "category": "Documentum",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "dctm.showGroupDetails",
+        "title": "Show Group Details",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.generateGroupQuery",
         "title": "Generate DQL Query",
         "category": "Documentum"
       },
@@ -288,6 +351,16 @@
           "contextualTitle": "Documentum Types"
         },
         {
+          "id": "documentumUserBrowser",
+          "name": "User Browser",
+          "contextualTitle": "Documentum Users"
+        },
+        {
+          "id": "documentumGroupBrowser",
+          "name": "Group Browser",
+          "contextualTitle": "Documentum Groups"
+        },
+        {
           "id": "documentumObjectDump",
           "type": "webview",
           "name": "Object Dump",
@@ -303,6 +376,14 @@
       {
         "view": "documentumTypeBrowser",
         "contents": "Connect to a repository to browse types.\n[Connect](command:dctm.connect)"
+      },
+      {
+        "view": "documentumUserBrowser",
+        "contents": "Connect to a repository to browse users.\n[Connect](command:dctm.connect)"
+      },
+      {
+        "view": "documentumGroupBrowser",
+        "contents": "Connect to a repository to browse groups.\n[Connect](command:dctm.connect)"
       }
     ],
     "configuration": {
@@ -436,6 +517,26 @@
           "command": "dctm.searchTypes",
           "when": "view == documentumTypeBrowser",
           "group": "navigation"
+        },
+        {
+          "command": "dctm.refreshUserBrowser",
+          "when": "view == documentumUserBrowser",
+          "group": "navigation"
+        },
+        {
+          "command": "dctm.searchUsers",
+          "when": "view == documentumUserBrowser",
+          "group": "navigation"
+        },
+        {
+          "command": "dctm.refreshGroupBrowser",
+          "when": "view == documentumGroupBrowser",
+          "group": "navigation"
+        },
+        {
+          "command": "dctm.searchGroups",
+          "when": "view == documentumGroupBrowser",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -463,11 +564,6 @@
           "command": "dctm.refreshFolder",
           "when": "view == documentumExplorer && viewItem =~ /^(folder|cabinet|cabinets-container)$/",
           "group": "2_actions"
-        },
-        {
-          "command": "dctm.queryType",
-          "when": "view == documentumExplorer && viewItem == type",
-          "group": "1_query"
         },
         {
           "command": "dctm.executeApiOnObject",
@@ -502,6 +598,26 @@
         {
           "command": "dctm.generateTypeQuery",
           "when": "view == documentumTypeBrowser && viewItem == type",
+          "group": "2_actions"
+        },
+        {
+          "command": "dctm.showUserDetails",
+          "when": "view == documentumUserBrowser && viewItem == user",
+          "group": "1_info"
+        },
+        {
+          "command": "dctm.generateUserQuery",
+          "when": "view == documentumUserBrowser && viewItem == user",
+          "group": "2_actions"
+        },
+        {
+          "command": "dctm.showGroupDetails",
+          "when": "view == documentumGroupBrowser && viewItem == group",
+          "group": "1_info"
+        },
+        {
+          "command": "dctm.generateGroupQuery",
+          "when": "view == documentumGroupBrowser && viewItem == group",
           "group": "2_actions"
         }
       ],

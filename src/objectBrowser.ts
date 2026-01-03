@@ -8,9 +8,6 @@ import {
     CabinetNodeData,
     FolderNodeData,
     DocumentNodeData,
-    TypeNodeData,
-    UserNodeData,
-    GroupNodeData,
     createNodeId,
     escapeDqlString
 } from './objectBrowserNodes';
@@ -23,9 +20,8 @@ import {
  *   - Cabinets
  *     - Folders
  *       - Documents
- *   - Types
- *   - Users
- *   - Groups
+ *
+ * Note: Types, Users, and Groups are now in separate browser views
  */
 export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrowserItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<ObjectBrowserItem | undefined | null | void> =
@@ -34,7 +30,6 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
         this._onDidChangeTreeData.event;
 
     private connectionManager: ConnectionManager;
-    private expandedNodes: Set<string> = new Set();
 
     constructor(connectionManager: ConnectionManager) {
         this.connectionManager = connectionManager;
@@ -74,17 +69,9 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
                 return this.getConnectionChildren(element.data as ConnectionNodeData);
             case 'cabinets-container':
                 return this.getCabinets(element.data as ContainerNodeData);
-            case 'types-container':
-                return this.getTypes(element.data as ContainerNodeData);
-            case 'users-container':
-                return this.getUsers(element.data as ContainerNodeData);
-            case 'groups-container':
-                return this.getGroups(element.data as ContainerNodeData);
             case 'cabinet':
             case 'folder':
                 return this.getFolderContents(element.data as CabinetNodeData | FolderNodeData);
-            case 'type':
-                return this.getSubtypes(element.data as TypeNodeData);
             default:
                 return [];
         }
@@ -128,6 +115,7 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
 
     /**
      * Get container nodes for a connected connection
+     * Only shows Cabinets - Types, Users, Groups are now in separate browser views
      */
     private getConnectionChildren(data: ConnectionNodeData): ObjectBrowserItem[] {
         if (!data.connected) {
@@ -139,24 +127,6 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
                 id: createNodeId(data.connectionName, 'cabinets-container', 'cabinets'),
                 name: 'Cabinets',
                 type: 'cabinets-container',
-                connectionName: data.connectionName
-            },
-            {
-                id: createNodeId(data.connectionName, 'types-container', 'types'),
-                name: 'Types',
-                type: 'types-container',
-                connectionName: data.connectionName
-            },
-            {
-                id: createNodeId(data.connectionName, 'users-container', 'users'),
-                name: 'Users',
-                type: 'users-container',
-                connectionName: data.connectionName
-            },
-            {
-                id: createNodeId(data.connectionName, 'groups-container', 'groups'),
-                name: 'Groups',
-                type: 'groups-container',
                 connectionName: data.connectionName
             }
         ];
@@ -245,136 +215,6 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
             return items;
         } catch (error) {
             this.showError('Failed to fetch folder contents', error);
-            return [];
-        }
-    }
-
-    /**
-     * Fetch top-level types
-     */
-    private async getTypes(data: ContainerNodeData): Promise<ObjectBrowserItem[]> {
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection) {
-            return [];
-        }
-
-        try {
-            // Get root types (dm_sysobject and its immediate subtypes)
-            const query = "SELECT name, super_name FROM dm_type WHERE super_name = 'dm_sysobject' ORDER BY name";
-            await this.executeDql(connection, query);
-
-            const items: ObjectBrowserItem[] = [];
-
-            // Add dm_sysobject as root
-            const sysObjectData: TypeNodeData = {
-                id: createNodeId(data.connectionName, 'type', 'dm_sysobject'),
-                name: 'dm_sysobject',
-                type: 'type',
-                typeName: 'dm_sysobject',
-                superType: 'dm_persistent',
-                isSystemType: true,
-                connectionName: data.connectionName
-            };
-            items.push(new ObjectBrowserItem(sysObjectData, vscode.TreeItemCollapsibleState.Collapsed));
-
-            return items;
-        } catch (error) {
-            this.showError('Failed to fetch types', error);
-            return [];
-        }
-    }
-
-    /**
-     * Fetch subtypes of a type
-     */
-    private async getSubtypes(data: TypeNodeData): Promise<ObjectBrowserItem[]> {
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection) {
-            return [];
-        }
-
-        try {
-            // Escape type name to prevent SQL injection
-            const escapedTypeName = escapeDqlString(data.typeName);
-            const query = `SELECT name, super_name FROM dm_type WHERE super_name = '${escapedTypeName}' ORDER BY name`;
-            const results = await this.executeDql(connection, query);
-
-            return results.rows.map(row => {
-                const typeName = row.name as string;
-                const typeData: TypeNodeData = {
-                    id: createNodeId(data.connectionName, 'type', typeName),
-                    name: typeName,
-                    type: 'type',
-                    typeName: typeName,
-                    superType: data.typeName,
-                    isSystemType: typeName.startsWith('dm_') || typeName.startsWith('dmi_'),
-                    connectionName: data.connectionName
-                };
-                return new ObjectBrowserItem(typeData, vscode.TreeItemCollapsibleState.Collapsed);
-            });
-        } catch (error) {
-            this.showError('Failed to fetch subtypes', error);
-            return [];
-        }
-    }
-
-    /**
-     * Fetch users
-     */
-    private async getUsers(data: ContainerNodeData): Promise<ObjectBrowserItem[]> {
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection) {
-            return [];
-        }
-
-        try {
-            const query = "SELECT user_name, user_login_name FROM dm_user WHERE user_state = 0 AND r_is_group = false ORDER BY user_name ENABLE (RETURN_TOP 100)";
-            const results = await this.executeDql(connection, query);
-
-            return results.rows.map(row => {
-                const userName = row.user_name as string;
-                const userData: UserNodeData = {
-                    id: createNodeId(data.connectionName, 'user', userName),
-                    name: userName,
-                    type: 'user',
-                    userName: userName,
-                    userLoginName: row.user_login_name as string,
-                    connectionName: data.connectionName
-                };
-                return new ObjectBrowserItem(userData, vscode.TreeItemCollapsibleState.None);
-            });
-        } catch (error) {
-            this.showError('Failed to fetch users', error);
-            return [];
-        }
-    }
-
-    /**
-     * Fetch groups
-     */
-    private async getGroups(data: ContainerNodeData): Promise<ObjectBrowserItem[]> {
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection) {
-            return [];
-        }
-
-        try {
-            const query = "SELECT group_name FROM dm_group ORDER BY group_name ENABLE (RETURN_TOP 100)";
-            const results = await this.executeDql(connection, query);
-
-            return results.rows.map(row => {
-                const groupName = row.group_name as string;
-                const groupData: GroupNodeData = {
-                    id: createNodeId(data.connectionName, 'group', groupName),
-                    name: groupName,
-                    type: 'group',
-                    groupName: groupName,
-                    connectionName: data.connectionName
-                };
-                return new ObjectBrowserItem(groupData, vscode.TreeItemCollapsibleState.None);
-            });
-        } catch (error) {
-            this.showError('Failed to fetch groups', error);
             return [];
         }
     }
@@ -473,25 +313,6 @@ export function registerObjectBrowser(
         }
     );
     context.subscriptions.push(refreshFolderCommand);
-
-    // Register query type command
-    const queryTypeCommand = vscode.commands.registerCommand(
-        'dctm.queryType',
-        async (item: ObjectBrowserItem) => {
-            if (item.data.type === 'type') {
-                const typeData = item.data as TypeNodeData;
-                const query = `SELECT r_object_id, object_name, r_modify_date FROM ${typeData.typeName} ENABLE (RETURN_TOP 100)`;
-
-                // Create a new DQL file with the query
-                const doc = await vscode.workspace.openTextDocument({
-                    language: 'dql',
-                    content: query
-                });
-                await vscode.window.showTextDocument(doc);
-            }
-        }
-    );
-    context.subscriptions.push(queryTypeCommand);
 
     return provider;
 }

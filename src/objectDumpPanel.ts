@@ -43,6 +43,8 @@ export interface NavigationEntry {
  */
 export class ObjectDumpPanel {
     public static currentPanel: ObjectDumpPanel | undefined;
+    private static allPanels: Set<ObjectDumpPanel> = new Set();
+    private static panelCounter: number = 0;
     private static readonly viewType = 'dctmObjectDump';
 
     private readonly panel: vscode.WebviewPanel;
@@ -62,17 +64,23 @@ export class ObjectDumpPanel {
             ? vscode.window.activeTextEditor.viewColumn
             : undefined;
 
-        // If we already have a panel, show it and update content
-        if (ObjectDumpPanel.currentPanel) {
+        // Check the reuseWindow setting
+        const config = vscode.workspace.getConfiguration('documentum.dumpPanel');
+        const reuseWindow = config.get<boolean>('reuseWindow', true);
+
+        // If reuseWindow is true and we already have a panel, show it and update content
+        if (reuseWindow && ObjectDumpPanel.currentPanel) {
             ObjectDumpPanel.currentPanel.panel.reveal(column);
             await ObjectDumpPanel.currentPanel.loadObject(objectId);
             return;
         }
 
-        // Otherwise, create a new panel
+        // Create a new panel
+        ObjectDumpPanel.panelCounter++;
+        const panelTitle = reuseWindow ? 'Object Dump' : `Object Dump #${ObjectDumpPanel.panelCounter}`;
         const panel = vscode.window.createWebviewPanel(
             ObjectDumpPanel.viewType,
-            'Object Dump',
+            panelTitle,
             column || vscode.ViewColumn.One,
             {
                 enableScripts: true,
@@ -81,8 +89,15 @@ export class ObjectDumpPanel {
             }
         );
 
-        ObjectDumpPanel.currentPanel = new ObjectDumpPanel(panel, connectionManager, extensionUri);
-        await ObjectDumpPanel.currentPanel.loadObject(objectId);
+        const dumpPanel = new ObjectDumpPanel(panel, connectionManager, extensionUri);
+        ObjectDumpPanel.allPanels.add(dumpPanel);
+
+        // Only track as currentPanel when reuseWindow is true
+        if (reuseWindow) {
+            ObjectDumpPanel.currentPanel = dumpPanel;
+        }
+
+        await dumpPanel.loadObject(objectId);
     }
 
     private constructor(
@@ -869,7 +884,11 @@ export class ObjectDumpPanel {
     }
 
     public dispose(): void {
-        ObjectDumpPanel.currentPanel = undefined;
+        // Remove from tracking sets
+        ObjectDumpPanel.allPanels.delete(this);
+        if (ObjectDumpPanel.currentPanel === this) {
+            ObjectDumpPanel.currentPanel = undefined;
+        }
 
         this.panel.dispose();
 

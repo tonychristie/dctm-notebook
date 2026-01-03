@@ -85,6 +85,9 @@ export class UserDumpPanel {
                         // Could open group panel here
                         await vscode.commands.executeCommand('dctm.searchGroups');
                         break;
+                    case 'dumpObject':
+                        await vscode.commands.executeCommand('dctm.dumpObject', message.objectId);
+                        break;
                 }
             },
             null,
@@ -471,6 +474,14 @@ WHERE user_name = '${this.currentUserName}'`;
                     color: var(--vscode-descriptionForeground);
                     font-style: italic;
                 }
+                .attr-value.object-id {
+                    color: var(--vscode-textLink-foreground);
+                    cursor: pointer;
+                }
+                .attr-value.object-id:hover {
+                    text-decoration: underline;
+                    color: var(--vscode-textLink-activeForeground);
+                }
                 .no-groups {
                     color: var(--vscode-descriptionForeground);
                     font-style: italic;
@@ -571,6 +582,10 @@ WHERE user_name = '${this.currentUserName}'`;
                     vscode.postMessage({ command: 'copyValue', value: value });
                 }
 
+                function dumpObject(objectId) {
+                    vscode.postMessage({ command: 'dumpObject', objectId: objectId });
+                }
+
                 function generateDql() {
                     vscode.postMessage({ command: 'generateDql' });
                 }
@@ -614,6 +629,13 @@ WHERE user_name = '${this.currentUserName}'`;
     }
 
     /**
+     * Check if a value looks like an object ID (16 hex chars)
+     */
+    private isObjectId(value: string): boolean {
+        return /^[0-9a-f]{16}$/i.test(value);
+    }
+
+    /**
      * Render a single attribute row
      */
     private renderAttribute(attr: UserAttribute): string {
@@ -622,9 +644,16 @@ WHERE user_name = '${this.currentUserName}'`;
             : String(attr.value);
         const isNull = attr.value === null || attr.value === undefined || valueStr === '';
 
+        // Check if this is an object ID field that should be clickable
+        const isObjectIdField = !isNull && this.isObjectId(valueStr);
+        const valueClass = isNull ? ' null' : (isObjectIdField ? ' object-id' : '');
+        const valueOnClick = isObjectIdField
+            ? `dumpObject('${this.escapeHtml(valueStr)}')`
+            : `copyValue('${this.escapeHtml(valueStr)}')`;
+
         return `<div class="attribute" data-name="${this.escapeHtml(attr.name)}" data-value="${this.escapeHtml(valueStr)}">
             <div class="attr-name" title="${this.escapeHtml(attr.name)}" onclick="copyValue('${this.escapeHtml(attr.name)}')">${this.escapeHtml(attr.name)}</div>
-            <div class="attr-value${isNull ? ' null' : ''}" onclick="copyValue('${this.escapeHtml(valueStr)}')">${isNull ? '(empty)' : this.escapeHtml(valueStr)}</div>
+            <div class="attr-value${valueClass}" onclick="${valueOnClick}">${isNull ? '(empty)' : this.escapeHtml(valueStr)}</div>
         </div>`;
     }
 

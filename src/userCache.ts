@@ -105,10 +105,11 @@ export class UserCache {
             const bridge = this.connectionManager.getDfcBridge();
 
             // Fetch user list with basic info
+            // r_is_group = false filters out groups (dm_user table contains both users and groups)
             const query = `SELECT user_name, user_login_name, user_os_name, user_address,
-                user_state, user_source, default_folder, default_group, description
+                user_state, user_source, default_folder, user_group_name, description
                 FROM dm_user
-                WHERE user_state = 0
+                WHERE user_state = 0 AND r_is_group = false
                 ORDER BY user_name`;
 
             const result = await bridge.executeDql(connection.sessionId, query);
@@ -131,7 +132,7 @@ export class UserCache {
                     userState: row.user_state as number || 0,
                     userSource: row.user_source as string || '',
                     defaultFolder: row.default_folder as string || '',
-                    defaultGroup: row.default_group as string || '',
+                    defaultGroup: row.user_group_name as string || '',
                     description: row.description as string || '',
                     email: '',
                     homeDocbase: '',
@@ -176,8 +177,8 @@ export class UserCache {
         try {
             const bridge = this.connectionManager.getDfcBridge();
 
-            // Fetch all user attributes
-            const query = `SELECT * FROM dm_user WHERE user_name = '${userName.replace(/'/g, "''")}'`;
+            // Fetch all user attributes (r_is_group = false ensures we only get users, not groups)
+            const query = `SELECT * FROM dm_user WHERE user_name = '${userName.replace(/'/g, "''")}' AND r_is_group = false`;
             const result = await bridge.executeDql(connection.sessionId, query);
 
             if (result.rows.length === 0) {
@@ -209,7 +210,7 @@ export class UserCache {
                     userState: row.user_state as number || 0,
                     userSource: row.user_source as string || '',
                     defaultFolder: row.default_folder as string || '',
-                    defaultGroup: row.default_group as string || '',
+                    defaultGroup: row.user_group_name as string || '',
                     description: row.description as string || '',
                     email: row.user_email as string || '',
                     homeDocbase: row.home_docbase as string || '',

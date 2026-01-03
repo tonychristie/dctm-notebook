@@ -276,6 +276,49 @@ export class DfcBridge {
     }
 
     /**
+     * Checkout (lock) an object for editing
+     */
+    async checkout(sessionId: string, objectId: string): Promise<unknown> {
+        if (!this.client) {
+            throw new Error('DFC Bridge not initialized');
+        }
+
+        const response = await this.client.put(`/api/v1/objects/${objectId}/lock`, null, {
+            params: { sessionId }
+        });
+
+        return response.data;
+    }
+
+    /**
+     * Cancel checkout (unlock) an object
+     */
+    async cancelCheckout(sessionId: string, objectId: string): Promise<void> {
+        if (!this.client) {
+            throw new Error('DFC Bridge not initialized');
+        }
+
+        await this.client.delete(`/api/v1/objects/${objectId}/lock`, {
+            params: { sessionId }
+        });
+    }
+
+    /**
+     * Checkin an object, creating a new version
+     */
+    async checkin(sessionId: string, objectId: string, versionLabel: string = 'CURRENT'): Promise<unknown> {
+        if (!this.client) {
+            throw new Error('DFC Bridge not initialized');
+        }
+
+        const response = await this.client.post(`/api/v1/objects/${objectId}/versions`, null, {
+            params: { sessionId, versionLabel }
+        });
+
+        return response.data;
+    }
+
+    /**
      * Stop the DFC Bridge if we started it
      */
     async stop(): Promise<void> {

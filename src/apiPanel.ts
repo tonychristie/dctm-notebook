@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ApiExecutor, ApiMethodResponse, COMMON_DFC_METHODS } from './apiExecutor';
+import { ConnectionManager } from './connectionManager';
 
 /**
  * Message types from webview to extension
@@ -793,7 +794,8 @@ export class ApiPanel {
  */
 export function registerApiPanel(
     context: vscode.ExtensionContext,
-    apiExecutor: ApiExecutor
+    apiExecutor: ApiExecutor,
+    connectionManager: ConnectionManager
 ): void {
     // Command to open API panel
     const openApiPanelCommand = vscode.commands.registerCommand(
@@ -828,16 +830,38 @@ export function registerApiPanel(
     context.subscriptions.push(executeApiOnObjectCommand);
 
     // Quick execute common operations
+    // When called from context menu, receives ObjectBrowserItem; when called programmatically, may receive string
     const checkoutCommand = vscode.commands.registerCommand(
         'dctm.checkout',
-        async (objectId: string) => {
+        async (arg?: unknown) => {
+            let objectId: string | undefined;
+
+            if (typeof arg === 'string') {
+                objectId = arg;
+            } else if (arg && typeof arg === 'object') {
+                const item = arg as { data?: { objectId?: string } };
+                if (item.data && typeof item.data.objectId === 'string') {
+                    objectId = item.data.objectId;
+                }
+            }
+
+            if (!objectId) {
+                vscode.window.showErrorMessage('No object selected');
+                return;
+            }
+
+            const connection = connectionManager.getActiveConnection();
+            if (!connection?.sessionId) {
+                vscode.window.showErrorMessage('No active connection');
+                return;
+            }
+
             try {
-                const result = await apiExecutor.execute({
-                    objectId,
-                    method: 'checkout'
-                });
+                const bridge = connectionManager.getDfcBridge();
+                const result = await bridge.checkout(connection.sessionId, objectId);
+                const objectInfo = result as { objectId?: string };
                 vscode.window.showInformationMessage(
-                    `Checked out: ${result.result}`
+                    `Checked out: ${objectInfo.objectId || objectId}`
                 );
             } catch (error) {
                 vscode.window.showErrorMessage(
@@ -850,7 +874,29 @@ export function registerApiPanel(
 
     const checkinCommand = vscode.commands.registerCommand(
         'dctm.checkin',
-        async (objectId: string) => {
+        async (arg?: unknown) => {
+            let objectId: string | undefined;
+
+            if (typeof arg === 'string') {
+                objectId = arg;
+            } else if (arg && typeof arg === 'object') {
+                const item = arg as { data?: { objectId?: string } };
+                if (item.data && typeof item.data.objectId === 'string') {
+                    objectId = item.data.objectId;
+                }
+            }
+
+            if (!objectId) {
+                vscode.window.showErrorMessage('No object selected');
+                return;
+            }
+
+            const connection = connectionManager.getActiveConnection();
+            if (!connection?.sessionId) {
+                vscode.window.showErrorMessage('No active connection');
+                return;
+            }
+
             const versionLabel = await vscode.window.showInputBox({
                 prompt: 'Enter version label',
                 placeHolder: 'CURRENT',
@@ -862,13 +908,11 @@ export function registerApiPanel(
             }
 
             try {
-                const result = await apiExecutor.execute({
-                    objectId,
-                    method: 'checkin',
-                    args: [false, versionLabel]
-                });
+                const bridge = connectionManager.getDfcBridge();
+                const result = await bridge.checkin(connection.sessionId, objectId, versionLabel);
+                const objectInfo = result as { objectId?: string };
                 vscode.window.showInformationMessage(
-                    `Checked in: ${result.result}`
+                    `Checked in: ${objectInfo.objectId || objectId}`
                 );
             } catch (error) {
                 vscode.window.showErrorMessage(
@@ -881,7 +925,29 @@ export function registerApiPanel(
 
     const cancelCheckoutCommand = vscode.commands.registerCommand(
         'dctm.cancelCheckout',
-        async (objectId: string) => {
+        async (arg?: unknown) => {
+            let objectId: string | undefined;
+
+            if (typeof arg === 'string') {
+                objectId = arg;
+            } else if (arg && typeof arg === 'object') {
+                const item = arg as { data?: { objectId?: string } };
+                if (item.data && typeof item.data.objectId === 'string') {
+                    objectId = item.data.objectId;
+                }
+            }
+
+            if (!objectId) {
+                vscode.window.showErrorMessage('No object selected');
+                return;
+            }
+
+            const connection = connectionManager.getActiveConnection();
+            if (!connection?.sessionId) {
+                vscode.window.showErrorMessage('No active connection');
+                return;
+            }
+
             const confirm = await vscode.window.showWarningMessage(
                 'Are you sure you want to cancel checkout? Unsaved changes will be lost.',
                 'Yes',
@@ -893,10 +959,8 @@ export function registerApiPanel(
             }
 
             try {
-                await apiExecutor.execute({
-                    objectId,
-                    method: 'cancelCheckout'
-                });
+                const bridge = connectionManager.getDfcBridge();
+                await bridge.cancelCheckout(connection.sessionId, objectId);
                 vscode.window.showInformationMessage('Checkout cancelled');
             } catch (error) {
                 vscode.window.showErrorMessage(

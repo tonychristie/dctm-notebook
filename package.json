@@ -193,10 +193,10 @@
         "icon": "$(refresh)"
       },
       {
-        "command": "dctm.toggleInheritedAttributes",
-        "title": "Toggle Inherited Attributes",
+        "command": "dctm.openTypePanel",
+        "title": "Open Type Details",
         "category": "Documentum",
-        "icon": "$(filter)"
+        "icon": "$(symbol-class)"
       },
       {
         "command": "dctm.searchTypes",
@@ -429,11 +429,6 @@
         },
         {
           "command": "dctm.searchTypes",
-          "when": "view == documentumTypeBrowser",
-          "group": "navigation"
-        },
-        {
-          "command": "dctm.toggleInheritedAttributes",
           "when": "view == documentumTypeBrowser",
           "group": "navigation"
         }

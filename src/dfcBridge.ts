@@ -179,24 +179,35 @@ export class DfcBridge {
     }
 
     /**
-     * Execute an arbitrary DFC API method
-     * TODO: Define proper interface for API calls
+     * Execute an arbitrary DFC API method on an object or type.
+     *
+     * @param sessionId Active session ID
+     * @param typeName Type name for type-level operations (optional)
+     * @param method Method name to invoke
+     * @param options Object containing objectId, args, and namedArgs
      */
     async executeApi(
         sessionId: string,
-        objectType: string,
+        typeName: string,
         method: string,
-        params: Record<string, unknown>
+        options: {
+            objectId?: string;
+            args?: unknown[];
+            namedArgs?: Record<string, unknown>;
+        }
     ): Promise<unknown> {
         if (!this.client) {
             throw new Error('DFC Bridge not initialized');
         }
 
+        // Flatten the request to match ApiRequest structure expected by the bridge
         const response = await this.client.post('/api/v1/api', {
             sessionId,
-            objectType,
+            objectId: options.objectId,
+            typeName: typeName || undefined,
             method,
-            params
+            args: options.args,
+            namedArgs: options.namedArgs
         });
 
         return response.data;

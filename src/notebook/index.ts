@@ -7,6 +7,7 @@ import { DqlExecutor } from '../dqlExecutor';
 import { ApiExecutor } from '../apiExecutor';
 import { ApiMethodReference } from '../apiMethodReference';
 import { ObjectDumpPanel } from '../objectDumpPanel';
+import { exportToExcel, exportToJson } from './exporter';
 
 export { DctmNotebookSerializer } from './notebookSerializer';
 export { DctmNotebookController } from './notebookController';
@@ -49,10 +50,19 @@ export function registerNotebook(
         dispose: () => controller.dispose()
     });
 
-    // Set up renderer messaging for object ID click handling
+    // Set up renderer messaging for object ID click handling and export
     const rendererMessaging = vscode.notebooks.createRendererMessaging('dctm-result-renderer');
     const messageDisposable = rendererMessaging.onDidReceiveMessage(async (e) => {
-        const message = e.message as { command: string; objectId?: string };
+        const message = e.message as {
+            command: string;
+            objectId?: string;
+            data?: {
+                columns: string[];
+                rows: Record<string, unknown>[];
+                format: 'excel' | 'json';
+            };
+        };
+
         if (message.command === 'dumpObject' && message.objectId) {
             const connection = connectionManager.getActiveConnection();
             if (!connection) {
@@ -64,6 +74,17 @@ export function registerNotebook(
             } catch (error) {
                 const errorMsg = error instanceof Error ? error.message : String(error);
                 vscode.window.showErrorMessage(`Failed to dump object: ${errorMsg}`);
+            }
+        } else if (message.command === 'exportData' && message.data) {
+            try {
+                if (message.data.format === 'excel') {
+                    await exportToExcel(message.data.columns, message.data.rows);
+                } else if (message.data.format === 'json') {
+                    await exportToJson(message.data.columns, message.data.rows);
+                }
+            } catch (error) {
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                vscode.window.showErrorMessage(`Export failed: ${errorMsg}`);
             }
         }
     });

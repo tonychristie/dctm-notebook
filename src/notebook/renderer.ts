@@ -28,6 +28,13 @@ interface RendererMessage {
     command: string;
     objectId?: string;
     value?: string;
+    data?: ExportData;
+}
+
+interface ExportData {
+    columns: string[];
+    rows: Record<string, unknown>[];
+    format: 'excel' | 'json';
 }
 
 /**
@@ -256,6 +263,18 @@ function renderDqlResult(
     copyRowBtn.onclick = () => copySelectedRow();
     toolbar.appendChild(copyRowBtn);
 
+    const exportExcelBtn = document.createElement('button');
+    exportExcelBtn.textContent = 'Export Excel';
+    exportExcelBtn.title = 'Export results to Excel file (.xlsx)';
+    exportExcelBtn.onclick = () => exportToExcel();
+    toolbar.appendChild(exportExcelBtn);
+
+    const exportJsonBtn = document.createElement('button');
+    exportJsonBtn.textContent = 'Export JSON';
+    exportJsonBtn.title = 'Export results to JSON file (.json)';
+    exportJsonBtn.onclick = () => exportToJson();
+    toolbar.appendChild(exportJsonBtn);
+
     container.appendChild(toolbar);
 
     // Table container
@@ -352,6 +371,36 @@ function renderDqlResult(
         navigator.clipboard.writeText(text).then(() => {
             showNotification('Row copied to clipboard');
         });
+    }
+
+    function exportToExcel(): void {
+        // Send message to extension host to create Excel file
+        if (context.postMessage) {
+            context.postMessage({
+                command: 'exportData',
+                data: {
+                    columns: data.columns,
+                    rows: sortedRows,
+                    format: 'excel'
+                }
+            } as RendererMessage);
+            showNotification('Exporting to Excel...');
+        }
+    }
+
+    function exportToJson(): void {
+        // Send message to extension host to create JSON file
+        if (context.postMessage) {
+            context.postMessage({
+                command: 'exportData',
+                data: {
+                    columns: data.columns,
+                    rows: sortedRows,
+                    format: 'json'
+                }
+            } as RendererMessage);
+            showNotification('Exporting to JSON...');
+        }
     }
 
     function sortTable(colIdx: number): void {
@@ -622,14 +671,6 @@ function renderApiResult(
     data: ApiResultData,
     context: RendererContext<void>
 ): void {
-    // Helper to check if a value is an object ID
-    function isObjectId(value: unknown): boolean {
-        if (typeof value !== 'string') {
-            return false;
-        }
-        return /^[0-9a-f]{16}$/i.test(value);
-    }
-
     // Helper to escape HTML
     function escapeHtml(text: string): string {
         const div = document.createElement('div');

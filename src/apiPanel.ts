@@ -805,9 +805,23 @@ export function registerApiPanel(
     context.subscriptions.push(openApiPanelCommand);
 
     // Command to execute API on selected object
+    // When called from context menu, receives ObjectBrowserItem; when called programmatically, may receive string
     const executeApiOnObjectCommand = vscode.commands.registerCommand(
         'dctm.executeApiOnObject',
-        (objectId: string) => {
+        (arg?: unknown) => {
+            let objectId: string | undefined;
+
+            if (typeof arg === 'string') {
+                // Direct string objectId passed
+                objectId = arg;
+            } else if (arg && typeof arg === 'object') {
+                // ObjectBrowserItem from context menu - extract objectId from data
+                const item = arg as { data?: { objectId?: string } };
+                if (item.data && typeof item.data.objectId === 'string') {
+                    objectId = item.data.objectId;
+                }
+            }
+
             ApiPanel.createOrShow(context.extensionUri, apiExecutor, objectId);
         }
     );

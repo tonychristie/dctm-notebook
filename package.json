@@ -400,6 +400,11 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically start DFC Bridge when connecting"
+        },
+        "documentum.dumpPanel.reuseWindow": {
+          "type": "boolean",
+          "default": true,
+          "description": "Reuse existing dump panel when dumping objects. When false, each dump opens a new panel for side-by-side comparison."
         }
       }
     },

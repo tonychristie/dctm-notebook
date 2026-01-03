@@ -862,19 +862,16 @@ export class DctmNotebookController {
                 vscode.NotebookCellOutputItem.text(text, 'text/plain')
             ]);
         } else {
-            // Default to HTML
-            const html = `
-                <div style="font-family: var(--vscode-font-family); font-size: 12px;">
-                    <div style="margin-bottom: 8px; color: var(--vscode-descriptionForeground);">
-                        Result type: ${result.resultType} | Execution time: ${result.executionTimeMs}ms
-                    </div>
-                    <div style="background: var(--vscode-textCodeBlock-background); padding: 8px; border-radius: 4px; font-family: var(--vscode-editor-font-family);">
-                        <pre style="margin: 0; white-space: pre-wrap;">${this.escapeHtml(formattedResult)}</pre>
-                    </div>
-                </div>
-            `;
+            // Default to custom renderer with clickable object IDs
+            // Use the same MIME type as DQL results so the custom renderer handles it
+            const apiResultData = {
+                type: 'api',
+                result: formattedResult,
+                resultType: result.resultType,
+                executionTimeMs: result.executionTimeMs
+            };
             return new vscode.NotebookCellOutput([
-                vscode.NotebookCellOutputItem.text(html, 'text/html'),
+                vscode.NotebookCellOutputItem.json(apiResultData, 'application/x-dctm-result'),
                 vscode.NotebookCellOutputItem.text(text, 'text/plain')
             ]);
         }
@@ -903,6 +900,16 @@ export class DctmNotebookController {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    /**
+     * Format result text with clickable object ID links
+     * Object IDs are 16-character hex strings
+     */
+    private formatResultWithObjectIdLinks(text: string): string {
+        return text.replace(/\b([0-9a-f]{16})\b/gi, (match) => {
+            return `<span class="object-id" data-object-id="${match}">${match}</span>`;
+        });
     }
 
     /**

@@ -345,4 +345,68 @@ suite('NotebookController Test Suite', () => {
             assert.strictEqual(result, '[\n  1,\n  2,\n  3\n]');
         });
     });
+
+    suite('Object ID link formatting', () => {
+        // Test the formatResultWithObjectIdLinks logic
+        function formatResultWithObjectIdLinks(text: string): string {
+            return text.replace(/\b([0-9a-f]{16})\b/gi, (match) => {
+                return `<span class="object-id" data-object-id="${match}">${match}</span>`;
+            });
+        }
+
+        test('wraps single object ID with clickable span', () => {
+            const input = '0900000000000001';
+            const result = formatResultWithObjectIdLinks(input);
+            assert.strictEqual(
+                result,
+                '<span class="object-id" data-object-id="0900000000000001">0900000000000001</span>'
+            );
+        });
+
+        test('wraps multiple object IDs in text', () => {
+            const input = 'Parent: 0900000000000001, Child: 0900000000000002';
+            const result = formatResultWithObjectIdLinks(input);
+            assert.ok(result.includes('<span class="object-id" data-object-id="0900000000000001">0900000000000001</span>'));
+            assert.ok(result.includes('<span class="object-id" data-object-id="0900000000000002">0900000000000002</span>'));
+        });
+
+        test('preserves text without object IDs', () => {
+            const input = 'This is just plain text without any IDs';
+            const result = formatResultWithObjectIdLinks(input);
+            assert.strictEqual(result, input);
+        });
+
+        test('handles uppercase object IDs', () => {
+            const input = 'ABCDEF0123456789';
+            const result = formatResultWithObjectIdLinks(input);
+            assert.strictEqual(
+                result,
+                '<span class="object-id" data-object-id="ABCDEF0123456789">ABCDEF0123456789</span>'
+            );
+        });
+
+        test('does not match 15-character hex strings', () => {
+            const input = '090000000000001';
+            const result = formatResultWithObjectIdLinks(input);
+            assert.strictEqual(result, input);
+        });
+
+        test('does not match 17-character hex strings', () => {
+            const input = '09000000000000001';
+            const result = formatResultWithObjectIdLinks(input);
+            assert.strictEqual(result, input);
+        });
+
+        test('does not match partial hex strings without word boundary', () => {
+            const input = 'prefix0900000000000001suffix';
+            const result = formatResultWithObjectIdLinks(input);
+            assert.strictEqual(result, input);
+        });
+
+        test('handles empty string', () => {
+            const input = '';
+            const result = formatResultWithObjectIdLinks(input);
+            assert.strictEqual(result, '');
+        });
+    });
 });

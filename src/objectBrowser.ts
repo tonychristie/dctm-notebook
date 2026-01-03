@@ -452,15 +452,14 @@ export function registerObjectBrowser(
     );
     context.subscriptions.push(switchUserFromTreeCommand);
 
-    // Register show properties command
+    // Register show properties command - delegates to dumpObject to show Object Dump panel
     const showPropertiesCommand = vscode.commands.registerCommand(
         'dctm.showObjectProperties',
-        async (data: AnyNodeData) => {
+        async (item: ObjectBrowserItem | AnyNodeData) => {
+            // Handle both ObjectBrowserItem (from context menu) and AnyNodeData (from click command)
+            const data = 'data' in item ? item.data : item;
             if ('objectId' in data) {
-                vscode.window.showInformationMessage(
-                    `Object: ${data.name}\nID: ${data.objectId}\nType: ${data.type}`
-                );
-                // TODO: Open properties panel
+                await vscode.commands.executeCommand('dctm.dumpObject', data);
             }
         }
     );

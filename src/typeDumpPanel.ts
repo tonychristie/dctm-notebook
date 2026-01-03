@@ -2,6 +2,11 @@ import * as vscode from 'vscode';
 import { TypeCache, TypeInfo, TypeAttribute } from './typeCache';
 
 /**
+ * Attribute grouping categories (same as ObjectDumpPanel)
+ */
+type AttributeGroup = 'custom' | 'standard' | 'system' | 'application' | 'internal';
+
+/**
  * WebviewPanel for displaying Documentum type details with grouped attributes
  * Similar to ObjectDumpPanel but for type definitions
  */
@@ -15,8 +20,6 @@ export class TypeDumpPanel {
 
     // Current state
     private currentTypeName: string = '';
-    private showInheritedAttributes: boolean = true;
-    private attributeFilter: string = '';
 
     public static async createOrShow(
         extensionUri: vscode.Uri,
@@ -71,14 +74,6 @@ export class TypeDumpPanel {
                     case 'refresh':
                         await this.loadType(this.currentTypeName);
                         break;
-                    case 'toggleInherited':
-                        this.showInheritedAttributes = message.value;
-                        await this.loadType(this.currentTypeName);
-                        break;
-                    case 'filterAttributes':
-                        this.attributeFilter = message.value.toLowerCase();
-                        await this.updateContent();
-                        break;
                     case 'openType':
                         await this.loadType(message.typeName);
                         break;
@@ -111,7 +106,7 @@ export class TypeDumpPanel {
                 return;
             }
 
-            await this.updateContent();
+            this.panel.webview.html = this.getContentHtml(type);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.panel.webview.html = this.getErrorHtml(typeName, errorMessage);
@@ -119,14 +114,19 @@ export class TypeDumpPanel {
     }
 
     /**
-     * Update the content with current state (filtering, inherited toggle)
+     * Categorize attribute based on prefix (same logic as ObjectDumpPanel)
      */
-    private async updateContent(): Promise<void> {
-        const type = await this.typeCache.fetchTypeDetails(this.currentTypeName);
-        if (!type) {
-            return;
+    private categorizeAttribute(name: string): AttributeGroup {
+        if (name.startsWith('r_')) {
+            return 'system';
         }
-        this.panel.webview.html = this.getContentHtml(type);
+        if (name.startsWith('i_')) {
+            return 'internal';
+        }
+        if (name.startsWith('a_')) {
+            return 'application';
+        }
+        return 'standard';
     }
 
     /**
@@ -262,28 +262,44 @@ export class TypeDumpPanel {
     }
 
     /**
-     * Generate content HTML with type details and attributes
+     * Generate content HTML with type details and grouped attributes
      */
     private getContentHtml(type: TypeInfo): string {
-        // Filter attributes based on current filter and inherited toggle
-        let attributes = type.attributes;
-        if (!this.showInheritedAttributes) {
-            attributes = attributes.filter(a => !a.isInherited);
-        }
-        if (this.attributeFilter) {
-            attributes = attributes.filter(a =>
-                a.name.toLowerCase().includes(this.attributeFilter) ||
-                a.dataType.toLowerCase().includes(this.attributeFilter)
-            );
+        // Group attributes by category (like ObjectDumpPanel)
+        const groups: Record<AttributeGroup, TypeAttribute[]> = {
+            custom: [],
+            standard: [],
+            system: [],
+            application: [],
+            internal: []
+        };
+
+        // Separate type-specific (custom) from inherited standard attributes
+        for (const attr of type.attributes) {
+            if (!attr.isInherited) {
+                // Type-specific attributes go to "custom" group
+                groups.custom.push(attr);
+            } else {
+                // Inherited attributes go by prefix
+                const group = this.categorizeAttribute(attr.name);
+                groups[group].push(attr);
+            }
         }
 
-        // Sort attributes: non-inherited first, then by name
-        attributes = [...attributes].sort((a, b) => {
-            if (a.isInherited !== b.isInherited) {
-                return a.isInherited ? 1 : -1;
-            }
-            return a.name.localeCompare(b.name);
-        });
+        // Sort attributes within each group
+        for (const group of Object.values(groups)) {
+            group.sort((a, b) => a.name.localeCompare(b.name));
+        }
+
+        const groupLabels: Record<AttributeGroup, string> = {
+            custom: 'Type-Specific Attributes',
+            standard: 'Standard Attributes',
+            system: 'System Attributes (r_)',
+            application: 'Application Attributes (a_)',
+            internal: 'Internal Attributes (i_)'
+        };
+
+        const groupOrder: AttributeGroup[] = ['custom', 'standard', 'application', 'system', 'internal'];
 
         // Get child types
         const childTypes = this.typeCache.getChildTypes(type.name);
@@ -292,6 +308,16 @@ export class TypeDumpPanel {
         const totalAttrs = type.attributes.length;
         const inheritedAttrs = type.attributes.filter(a => a.isInherited).length;
         const ownAttrs = totalAttrs - inheritedAttrs;
+
+        // Serialize attribute data for JavaScript
+        const attributeData = JSON.stringify(type.attributes.map(a => ({
+            name: a.name,
+            dataType: a.dataType,
+            length: a.length,
+            isRepeating: a.isRepeating,
+            isInherited: a.isInherited,
+            group: a.isInherited ? this.categorizeAttribute(a.name) : 'custom'
+        })));
 
         return `<!DOCTYPE html>
         <html>
@@ -394,10 +420,10 @@ export class TypeDumpPanel {
                 .content {
                     padding: 16px;
                 }
-                .section {
+                .group {
                     margin-bottom: 24px;
                 }
-                .section-header {
+                .group-header {
                     font-weight: 600;
                     font-size: 12px;
                     text-transform: uppercase;
@@ -410,10 +436,10 @@ export class TypeDumpPanel {
                     cursor: pointer;
                     user-select: none;
                 }
-                .section-header:hover {
+                .group-header:hover {
                     color: var(--vscode-foreground);
                 }
-                .section-header .count {
+                .group-header .count {
                     background: var(--vscode-badge-background);
                     color: var(--vscode-badge-foreground);
                     padding: 2px 6px;
@@ -421,14 +447,17 @@ export class TypeDumpPanel {
                     font-size: 10px;
                     margin-left: 8px;
                 }
-                .section-header .toggle {
+                .group-header .toggle {
                     margin-right: 8px;
                 }
-                .section-content {
+                .group-content {
                     display: block;
                 }
-                .section-content.collapsed {
+                .group-content.collapsed {
                     display: none;
+                }
+                .child-types-section {
+                    margin-bottom: 24px;
                 }
                 .child-types {
                     display: flex;
@@ -455,6 +484,9 @@ export class TypeDumpPanel {
                 .attribute:hover {
                     background: var(--vscode-list-hoverBackground);
                 }
+                .attribute.hidden {
+                    display: none;
+                }
                 .attr-name {
                     width: 220px;
                     flex-shrink: 0;
@@ -472,16 +504,15 @@ export class TypeDumpPanel {
                 .attr-type {
                     width: 100px;
                     flex-shrink: 0;
-                    color: var(--vscode-symbolIcon-classforeground, var(--vscode-foreground));
+                    color: var(--vscode-descriptionForeground);
                     font-size: 12px;
                     padding-right: 12px;
                 }
                 .attr-details {
                     flex-grow: 1;
                     display: flex;
-                    gap: 12px;
+                    gap: 8px;
                     font-size: 11px;
-                    color: var(--vscode-descriptionForeground);
                 }
                 .attr-badge {
                     background: var(--vscode-badge-background);
@@ -489,10 +520,6 @@ export class TypeDumpPanel {
                     padding: 2px 6px;
                     border-radius: 4px;
                     font-size: 10px;
-                }
-                .attr-badge.inherited {
-                    background: var(--vscode-editorInfo-foreground);
-                    opacity: 0.7;
                 }
                 .attr-badge.repeating {
                     background: var(--vscode-editorWarning-foreground);
@@ -520,24 +547,26 @@ export class TypeDumpPanel {
                     <button onclick="refresh()">Refresh</button>
                     <button onclick="generateDql()" class="primary">Generate DQL</button>
                     <button onclick="copyTypeName()">Copy Type Name</button>
+                    <button onclick="collapseAll()">Collapse All</button>
+                    <button onclick="expandAll()">Expand All</button>
                     <span class="toggle-container">
-                        <input type="checkbox" id="showInherited" ${this.showInheritedAttributes ? 'checked' : ''} onchange="toggleInherited(this.checked)">
+                        <input type="checkbox" id="showInherited" checked onchange="toggleInherited(this.checked)">
                         <label for="showInherited">Show inherited</label>
                     </span>
                 </div>
                 <div class="filter-bar">
-                    <input type="text" id="filter" placeholder="Filter attributes by name or type..." value="${this.escapeHtml(this.attributeFilter)}" oninput="filterAttributes(this.value)">
+                    <input type="text" id="filter" placeholder="Filter attributes by name or type..." oninput="filterAttributes(this.value)">
                 </div>
             </div>
             <div class="content">
                 ${childTypes.length > 0 ? `
-                <div class="section">
-                    <div class="section-header" onclick="toggleSection('children')">
+                <div class="child-types-section">
+                    <div class="group-header" onclick="toggleGroup('children')">
                         <span class="toggle" id="toggle-children">&#9660;</span>
                         Child Types
                         <span class="count">${childTypes.length}</span>
                     </div>
-                    <div class="section-content" id="section-children">
+                    <div class="group-content" id="group-children">
                         <div class="child-types">
                             ${childTypes.map(ct => `<span class="child-type" onclick="openType('${this.escapeHtml(ct)}')">${this.escapeHtml(ct)}</span>`).join('')}
                         </div>
@@ -545,31 +574,76 @@ export class TypeDumpPanel {
                 </div>
                 ` : ''}
 
-                <div class="section">
-                    <div class="section-header" onclick="toggleSection('attributes')">
-                        <span class="toggle" id="toggle-attributes">&#9660;</span>
-                        Attributes
-                        <span class="count">${attributes.length}</span>
-                    </div>
-                    <div class="section-content" id="section-attributes">
-                        ${attributes.length > 0 ? attributes.map(attr => this.renderAttribute(attr)).join('') : '<div class="no-results">No attributes match the current filter</div>'}
-                    </div>
-                </div>
+                ${groupOrder.map(groupKey => {
+                    const attrs = groups[groupKey];
+                    if (attrs.length === 0) {
+                        return '';
+                    }
+                    const isInheritedGroup = groupKey !== 'custom';
+                    return `
+                        <div class="group" data-group="${groupKey}" data-inherited="${isInheritedGroup}">
+                            <div class="group-header" onclick="toggleGroup('${groupKey}')">
+                                <span class="toggle" id="toggle-${groupKey}">&#9660;</span>
+                                ${groupLabels[groupKey]}
+                                <span class="count" id="count-${groupKey}">${attrs.length}</span>
+                            </div>
+                            <div class="group-content" id="group-${groupKey}">
+                                ${attrs.map(attr => this.renderAttribute(attr, isInheritedGroup)).join('')}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
             </div>
             <script>
                 const vscode = acquireVsCodeApi();
                 const typeName = '${this.escapeHtml(type.name)}';
+                const allAttributes = ${attributeData};
+                let showInherited = true;
+                let currentFilter = '';
 
                 function refresh() {
                     vscode.postMessage({ command: 'refresh' });
                 }
 
                 function toggleInherited(checked) {
-                    vscode.postMessage({ command: 'toggleInherited', value: checked });
+                    showInherited = checked;
+                    applyFilters();
                 }
 
                 function filterAttributes(value) {
-                    vscode.postMessage({ command: 'filterAttributes', value: value });
+                    currentFilter = value.toLowerCase();
+                    applyFilters();
+                }
+
+                function applyFilters() {
+                    // Show/hide inherited groups
+                    document.querySelectorAll('.group[data-inherited="true"]').forEach(group => {
+                        group.style.display = showInherited ? 'block' : 'none';
+                    });
+
+                    // Filter individual attributes by name/type
+                    document.querySelectorAll('.attribute').forEach(el => {
+                        const name = (el.dataset.name || '').toLowerCase();
+                        const type = (el.dataset.type || '').toLowerCase();
+                        const matchesFilter = !currentFilter || name.includes(currentFilter) || type.includes(currentFilter);
+                        el.classList.toggle('hidden', !matchesFilter);
+                    });
+
+                    // Update group counts and visibility based on visible attributes
+                    document.querySelectorAll('.group').forEach(group => {
+                        const groupKey = group.dataset.group;
+                        const visibleAttrs = group.querySelectorAll('.attribute:not(.hidden)');
+                        const countEl = document.getElementById('count-' + groupKey);
+                        if (countEl) {
+                            countEl.textContent = visibleAttrs.length;
+                        }
+                        // Hide group if no visible attributes (but respect inherited toggle)
+                        if (group.dataset.inherited === 'true' && !showInherited) {
+                            group.style.display = 'none';
+                        } else {
+                            group.style.display = visibleAttrs.length > 0 ? 'block' : 'none';
+                        }
+                    });
                 }
 
                 function openType(name) {
@@ -588,9 +662,9 @@ export class TypeDumpPanel {
                     vscode.postMessage({ command: 'generateDql' });
                 }
 
-                function toggleSection(sectionId) {
-                    const content = document.getElementById('section-' + sectionId);
-                    const toggle = document.getElementById('toggle-' + sectionId);
+                function toggleGroup(groupKey) {
+                    const content = document.getElementById('group-' + groupKey);
+                    const toggle = document.getElementById('toggle-' + groupKey);
                     if (content.classList.contains('collapsed')) {
                         content.classList.remove('collapsed');
                         toggle.innerHTML = '&#9660;';
@@ -598,6 +672,24 @@ export class TypeDumpPanel {
                         content.classList.add('collapsed');
                         toggle.innerHTML = '&#9654;';
                     }
+                }
+
+                function collapseAll() {
+                    document.querySelectorAll('.group-content').forEach(el => {
+                        el.classList.add('collapsed');
+                    });
+                    document.querySelectorAll('.group-header .toggle').forEach(el => {
+                        el.innerHTML = '&#9654;';
+                    });
+                }
+
+                function expandAll() {
+                    document.querySelectorAll('.group-content').forEach(el => {
+                        el.classList.remove('collapsed');
+                    });
+                    document.querySelectorAll('.group-header .toggle').forEach(el => {
+                        el.innerHTML = '&#9660;';
+                    });
                 }
             </script>
         </body>
@@ -607,15 +699,14 @@ export class TypeDumpPanel {
     /**
      * Render a single attribute row
      */
-    private renderAttribute(attr: TypeAttribute): string {
+    private renderAttribute(attr: TypeAttribute, isInherited: boolean): string {
         const typeDisplay = attr.length > 0 ? `${attr.dataType}(${attr.length})` : attr.dataType;
 
-        return `<div class="attribute">
+        return `<div class="attribute" data-name="${this.escapeHtml(attr.name)}" data-type="${this.escapeHtml(attr.dataType)}" data-inherited="${isInherited}">
             <div class="attr-name" title="${this.escapeHtml(attr.name)}" onclick="copyValue('${this.escapeHtml(attr.name)}')">${this.escapeHtml(attr.name)}</div>
             <div class="attr-type">${this.escapeHtml(typeDisplay)}</div>
             <div class="attr-details">
                 ${attr.isRepeating ? '<span class="attr-badge repeating">repeating</span>' : ''}
-                ${attr.isInherited ? '<span class="attr-badge inherited">inherited</span>' : ''}
             </div>
         </div>`;
     }

@@ -8,6 +8,93 @@ import * as assert from 'assert';
  */
 suite('ApiPanel Test Suite', () => {
 
+    suite('extractObjectIdFromArg', () => {
+        /**
+         * Helper function that mirrors the logic in registerApiPanel's executeApiOnObject command.
+         * Extracts objectId from various argument types passed to the command.
+         */
+        function extractObjectIdFromArg(arg?: unknown): string | undefined {
+            if (typeof arg === 'string') {
+                // Direct string objectId passed
+                return arg;
+            } else if (arg && typeof arg === 'object') {
+                // ObjectBrowserItem from context menu - extract objectId from data
+                const item = arg as { data?: { objectId?: string } };
+                if (item.data && typeof item.data.objectId === 'string') {
+                    return item.data.objectId;
+                }
+            }
+            return undefined;
+        }
+
+        test('extracts objectId from direct string argument', () => {
+            const result = extractObjectIdFromArg('0900000180001234');
+            assert.strictEqual(result, '0900000180001234');
+        });
+
+        test('extracts objectId from ObjectBrowserItem structure', () => {
+            const item = {
+                data: {
+                    objectId: '0900000180005678',
+                    name: 'test.doc',
+                    type: 'document'
+                }
+            };
+            const result = extractObjectIdFromArg(item);
+            assert.strictEqual(result, '0900000180005678');
+        });
+
+        test('returns undefined for null argument', () => {
+            const result = extractObjectIdFromArg(null);
+            assert.strictEqual(result, undefined);
+        });
+
+        test('returns undefined for undefined argument', () => {
+            const result = extractObjectIdFromArg(undefined);
+            assert.strictEqual(result, undefined);
+        });
+
+        test('returns undefined for object without data property', () => {
+            const result = extractObjectIdFromArg({ someOtherProp: 'value' });
+            assert.strictEqual(result, undefined);
+        });
+
+        test('returns undefined for object with data but no objectId', () => {
+            const result = extractObjectIdFromArg({ data: { name: 'test' } });
+            assert.strictEqual(result, undefined);
+        });
+
+        test('returns undefined for object with non-string objectId', () => {
+            const result = extractObjectIdFromArg({ data: { objectId: 12345 } });
+            assert.strictEqual(result, undefined);
+        });
+
+        test('handles empty string objectId', () => {
+            const result = extractObjectIdFromArg('');
+            assert.strictEqual(result, '');
+        });
+
+        test('handles nested ObjectBrowserItem with full data', () => {
+            // Simulates actual ObjectBrowserItem from tree view
+            const item = {
+                data: {
+                    id: 'test-connection::document::0900000180001234',
+                    name: 'Important Document.pdf',
+                    type: 'document',
+                    objectId: '0900000180001234',
+                    objectType: 'dm_document',
+                    format: 'pdf',
+                    parentId: '0c00000180000100',
+                    connectionName: 'test-connection'
+                },
+                collapsibleState: 0,
+                contextValue: 'document'
+            };
+            const result = extractObjectIdFromArg(item);
+            assert.strictEqual(result, '0900000180001234');
+        });
+    });
+
     suite('Object ID detection in results', () => {
         // Test the isObjectId logic used in formatResultWithLinks
         function isObjectId(value: string): boolean {

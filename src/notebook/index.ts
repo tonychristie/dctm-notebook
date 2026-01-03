@@ -324,18 +324,25 @@ function registerNotebookCommands(
     // Command to dump an object by ID (opens Object Dump panel)
     // Can be called with:
     // - A string objectId (from notebook context menu)
-    // - A node data object with objectId property (from tree view context menu)
+    // - A node data object with objectId property (from tree view via showObjectProperties)
+    // - An ObjectBrowserItem with data.objectId (from tree view context menu directly)
     // - No argument (prompts for object ID)
     const dumpObject = vscode.commands.registerCommand(
         'dctm.dumpObject',
-        async (arg?: string | { objectId?: string }) => {
+        async (arg?: string | { objectId?: string } | { data?: { objectId?: string } }) => {
             let objectId: string | undefined;
 
             // Extract objectId from argument
             if (typeof arg === 'string') {
                 objectId = arg;
-            } else if (arg && typeof arg === 'object' && 'objectId' in arg) {
-                objectId = arg.objectId;
+            } else if (arg && typeof arg === 'object') {
+                // Check for ObjectBrowserItem (has data.objectId)
+                if ('data' in arg && arg.data && typeof arg.data === 'object' && 'objectId' in arg.data) {
+                    objectId = arg.data.objectId;
+                } else if ('objectId' in arg) {
+                    // Node data object with objectId directly
+                    objectId = arg.objectId;
+                }
             }
 
             // If no objectId provided, prompt for one

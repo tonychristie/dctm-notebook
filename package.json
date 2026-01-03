@@ -418,9 +418,14 @@
       ],
       "view/title": [
         {
+          "command": "dctm.openApiPanel",
+          "when": "view == documentumExplorer",
+          "group": "navigation@1"
+        },
+        {
           "command": "dctm.refreshObjectBrowser",
           "when": "view == documentumExplorer",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "dctm.refreshTypeBrowser",

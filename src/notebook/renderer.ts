@@ -17,6 +17,13 @@ interface DqlResultData {
     executionTime: number;
 }
 
+interface ApiResultData {
+    type: 'api';
+    result: string;
+    resultType: string;
+    executionTimeMs: number;
+}
+
 interface RendererMessage {
     command: string;
     objectId?: string;
@@ -29,8 +36,14 @@ interface RendererMessage {
 export function activate(context: RendererContext<void>): { renderOutputItem: (outputItem: OutputItem, element: HTMLElement) => void } {
     return {
         renderOutputItem(outputItem: OutputItem, element: HTMLElement): void {
-            const data = outputItem.json() as DqlResultData;
-            renderDqlResult(element, data, context);
+            const data = outputItem.json() as DqlResultData | ApiResultData;
+
+            // Check if this is an API result or DQL result
+            if ('type' in data && data.type === 'api') {
+                renderApiResult(element, data as ApiResultData, context);
+            } else {
+                renderDqlResult(element, data as DqlResultData, context);
+            }
         }
     };
 }
@@ -599,4 +612,106 @@ function renderDqlResult(
 
     // Initial render
     renderTable();
+}
+
+/**
+ * Render API result with clickable object IDs
+ */
+function renderApiResult(
+    element: HTMLElement,
+    data: ApiResultData,
+    context: RendererContext<void>
+): void {
+    // Helper to check if a value is an object ID
+    function isObjectId(value: unknown): boolean {
+        if (typeof value !== 'string') {
+            return false;
+        }
+        return /^[0-9a-f]{16}$/i.test(value);
+    }
+
+    // Helper to escape HTML
+    function escapeHtml(text: string): string {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Helper to format result with clickable object IDs
+    function formatResultWithLinks(text: string): string {
+        return text.replace(/\b([0-9a-f]{16})\b/gi, (match) => {
+            return `<span class="object-id" data-object-id="${escapeHtml(match)}">${escapeHtml(match)}</span>`;
+        });
+    }
+
+    // Helper to dump an object
+    function dumpObject(objectId: string): void {
+        if (context.postMessage) {
+            context.postMessage({ command: 'dumpObject', objectId } as RendererMessage);
+        }
+    }
+
+    // Create styles
+    const style = document.createElement('style');
+    style.textContent = `
+        .api-result-container {
+            font-family: var(--vscode-font-family);
+            font-size: 12px;
+        }
+        .api-result-container .object-id {
+            color: var(--vscode-textLink-foreground);
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .api-result-container .object-id:hover {
+            color: var(--vscode-textLink-activeForeground);
+        }
+        .api-result-container .result-meta {
+            margin-bottom: 8px;
+            color: var(--vscode-descriptionForeground);
+        }
+        .api-result-container .result-content {
+            background: var(--vscode-textCodeBlock-background);
+            padding: 8px;
+            border-radius: 4px;
+            font-family: var(--vscode-editor-font-family);
+        }
+        .api-result-container .result-content pre {
+            margin: 0;
+            white-space: pre-wrap;
+        }
+    `;
+
+    // Build container
+    element.innerHTML = '';
+    element.appendChild(style);
+
+    const container = document.createElement('div');
+    container.className = 'api-result-container';
+    element.appendChild(container);
+
+    // Meta info
+    const meta = document.createElement('div');
+    meta.className = 'result-meta';
+    meta.textContent = `Result type: ${data.resultType} | Execution time: ${data.executionTimeMs}ms`;
+    container.appendChild(meta);
+
+    // Result content
+    const content = document.createElement('div');
+    content.className = 'result-content';
+    const pre = document.createElement('pre');
+    pre.innerHTML = formatResultWithLinks(escapeHtml(data.result));
+    content.appendChild(pre);
+    container.appendChild(content);
+
+    // Add click handler for object IDs
+    container.addEventListener('click', (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (target.classList.contains('object-id')) {
+            const objectId = target.getAttribute('data-object-id');
+            if (objectId) {
+                dumpObject(objectId);
+            }
+        }
+    });
 }

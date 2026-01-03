@@ -862,43 +862,16 @@ export class DctmNotebookController {
                 vscode.NotebookCellOutputItem.text(text, 'text/plain')
             ]);
         } else {
-            // Default to HTML with clickable object IDs
-            const resultWithLinks = this.formatResultWithObjectIdLinks(this.escapeHtml(formattedResult));
-            const html = `
-                <style>
-                    .api-result-container .object-id {
-                        color: var(--vscode-textLink-foreground);
-                        text-decoration: underline;
-                        cursor: pointer;
-                    }
-                    .api-result-container .object-id:hover {
-                        color: var(--vscode-textLink-activeForeground);
-                    }
-                </style>
-                <div class="api-result-container" style="font-family: var(--vscode-font-family); font-size: 12px;">
-                    <div style="margin-bottom: 8px; color: var(--vscode-descriptionForeground);">
-                        Result type: ${result.resultType} | Execution time: ${result.executionTimeMs}ms
-                    </div>
-                    <div style="background: var(--vscode-textCodeBlock-background); padding: 8px; border-radius: 4px; font-family: var(--vscode-editor-font-family);">
-                        <pre style="margin: 0; white-space: pre-wrap;">${resultWithLinks}</pre>
-                    </div>
-                </div>
-                <script>
-                    (function() {
-                        const vscode = acquireVsCodeApi();
-                        document.querySelectorAll('.api-result-container .object-id').forEach(el => {
-                            el.addEventListener('click', () => {
-                                const objectId = el.getAttribute('data-object-id');
-                                if (objectId) {
-                                    vscode.postMessage({ command: 'dumpObject', objectId: objectId });
-                                }
-                            });
-                        });
-                    })();
-                </script>
-            `;
+            // Default to custom renderer with clickable object IDs
+            // Use the same MIME type as DQL results so the custom renderer handles it
+            const apiResultData = {
+                type: 'api',
+                result: formattedResult,
+                resultType: result.resultType,
+                executionTimeMs: result.executionTimeMs
+            };
             return new vscode.NotebookCellOutput([
-                vscode.NotebookCellOutputItem.text(html, 'text/html'),
+                vscode.NotebookCellOutputItem.json(apiResultData, 'application/x-dctm-result'),
                 vscode.NotebookCellOutputItem.text(text, 'text/plain')
             ]);
         }

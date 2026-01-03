@@ -106,7 +106,7 @@ export function activate(context: vscode.ExtensionContext) {
     registerObjectBrowser(context, connectionManager);
 
     // Register API Panel and related commands
-    registerApiPanel(context, apiExecutor);
+    registerApiPanel(context, apiExecutor, connectionManager);
 
     // Register Type Browser and semantic tokens
     registerTypeBrowser(context, typeCache, connectionManager);

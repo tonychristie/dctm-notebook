@@ -25,7 +25,7 @@ function getDefaultSaveDirectory(): string {
  * Check if a value appears to be a date
  * Recognizes ISO date strings and Date objects
  */
-function isDateValue(value: unknown): boolean {
+export function isDateValue(value: unknown): boolean {
     if (value instanceof Date) {
         return true;
     }
@@ -40,7 +40,7 @@ function isDateValue(value: unknown): boolean {
 /**
  * Check if a column contains date values by sampling the first few non-null values
  */
-function isDateColumn(columnName: string, rows: Record<string, unknown>[]): boolean {
+export function isDateColumn(columnName: string, rows: Record<string, unknown>[]): boolean {
     // Common date column name patterns
     const dateColumnPatterns = [
         /date$/i,

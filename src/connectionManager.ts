@@ -3,11 +3,14 @@ import { DfcBridge } from './dfcBridge';
 
 export interface DocumentumConnection {
     name: string;
-    // Connection via bridge - bridge handles backend type (DFC or REST)
-    // DFC backend properties (used if bridge is configured for DFC)
+    // Connection type - determines which backend the bridge uses
+    type: 'dfc' | 'rest';
+    // DFC backend properties (used when type is 'dfc')
     docbroker?: string;
     port?: number;
     dfcProfile?: string;
+    // REST backend properties (used when type is 'rest')
+    endpoint?: string;
     // Common properties
     repository: string;
     username?: string;
@@ -105,9 +108,11 @@ export class ConnectionManager {
         // Let user pick a connection
         const items = connections.map(c => ({
             label: c.name,
-            description: c.docbroker
-                ? `${c.docbroker}:${c.port || 1489}`
-                : 'Bridge connection',
+            description: c.type === 'rest'
+                ? c.endpoint || 'REST'
+                : c.docbroker
+                    ? `${c.docbroker}:${c.port || 1489}`
+                    : 'DFC',
             detail: c.repository,
             connection: c
         }));
@@ -169,14 +174,23 @@ export class ConnectionManager {
                 // Ensure bridge is running
                 await this.dfcBridge.ensureRunning(profileName ? profiles[profileName] : undefined);
 
-                // Connect via bridge - bridge handles DFC vs REST internally
-                const sessionId = await this.dfcBridge.connect({
-                    docbroker: connection.docbroker || '',
-                    port: connection.port || 1489,
-                    repository: connection.repository,
-                    username,
-                    password
-                });
+                // Connect via bridge - route to DFC or REST based on connection type
+                const sessionId = await this.dfcBridge.connect(
+                    connection.type === 'rest'
+                        ? {
+                            endpoint: connection.endpoint,
+                            repository: connection.repository,
+                            username,
+                            password
+                        }
+                        : {
+                            docbroker: connection.docbroker || '',
+                            port: connection.port || 1489,
+                            repository: connection.repository,
+                            username,
+                            password
+                        }
+                );
 
                 this.activeConnection = {
                     config: connection,
@@ -219,9 +233,11 @@ export class ConnectionManager {
 
         const items: vscode.QuickPickItem[] = connections.map(c => ({
             label: c.name === currentName ? `$(check) ${c.name}` : c.name,
-            description: c.docbroker
-                ? `${c.docbroker}:${c.port || 1489}`
-                : 'Bridge connection',
+            description: c.type === 'rest'
+                ? c.endpoint || 'REST'
+                : c.docbroker
+                    ? `${c.docbroker}:${c.port || 1489}`
+                    : 'DFC',
             detail: c.repository
         }));
 
@@ -376,14 +392,23 @@ export class ConnectionManager {
         // Ensure bridge is running
         await this.dfcBridge.ensureRunning(profileName ? profiles[profileName] : undefined);
 
-        // Connect via bridge
-        const sessionId = await this.dfcBridge.connect({
-            docbroker: connection.docbroker || '',
-            port: connection.port || 1489,
-            repository: connection.repository,
-            username,
-            password
-        });
+        // Connect via bridge - route to DFC or REST based on connection type
+        const sessionId = await this.dfcBridge.connect(
+            connection.type === 'rest'
+                ? {
+                    endpoint: connection.endpoint,
+                    repository: connection.repository,
+                    username,
+                    password
+                }
+                : {
+                    docbroker: connection.docbroker || '',
+                    port: connection.port || 1489,
+                    repository: connection.repository,
+                    username,
+                    password
+                }
+        );
 
         const activeConnection: ActiveConnection = {
             config: connection,

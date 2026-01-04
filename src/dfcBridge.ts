@@ -38,6 +38,16 @@ export class DfcBridge {
         this.context = context;
     }
 
+    /**
+     * Ensure client is initialized or throw an error
+     */
+    private requireClient(): AxiosInstance {
+        if (!this.client) {
+            throw new Error('DFC Bridge not initialized. Call ensureRunning() first.');
+        }
+        return this.client;
+    }
+
     private getConfig() {
         const config = vscode.workspace.getConfiguration('documentum');
         return {
@@ -102,17 +112,8 @@ export class DfcBridge {
      * Connect to a Documentum repository via DFC
      */
     async connect(params: DfcConnectParams): Promise<string> {
-        if (!this.client) {
-            throw new Error('DFC Bridge not initialized. Call ensureRunning() first.');
-        }
-
-        const response = await this.client.post('/api/v1/connect', {
-            docbroker: params.docbroker,
-            port: params.port,
-            repository: params.repository,
-            username: params.username,
-            password: params.password
-        });
+        const client = this.requireClient();
+        const response = await client.post('/api/v1/connect', params);
 
         if (response.status !== 200) {
             throw new Error(response.data?.message || 'Connection failed');
@@ -136,17 +137,10 @@ export class DfcBridge {
      * Execute a DQL query
      */
     async executeDql(sessionId: string, query: string): Promise<DqlQueryResult> {
-        if (!this.client) {
-            throw new Error('DFC Bridge not initialized');
-        }
-
+        const client = this.requireClient();
         const startTime = Date.now();
 
-        const response = await this.client.post('/api/v1/dql', {
-            sessionId,
-            query
-        });
-
+        const response = await client.post('/api/v1/dql', { sessionId, query });
         const executionTime = Date.now() - startTime;
 
         if (response.status !== 200) {
@@ -170,11 +164,8 @@ export class DfcBridge {
      * Get session information
      */
     async getSessionInfo(sessionId: string): Promise<Record<string, unknown>> {
-        if (!this.client) {
-            throw new Error('DFC Bridge not initialized');
-        }
-
-        const response = await this.client.get(`/api/v1/session/${sessionId}`);
+        const client = this.requireClient();
+        const response = await client.get(`/api/v1/session/${sessionId}`);
         return response.data;
     }
 
@@ -196,12 +187,8 @@ export class DfcBridge {
             namedArgs?: Record<string, unknown>;
         }
     ): Promise<unknown> {
-        if (!this.client) {
-            throw new Error('DFC Bridge not initialized');
-        }
-
-        // Flatten the request to match ApiRequest structure expected by the bridge
-        const response = await this.client.post('/api/v1/api', {
+        const client = this.requireClient();
+        const response = await client.post('/api/v1/api', {
             sessionId,
             objectId: options.objectId,
             typeName: typeName || undefined,
@@ -232,16 +219,8 @@ export class DfcBridge {
         resultType: string;
         executionTimeMs: number;
     }> {
-        if (!this.client) {
-            throw new Error('DFC Bridge not initialized');
-        }
-
-        const response = await this.client.post('/api/v1/dmapi', {
-            sessionId,
-            apiType,
-            command
-        });
-
+        const client = this.requireClient();
+        const response = await client.post('/api/v1/dmapi', { sessionId, apiType, command });
         return response.data;
     }
 
@@ -249,14 +228,8 @@ export class DfcBridge {
      * Get list of all types in the repository
      */
     async getTypes(sessionId: string): Promise<unknown> {
-        if (!this.client) {
-            throw new Error('DFC Bridge not initialized');
-        }
-
-        const response = await this.client.get(`/api/v1/types`, {
-            params: { sessionId }
-        });
-
+        const client = this.requireClient();
+        const response = await client.get('/api/v1/types', { params: { sessionId } });
         return response.data;
     }
 
@@ -264,14 +237,8 @@ export class DfcBridge {
      * Get detailed type information including attributes
      */
     async getTypeDetails(sessionId: string, typeName: string): Promise<unknown> {
-        if (!this.client) {
-            throw new Error('DFC Bridge not initialized');
-        }
-
-        const response = await this.client.get(`/api/v1/types/${typeName}`, {
-            params: { sessionId }
-        });
-
+        const client = this.requireClient();
+        const response = await client.get(`/api/v1/types/${typeName}`, { params: { sessionId } });
         return response.data;
     }
 
@@ -279,14 +246,8 @@ export class DfcBridge {
      * Checkout (lock) an object for editing
      */
     async checkout(sessionId: string, objectId: string): Promise<unknown> {
-        if (!this.client) {
-            throw new Error('DFC Bridge not initialized');
-        }
-
-        const response = await this.client.put(`/api/v1/objects/${objectId}/lock`, null, {
-            params: { sessionId }
-        });
-
+        const client = this.requireClient();
+        const response = await client.put(`/api/v1/objects/${objectId}/lock`, null, { params: { sessionId } });
         return response.data;
     }
 
@@ -294,27 +255,16 @@ export class DfcBridge {
      * Cancel checkout (unlock) an object
      */
     async cancelCheckout(sessionId: string, objectId: string): Promise<void> {
-        if (!this.client) {
-            throw new Error('DFC Bridge not initialized');
-        }
-
-        await this.client.delete(`/api/v1/objects/${objectId}/lock`, {
-            params: { sessionId }
-        });
+        const client = this.requireClient();
+        await client.delete(`/api/v1/objects/${objectId}/lock`, { params: { sessionId } });
     }
 
     /**
      * Checkin an object, creating a new version
      */
     async checkin(sessionId: string, objectId: string, versionLabel: string = 'CURRENT'): Promise<unknown> {
-        if (!this.client) {
-            throw new Error('DFC Bridge not initialized');
-        }
-
-        const response = await this.client.post(`/api/v1/objects/${objectId}/versions`, null, {
-            params: { sessionId, versionLabel }
-        });
-
+        const client = this.requireClient();
+        const response = await client.post(`/api/v1/objects/${objectId}/versions`, null, { params: { sessionId, versionLabel } });
         return response.data;
     }
 

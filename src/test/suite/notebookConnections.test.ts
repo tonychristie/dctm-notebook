@@ -38,9 +38,11 @@ interface ActiveConnection {
 class MockDfcBridge {
     private sessionCounter = 0;
     private activeSessions: Map<string, boolean> = new Map();
+    public lastConnectionType: 'dfc' | 'rest' | null = null;
 
-    async ensureRunning(): Promise<void> {
-        // No-op for mock
+    async ensureRunning(_profile?: unknown, connectionType: 'dfc' | 'rest' = 'dfc'): Promise<void> {
+        // Track the connection type for verification in tests
+        this.lastConnectionType = connectionType;
     }
 
     async connect(_params: {
@@ -111,7 +113,8 @@ class TestableConnectionManager {
             throw new Error(`Connection "${connectionName}" not found`);
         }
 
-        await this.mockBridge.ensureRunning();
+        // Ensure bridge is running - route to appropriate bridge based on connection type
+        await this.mockBridge.ensureRunning(undefined, connection.type);
 
         // Route to DFC or REST based on connection type
         const sessionId = await this.mockBridge.connect(
@@ -633,6 +636,32 @@ suite('Notebook Connections Test Suite', () => {
     });
 
     suite('REST vs DFC connection routing', () => {
+        test('ensureRunning is called with dfc connection type for DFC connection', async () => {
+            const manager = new TestableConnectionManager(testConnections);
+            const notebookUri = 'file:///notebooks/dfc-type-test.dctmbook';
+
+            await manager.connectNotebook(notebookUri, 'dev-docbase', 'user', 'pass');
+
+            assert.strictEqual(
+                manager.getMockBridge().lastConnectionType,
+                'dfc',
+                'ensureRunning should be called with dfc connection type'
+            );
+        });
+
+        test('ensureRunning is called with rest connection type for REST connection', async () => {
+            const manager = new TestableConnectionManager(testConnections);
+            const notebookUri = 'file:///notebooks/rest-type-test.dctmbook';
+
+            await manager.connectNotebook(notebookUri, 'rest-docbase', 'user', 'pass');
+
+            assert.strictEqual(
+                manager.getMockBridge().lastConnectionType,
+                'rest',
+                'ensureRunning should be called with rest connection type'
+            );
+        });
+
         test('can connect notebook to REST connection', async () => {
             const manager = new TestableConnectionManager(testConnections);
             const notebookUri = 'file:///notebooks/rest-test.dctmbook';

@@ -17,9 +17,11 @@ import * as assert from 'assert';
 // Types from connectionManager
 interface DocumentumConnection {
     name: string;
+    type: 'dfc' | 'rest';
     docbroker?: string;
     port?: number;
     dfcProfile?: string;
+    endpoint?: string;
     repository: string;
     username?: string;
 }
@@ -42,8 +44,9 @@ class MockDfcBridge {
     }
 
     async connect(_params: {
-        docbroker: string;
-        port: number;
+        docbroker?: string;
+        port?: number;
+        endpoint?: string;
         repository: string;
         username: string;
         password: string;
@@ -110,13 +113,23 @@ class TestableConnectionManager {
 
         await this.mockBridge.ensureRunning();
 
-        const sessionId = await this.mockBridge.connect({
-            docbroker: connection.docbroker || '',
-            port: connection.port || 1489,
-            repository: connection.repository,
-            username,
-            password
-        });
+        // Route to DFC or REST based on connection type
+        const sessionId = await this.mockBridge.connect(
+            connection.type === 'rest'
+                ? {
+                    endpoint: connection.endpoint,
+                    repository: connection.repository,
+                    username,
+                    password
+                }
+                : {
+                    docbroker: connection.docbroker || '',
+                    port: connection.port || 1489,
+                    repository: connection.repository,
+                    username,
+                    password
+                }
+        );
 
         const activeConnection: ActiveConnection = {
             config: connection,
@@ -168,21 +181,30 @@ suite('Notebook Connections Test Suite', () => {
     const testConnections: DocumentumConnection[] = [
         {
             name: 'dev-docbase',
+            type: 'dfc',
             docbroker: 'devserver',
             port: 1489,
             repository: 'dev_repo'
         },
         {
             name: 'prod-docbase',
+            type: 'dfc',
             docbroker: 'prodserver',
             port: 1489,
             repository: 'prod_repo'
         },
         {
             name: 'test-docbase',
+            type: 'dfc',
             docbroker: 'testserver',
             port: 1490,
             repository: 'test_repo'
+        },
+        {
+            name: 'rest-docbase',
+            type: 'rest',
+            endpoint: 'http://rest.example.com/dctm-rest',
+            repository: 'rest_repo'
         }
     ];
 
@@ -607,6 +629,94 @@ suite('Notebook Connections Test Suite', () => {
 
             notebookMetadata.connection = 'prod-docbase';
             assert.strictEqual(notebookMetadata.connection, 'prod-docbase');
+        });
+    });
+
+    suite('REST vs DFC connection routing', () => {
+        test('can connect notebook to REST connection', async () => {
+            const manager = new TestableConnectionManager(testConnections);
+            const notebookUri = 'file:///notebooks/rest-test.dctmbook';
+
+            const sessionId = await manager.connectNotebook(
+                notebookUri,
+                'rest-docbase',
+                'restuser',
+                'restpass'
+            );
+
+            assert.ok(sessionId, 'Should return session ID for REST connection');
+            const conn = manager.getNotebookConnection(notebookUri);
+            assert.strictEqual(conn!.config.type, 'rest');
+            assert.strictEqual(conn!.config.endpoint, 'http://rest.example.com/dctm-rest');
+        });
+
+        test('can connect notebook to DFC connection', async () => {
+            const manager = new TestableConnectionManager(testConnections);
+            const notebookUri = 'file:///notebooks/dfc-test.dctmbook';
+
+            const sessionId = await manager.connectNotebook(
+                notebookUri,
+                'dev-docbase',
+                'dfcuser',
+                'dfcpass'
+            );
+
+            assert.ok(sessionId, 'Should return session ID for DFC connection');
+            const conn = manager.getNotebookConnection(notebookUri);
+            assert.strictEqual(conn!.config.type, 'dfc');
+            assert.strictEqual(conn!.config.docbroker, 'devserver');
+        });
+
+        test('can connect multiple notebooks to different connection types', async () => {
+            const manager = new TestableConnectionManager(testConnections);
+
+            await manager.connectNotebook('file:///nb-dfc.dctmbook', 'dev-docbase', 'u1', 'p1');
+            await manager.connectNotebook('file:///nb-rest.dctmbook', 'rest-docbase', 'u2', 'p2');
+
+            const dfcConn = manager.getNotebookConnection('file:///nb-dfc.dctmbook');
+            const restConn = manager.getNotebookConnection('file:///nb-rest.dctmbook');
+
+            assert.strictEqual(dfcConn!.config.type, 'dfc');
+            assert.strictEqual(restConn!.config.type, 'rest');
+            assert.strictEqual(dfcConn!.config.docbroker, 'devserver');
+            assert.strictEqual(restConn!.config.endpoint, 'http://rest.example.com/dctm-rest');
+        });
+
+        test('getEffectiveConnection returns correct type for REST connection', async () => {
+            const manager = new TestableConnectionManager(testConnections);
+            const notebookUri = 'file:///notebooks/rest-effective.dctmbook';
+
+            await manager.connectNotebook(notebookUri, 'rest-docbase', 'user', 'pass');
+
+            const effective = manager.getEffectiveConnection(notebookUri);
+            assert.ok(effective);
+            assert.strictEqual(effective!.config.type, 'rest');
+            assert.strictEqual(effective!.config.endpoint, 'http://rest.example.com/dctm-rest');
+            assert.strictEqual(effective!.config.docbroker, undefined);
+        });
+
+        test('REST connection does not have docbroker in config', async () => {
+            const manager = new TestableConnectionManager(testConnections);
+
+            await manager.connectNotebook('file:///nb.dctmbook', 'rest-docbase', 'user', 'pass');
+
+            const conn = manager.getNotebookConnection('file:///nb.dctmbook');
+            assert.strictEqual(conn!.config.type, 'rest');
+            assert.strictEqual(conn!.config.endpoint, 'http://rest.example.com/dctm-rest');
+            assert.strictEqual(conn!.config.docbroker, undefined);
+            assert.strictEqual(conn!.config.port, undefined);
+        });
+
+        test('DFC connection does not have endpoint in config', async () => {
+            const manager = new TestableConnectionManager(testConnections);
+
+            await manager.connectNotebook('file:///nb.dctmbook', 'dev-docbase', 'user', 'pass');
+
+            const conn = manager.getNotebookConnection('file:///nb.dctmbook');
+            assert.strictEqual(conn!.config.type, 'dfc');
+            assert.strictEqual(conn!.config.docbroker, 'devserver');
+            assert.strictEqual(conn!.config.port, 1489);
+            assert.strictEqual(conn!.config.endpoint, undefined);
         });
     });
 });

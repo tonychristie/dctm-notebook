@@ -3,8 +3,12 @@ import axios, { AxiosInstance } from 'axios';
 import { DfcProfile } from './connectionManager';
 
 export interface DfcConnectParams {
-    docbroker: string;
-    port: number;
+    // For DFC connections - docbroker and port
+    docbroker?: string;
+    port?: number;
+    // For REST connections - endpoint URL
+    endpoint?: string;
+    // Common properties
     repository: string;
     username: string;
     password: string;
@@ -109,11 +113,32 @@ export class DfcBridge {
     }
 
     /**
-     * Connect to a Documentum repository via DFC
+     * Connect to a Documentum repository via the bridge.
+     * The bridge routes to DFC or REST based on which fields are present:
+     * - endpoint field present -> REST connection
+     * - docbroker field present -> DFC connection
      */
     async connect(params: DfcConnectParams): Promise<string> {
         const client = this.requireClient();
-        const response = await client.post('/api/v1/connect', params);
+
+        // Build request body based on connection type
+        // Only include fields relevant to the connection type
+        const requestBody: Record<string, unknown> = {
+            repository: params.repository,
+            username: params.username,
+            password: params.password
+        };
+
+        if (params.endpoint) {
+            // REST connection - only include endpoint
+            requestBody.endpoint = params.endpoint;
+        } else {
+            // DFC connection - include docbroker and port
+            requestBody.docbroker = params.docbroker || '';
+            requestBody.port = params.port || 1489;
+        }
+
+        const response = await client.post('/api/v1/connect', requestBody);
 
         if (response.status !== 200) {
             throw new Error(response.data?.message || 'Connection failed');

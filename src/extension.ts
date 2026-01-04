@@ -7,6 +7,10 @@ import { ApiExecutor } from './apiExecutor';
 import { registerApiPanel } from './apiPanel';
 import { TypeCache } from './typeCache';
 import { registerTypeBrowser } from './typeBrowser';
+import { UserCache } from './userCache';
+import { registerUserBrowser } from './userBrowser';
+import { GroupCache } from './groupCache';
+import { registerGroupBrowser } from './groupBrowser';
 import { registerDqlSemanticTokens } from './dqlSemanticTokens';
 import { registerApiMethodReference } from './apiMethodReference';
 import { registerNotebook } from './notebook';
@@ -16,6 +20,8 @@ let connectionManager: ConnectionManager;
 let dqlExecutor: DqlExecutor;
 let apiExecutor: ApiExecutor;
 let typeCache: TypeCache;
+let userCache: UserCache;
+let groupCache: GroupCache;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Documentum Tools extension is now active');
@@ -25,6 +31,8 @@ export function activate(context: vscode.ExtensionContext) {
     dqlExecutor = new DqlExecutor(connectionManager);
     apiExecutor = new ApiExecutor(connectionManager);
     typeCache = new TypeCache(connectionManager);
+    userCache = new UserCache(connectionManager);
+    groupCache = new GroupCache(connectionManager);
 
     // Register commands
     const connectCommand = vscode.commands.registerCommand('dctm.connect', async () => {
@@ -112,6 +120,12 @@ export function activate(context: vscode.ExtensionContext) {
     registerTypeBrowser(context, typeCache, connectionManager);
     registerDqlSemanticTokens(context, typeCache);
 
+    // Register User Browser
+    registerUserBrowser(context, userCache, connectionManager);
+
+    // Register Group Browser
+    registerGroupBrowser(context, groupCache, connectionManager);
+
     // Register API method reference (autocomplete and hover for dmAPI methods)
     const apiReference = registerApiMethodReference(context);
 
@@ -121,16 +135,19 @@ export function activate(context: vscode.ExtensionContext) {
     // Register Object Dump sidebar view
     registerObjectDumpView(context, connectionManager);
 
-    // Auto-refresh type cache on connection
+    // Auto-refresh caches on connection
     connectionManager.onConnectionChange(async (connected) => {
         if (connected) {
-            try {
-                await typeCache.refresh();
-            } catch {
-                // Silent fail - types will be loaded on demand
-            }
+            // Refresh all caches in parallel
+            await Promise.allSettled([
+                typeCache.refresh(),
+                userCache.refresh(),
+                groupCache.refresh()
+            ]);
         } else {
             typeCache.clear();
+            userCache.clear();
+            groupCache.clear();
         }
     });
 }

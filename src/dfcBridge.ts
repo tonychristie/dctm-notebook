@@ -34,53 +34,125 @@ export interface DqlQueryResult {
  */
 export class DfcBridge {
     private context: vscode.ExtensionContext;
-    private client: AxiosInstance | null = null;
+    private dfcClient: AxiosInstance | null = null;
+    private restClient: AxiosInstance | null = null;
     private bridgeProcess: unknown = null; // TODO: ChildProcess when auto-start implemented
-    private baseUrl: string = '';
+
+    /**
+     * Track which session IDs belong to which connection type.
+     * This allows us to route requests to the correct bridge.
+     */
+    private sessionTypes: Map<string, 'dfc' | 'rest'> = new Map();
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
     }
 
     /**
-     * Ensure client is initialized or throw an error
+     * Get the client for a specific connection type.
+     * Throws if the client hasn't been initialized via ensureRunning().
      */
-    private requireClient(): AxiosInstance {
-        if (!this.client) {
-            throw new Error('DFC Bridge not initialized. Call ensureRunning() first.');
+    private getClientForType(connectionType: 'dfc' | 'rest'): AxiosInstance {
+        const client = connectionType === 'rest' ? this.restClient : this.dfcClient;
+        if (!client) {
+            const bridgeName = connectionType === 'rest' ? 'REST Bridge' : 'DFC Bridge';
+            throw new Error(`${bridgeName} not initialized. Call ensureRunning() first.`);
         }
-        return this.client;
+        return client;
+    }
+
+    /**
+     * Get the client for a specific session ID.
+     * Uses the stored session type to route to the correct bridge.
+     */
+    private getClientForSession(sessionId: string): AxiosInstance {
+        const connectionType = this.sessionTypes.get(sessionId);
+        if (!connectionType) {
+            // Fall back to DFC client for backwards compatibility
+            if (this.dfcClient) {
+                return this.dfcClient;
+            }
+            if (this.restClient) {
+                return this.restClient;
+            }
+            throw new Error('No bridge client initialized. Call ensureRunning() first.');
+        }
+        return this.getClientForType(connectionType);
     }
 
     private getConfig() {
         const config = vscode.workspace.getConfiguration('documentum');
         return {
             port: config.get<number>('bridge.port', 9876),
+            restPort: config.get<number>('bridge.restPort', 9877),
             autoStart: config.get<boolean>('bridge.autoStart', true)
         };
     }
 
     /**
-     * Ensure the DFC Bridge is running
+     * Get the base URL for a given connection type.
+     * DFC connections use bridge.port (9876), REST connections use bridge.restPort (9877).
      */
-    async ensureRunning(profile?: DfcProfile): Promise<void> {
+    private getBaseUrlForType(connectionType: 'dfc' | 'rest'): string {
         const config = this.getConfig();
-        this.baseUrl = `http://localhost:${config.port}`;
+        if (connectionType === 'rest') {
+            return `http://localhost:${config.restPort}`;
+        }
+        return `http://localhost:${config.port}`;
+    }
+
+    /**
+     * Ensure the appropriate bridge is running.
+     * Routes to the appropriate bridge based on connection type:
+     * - DFC connections use bridge.port (default 9876)
+     * - REST connections use bridge.restPort (default 9877)
+     *
+     * Each connection type maintains its own client, so DFC and REST
+     * connections can coexist simultaneously.
+     *
+     * @param profile Optional DFC profile configuration
+     * @param connectionType The connection type ('dfc' or 'rest'), defaults to 'dfc'
+     */
+    async ensureRunning(profile?: DfcProfile, connectionType: 'dfc' | 'rest' = 'dfc'): Promise<void> {
+        const config = this.getConfig();
+        const baseUrl = this.getBaseUrlForType(connectionType);
+
+        // Check if we already have a client for this connection type
+        const existingClient = connectionType === 'rest' ? this.restClient : this.dfcClient;
+        if (existingClient) {
+            // Client already exists, just verify bridge is running
+            try {
+                const response = await existingClient.get('/health');
+                if (response.status === 200) {
+                    console.log(`${connectionType === 'rest' ? 'REST' : 'DFC'} Bridge already running`);
+                    return;
+                }
+            } catch {
+                // Bridge not running, will try to start or throw error
+            }
+        }
 
         // Create axios client for bridge communication
-        this.client = axios.create({
-            baseURL: this.baseUrl,
+        const client = axios.create({
+            baseURL: baseUrl,
             headers: {
                 'Content-Type': 'application/json'
             },
             timeout: 30000 // 30 second timeout for DFC operations
         });
 
+        // Store client in the appropriate slot
+        if (connectionType === 'rest') {
+            this.restClient = client;
+        } else {
+            this.dfcClient = client;
+        }
+
         // Check if bridge is already running
         try {
-            const response = await this.client.get('/health');
+            const response = await client.get('/health');
             if (response.status === 200) {
-                console.log('DFC Bridge already running');
+                console.log(`${connectionType === 'rest' ? 'REST' : 'DFC'} Bridge already running`);
                 return;
             }
         } catch {
@@ -91,8 +163,10 @@ export class DfcBridge {
         if (config.autoStart) {
             await this.startBridge(profile);
         } else {
+            const bridgeName = connectionType === 'rest' ? 'REST Bridge' : 'DFC Bridge';
+            const port = connectionType === 'rest' ? config.restPort : config.port;
             throw new Error(
-                `DFC Bridge not running on port ${config.port}. ` +
+                `${bridgeName} not running on port ${port}. ` +
                 `Start it manually or enable documentum.bridge.autoStart`
             );
         }
@@ -117,9 +191,14 @@ export class DfcBridge {
      * The bridge routes to DFC or REST based on which fields are present:
      * - endpoint field present -> REST connection
      * - docbroker field present -> DFC connection
+     *
+     * The session ID is tracked along with its connection type so that
+     * subsequent requests are routed to the correct bridge.
      */
     async connect(params: DfcConnectParams): Promise<string> {
-        const client = this.requireClient();
+        // Determine connection type based on params
+        const connectionType: 'dfc' | 'rest' = params.endpoint ? 'rest' : 'dfc';
+        const client = this.getClientForType(connectionType);
 
         // Build request body based on connection type
         // Only include fields relevant to the connection type
@@ -144,25 +223,34 @@ export class DfcBridge {
             throw new Error(response.data?.message || 'Connection failed');
         }
 
-        return response.data.sessionId;
+        const sessionId = response.data.sessionId;
+
+        // Track session type for routing future requests
+        this.sessionTypes.set(sessionId, connectionType);
+
+        return sessionId;
     }
 
     /**
-     * Disconnect a DFC session
+     * Disconnect a session and clean up tracking
      */
     async disconnect(sessionId: string): Promise<void> {
-        if (!this.client) {
-            return;
+        try {
+            const client = this.getClientForSession(sessionId);
+            await client.post('/api/v1/disconnect', { sessionId });
+        } catch {
+            // Ignore errors if client not available
+        } finally {
+            // Always clean up the session tracking
+            this.sessionTypes.delete(sessionId);
         }
-
-        await this.client.post('/api/v1/disconnect', { sessionId });
     }
 
     /**
      * Execute a DQL query
      */
     async executeDql(sessionId: string, query: string): Promise<DqlQueryResult> {
-        const client = this.requireClient();
+        const client = this.getClientForSession(sessionId);
         const startTime = Date.now();
 
         const response = await client.post('/api/v1/dql', { sessionId, query });
@@ -189,7 +277,7 @@ export class DfcBridge {
      * Get session information
      */
     async getSessionInfo(sessionId: string): Promise<Record<string, unknown>> {
-        const client = this.requireClient();
+        const client = this.getClientForSession(sessionId);
         const response = await client.get(`/api/v1/session/${sessionId}`);
         return response.data;
     }
@@ -212,7 +300,7 @@ export class DfcBridge {
             namedArgs?: Record<string, unknown>;
         }
     ): Promise<unknown> {
-        const client = this.requireClient();
+        const client = this.getClientForSession(sessionId);
         const response = await client.post('/api/v1/api', {
             sessionId,
             objectId: options.objectId,
@@ -244,7 +332,7 @@ export class DfcBridge {
         resultType: string;
         executionTimeMs: number;
     }> {
-        const client = this.requireClient();
+        const client = this.getClientForSession(sessionId);
         const response = await client.post('/api/v1/dmapi', { sessionId, apiType, command });
         return response.data;
     }
@@ -253,7 +341,7 @@ export class DfcBridge {
      * Get list of all types in the repository
      */
     async getTypes(sessionId: string): Promise<unknown> {
-        const client = this.requireClient();
+        const client = this.getClientForSession(sessionId);
         const response = await client.get('/api/v1/types', { params: { sessionId } });
         return response.data;
     }
@@ -262,7 +350,7 @@ export class DfcBridge {
      * Get detailed type information including attributes
      */
     async getTypeDetails(sessionId: string, typeName: string): Promise<unknown> {
-        const client = this.requireClient();
+        const client = this.getClientForSession(sessionId);
         const response = await client.get(`/api/v1/types/${typeName}`, { params: { sessionId } });
         return response.data;
     }
@@ -271,7 +359,7 @@ export class DfcBridge {
      * Checkout (lock) an object for editing
      */
     async checkout(sessionId: string, objectId: string): Promise<unknown> {
-        const client = this.requireClient();
+        const client = this.getClientForSession(sessionId);
         const response = await client.put(`/api/v1/objects/${objectId}/lock`, null, { params: { sessionId } });
         return response.data;
     }
@@ -280,7 +368,7 @@ export class DfcBridge {
      * Cancel checkout (unlock) an object
      */
     async cancelCheckout(sessionId: string, objectId: string): Promise<void> {
-        const client = this.requireClient();
+        const client = this.getClientForSession(sessionId);
         await client.delete(`/api/v1/objects/${objectId}/lock`, { params: { sessionId } });
     }
 
@@ -288,19 +376,21 @@ export class DfcBridge {
      * Checkin an object, creating a new version
      */
     async checkin(sessionId: string, objectId: string, versionLabel: string = 'CURRENT'): Promise<unknown> {
-        const client = this.requireClient();
+        const client = this.getClientForSession(sessionId);
         const response = await client.post(`/api/v1/objects/${objectId}/versions`, null, { params: { sessionId, versionLabel } });
         return response.data;
     }
 
     /**
-     * Stop the DFC Bridge if we started it
+     * Stop the bridges if we started them
      */
     async stop(): Promise<void> {
         if (this.bridgeProcess) {
             // TODO: Kill the process
             this.bridgeProcess = null;
         }
-        this.client = null;
+        this.dfcClient = null;
+        this.restClient = null;
+        this.sessionTypes.clear();
     }
 }

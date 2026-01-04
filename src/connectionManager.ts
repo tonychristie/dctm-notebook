@@ -171,8 +171,11 @@ export class ConnectionManager {
                 title: `Connecting to ${connection.name}...`,
                 cancellable: false
             }, async () => {
-                // Ensure bridge is running
-                await this.dfcBridge.ensureRunning(profileName ? profiles[profileName] : undefined);
+                // Ensure bridge is running - route to appropriate bridge based on connection type
+                await this.dfcBridge.ensureRunning(
+                    profileName ? profiles[profileName] : undefined,
+                    connection.type
+                );
 
                 // Connect via bridge - route to DFC or REST based on connection type
                 const sessionId = await this.dfcBridge.connect(
@@ -389,8 +392,11 @@ export class ConnectionManager {
             throw new Error(`DFC profile "${profileName}" not found`);
         }
 
-        // Ensure bridge is running
-        await this.dfcBridge.ensureRunning(profileName ? profiles[profileName] : undefined);
+        // Ensure bridge is running - route to appropriate bridge based on connection type
+        await this.dfcBridge.ensureRunning(
+            profileName ? profiles[profileName] : undefined,
+            connection.type
+        );
 
         // Connect via bridge - route to DFC or REST based on connection type
         const sessionId = await this.dfcBridge.connect(

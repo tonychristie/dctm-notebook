@@ -222,33 +222,20 @@ export class ObjectBrowserItem extends vscode.TreeItem {
 
     private getDocumentIcon(): vscode.ThemeIcon {
         const docData = this.data as DocumentNodeData;
-        const format = docData.format?.toLowerCase();
+        const format = docData.format?.toLowerCase() ?? '';
 
-        // Map common formats to icons
-        if (format) {
-            if (format.includes('pdf')) {
-                return new vscode.ThemeIcon('file-pdf');
-            }
-            if (format.includes('word') || format === 'doc' || format === 'docx') {
-                return new vscode.ThemeIcon('file-text');
-            }
-            if (format.includes('excel') || format === 'xls' || format === 'xlsx') {
-                return new vscode.ThemeIcon('file-text');
-            }
-            if (format.includes('image') || ['jpg', 'jpeg', 'png', 'gif', 'bmp'].includes(format)) {
-                return new vscode.ThemeIcon('file-media');
-            }
-            if (format.includes('text') || format === 'txt') {
-                return new vscode.ThemeIcon('file-text');
-            }
-            if (format.includes('xml')) {
-                return new vscode.ThemeIcon('file-code');
-            }
-            if (format.includes('html')) {
-                return new vscode.ThemeIcon('file-code');
-            }
-            if (format.includes('zip') || format.includes('rar') || format.includes('tar')) {
-                return new vscode.ThemeIcon('file-zip');
+        // Format pattern to icon mapping
+        const iconMappings: Array<{ patterns: string[]; icon: string }> = [
+            { patterns: ['pdf'], icon: 'file-pdf' },
+            { patterns: ['word', 'doc', 'docx', 'text', 'txt', 'excel', 'xls', 'xlsx'], icon: 'file-text' },
+            { patterns: ['image', 'jpg', 'jpeg', 'png', 'gif', 'bmp'], icon: 'file-media' },
+            { patterns: ['xml', 'html'], icon: 'file-code' },
+            { patterns: ['zip', 'rar', 'tar'], icon: 'file-zip' }
+        ];
+
+        for (const { patterns, icon } of iconMappings) {
+            if (patterns.some(p => format.includes(p) || format === p)) {
+                return new vscode.ThemeIcon(icon);
             }
         }
 

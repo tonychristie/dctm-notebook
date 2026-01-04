@@ -56,16 +56,35 @@ export class DfcBridge {
         const config = vscode.workspace.getConfiguration('documentum');
         return {
             port: config.get<number>('bridge.port', 9876),
+            restPort: config.get<number>('bridge.restPort', 9877),
             autoStart: config.get<boolean>('bridge.autoStart', true)
         };
     }
 
     /**
-     * Ensure the DFC Bridge is running
+     * Get the base URL for a given connection type.
+     * DFC connections use bridge.port (9876), REST connections use bridge.restPort (9877).
      */
-    async ensureRunning(profile?: DfcProfile): Promise<void> {
+    private getBaseUrlForType(connectionType: 'dfc' | 'rest'): string {
         const config = this.getConfig();
-        this.baseUrl = `http://localhost:${config.port}`;
+        if (connectionType === 'rest') {
+            return `http://localhost:${config.restPort}`;
+        }
+        return `http://localhost:${config.port}`;
+    }
+
+    /**
+     * Ensure the DFC Bridge is running.
+     * Routes to the appropriate bridge based on connection type:
+     * - DFC connections use bridge.port (default 9876)
+     * - REST connections use bridge.restPort (default 9877)
+     *
+     * @param profile Optional DFC profile configuration
+     * @param connectionType The connection type ('dfc' or 'rest'), defaults to 'dfc'
+     */
+    async ensureRunning(profile?: DfcProfile, connectionType: 'dfc' | 'rest' = 'dfc'): Promise<void> {
+        const config = this.getConfig();
+        this.baseUrl = this.getBaseUrlForType(connectionType);
 
         // Create axios client for bridge communication
         this.client = axios.create({
@@ -91,8 +110,10 @@ export class DfcBridge {
         if (config.autoStart) {
             await this.startBridge(profile);
         } else {
+            const bridgeName = connectionType === 'rest' ? 'REST Bridge' : 'DFC Bridge';
+            const port = connectionType === 'rest' ? config.restPort : config.port;
             throw new Error(
-                `DFC Bridge not running on port ${config.port}. ` +
+                `${bridgeName} not running on port ${port}. ` +
                 `Start it manually or enable documentum.bridge.autoStart`
             );
         }

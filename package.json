@@ -475,7 +475,12 @@
         "documentum.bridge.port": {
           "type": "number",
           "default": 9876,
-          "description": "Port for DFC Bridge microservice"
+          "description": "Port for DFC Bridge microservice (DFC connections)"
+        },
+        "documentum.bridge.restPort": {
+          "type": "number",
+          "default": 9877,
+          "description": "Port for REST Bridge microservice (REST connections)"
         },
         "documentum.bridge.autoStart": {
           "type": "boolean",

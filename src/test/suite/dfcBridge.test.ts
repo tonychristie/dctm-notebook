@@ -333,6 +333,91 @@ suite('DfcBridge Test Suite', () => {
         });
     });
 
+    suite('Bridge port routing', () => {
+        /**
+         * Tests for connection type to bridge port routing.
+         * DFC connections should use bridge.port (9876), REST connections should use bridge.restPort (9877).
+         */
+
+        interface BridgeConfig {
+            port: number;
+            restPort: number;
+            autoStart: boolean;
+        }
+
+        /**
+         * Get base URL for connection type - mirrors the logic in dfcBridge.getBaseUrlForType()
+         */
+        function getBaseUrlForType(config: BridgeConfig, connectionType: 'dfc' | 'rest'): string {
+            if (connectionType === 'rest') {
+                return `http://localhost:${config.restPort}`;
+            }
+            return `http://localhost:${config.port}`;
+        }
+
+        const defaultConfig: BridgeConfig = {
+            port: 9876,
+            restPort: 9877,
+            autoStart: true
+        };
+
+        test('DFC connection uses port 9876 by default', () => {
+            const baseUrl = getBaseUrlForType(defaultConfig, 'dfc');
+            assert.strictEqual(baseUrl, 'http://localhost:9876');
+        });
+
+        test('REST connection uses port 9877 by default', () => {
+            const baseUrl = getBaseUrlForType(defaultConfig, 'rest');
+            assert.strictEqual(baseUrl, 'http://localhost:9877');
+        });
+
+        test('DFC connection uses custom port from config', () => {
+            const customConfig: BridgeConfig = {
+                port: 8000,
+                restPort: 9877,
+                autoStart: true
+            };
+            const baseUrl = getBaseUrlForType(customConfig, 'dfc');
+            assert.strictEqual(baseUrl, 'http://localhost:8000');
+        });
+
+        test('REST connection uses custom restPort from config', () => {
+            const customConfig: BridgeConfig = {
+                port: 9876,
+                restPort: 8001,
+                autoStart: true
+            };
+            const baseUrl = getBaseUrlForType(customConfig, 'rest');
+            assert.strictEqual(baseUrl, 'http://localhost:8001');
+        });
+
+        test('both ports can be customized independently', () => {
+            const customConfig: BridgeConfig = {
+                port: 7000,
+                restPort: 7001,
+                autoStart: true
+            };
+            const dfcUrl = getBaseUrlForType(customConfig, 'dfc');
+            const restUrl = getBaseUrlForType(customConfig, 'rest');
+
+            assert.strictEqual(dfcUrl, 'http://localhost:7000');
+            assert.strictEqual(restUrl, 'http://localhost:7001');
+        });
+
+        test('same port for both is allowed (though not recommended)', () => {
+            const samePortConfig: BridgeConfig = {
+                port: 9999,
+                restPort: 9999,
+                autoStart: true
+            };
+            const dfcUrl = getBaseUrlForType(samePortConfig, 'dfc');
+            const restUrl = getBaseUrlForType(samePortConfig, 'rest');
+
+            assert.strictEqual(dfcUrl, 'http://localhost:9999');
+            assert.strictEqual(restUrl, 'http://localhost:9999');
+        });
+    });
+
     suite('DfcConnectParams validation', () => {
 
         test('REST params have correct shape', () => {

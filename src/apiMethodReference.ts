@@ -79,25 +79,16 @@ export class ApiMethodReference {
         this.methodsByName.clear();
         this.methodsByCategory.clear();
 
-        const serverApi = this.data.serverApi;
+        const categories = this.data.serverApi.categories;
 
-        // Index exec methods
-        for (const method of serverApi.categories.exec.methods) {
-            this.methodsByName.set(method.name.toLowerCase(), method);
+        // Index all categories
+        for (const categoryName of ['exec', 'get', 'set'] as const) {
+            const methods = categories[categoryName].methods;
+            for (const method of methods) {
+                this.methodsByName.set(method.name.toLowerCase(), method);
+            }
+            this.methodsByCategory.set(categoryName, methods);
         }
-        this.methodsByCategory.set('exec', serverApi.categories.exec.methods);
-
-        // Index get methods
-        for (const method of serverApi.categories.get.methods) {
-            this.methodsByName.set(method.name.toLowerCase(), method);
-        }
-        this.methodsByCategory.set('get', serverApi.categories.get.methods);
-
-        // Index set methods
-        for (const method of serverApi.categories.set.methods) {
-            this.methodsByName.set(method.name.toLowerCase(), method);
-        }
-        this.methodsByCategory.set('set', serverApi.categories.set.methods);
     }
 
     /**
@@ -201,17 +192,24 @@ export class ApiMethodReference {
      * Get the category of a method
      */
     private getMethodCategory(methodName: string): string {
-        const name = methodName.toLowerCase();
+        if (!this.data) {
+            return 'Unknown';
+        }
 
-        if (this.data?.serverApi.categories.exec.methods.some(m => m.name.toLowerCase() === name)) {
-            return 'dmAPIExec';
+        const name = methodName.toLowerCase();
+        const categoryMap: Record<string, string> = {
+            exec: 'dmAPIExec',
+            get: 'dmAPIGet',
+            set: 'dmAPISet'
+        };
+
+        for (const [category, label] of Object.entries(categoryMap)) {
+            const methods = this.data.serverApi.categories[category as 'exec' | 'get' | 'set'].methods;
+            if (methods.some(m => m.name.toLowerCase() === name)) {
+                return label;
+            }
         }
-        if (this.data?.serverApi.categories.get.methods.some(m => m.name.toLowerCase() === name)) {
-            return 'dmAPIGet';
-        }
-        if (this.data?.serverApi.categories.set.methods.some(m => m.name.toLowerCase() === name)) {
-            return 'dmAPISet';
-        }
+
         return 'Unknown';
     }
 }

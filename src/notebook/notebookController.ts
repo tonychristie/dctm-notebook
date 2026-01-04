@@ -134,42 +134,28 @@ export class DctmNotebookController {
     }
 
     /**
-     * Strip comments from DQL queries.
-     * Handles both line comments (--) and block comments.
+     * Strip comments from code.
+     * @param code The code to strip comments from
+     * @param includeBlockComments Whether to also strip block comments
      */
-    private stripDqlComments(query: string): string {
-        // Remove block comments (/* ... */) - non-greedy match across lines
-        let stripped = query.replace(/\/\*[\s\S]*?\*\//g, '');
+    private stripComments(code: string, includeBlockComments: boolean = false): string {
+        let stripped = code;
+
+        // Remove block comments (/* ... */) if requested - non-greedy match across lines
+        if (includeBlockComments) {
+            stripped = stripped.replace(/\/\*[\s\S]*?\*\//g, '');
+        }
 
         // Remove line comments (-- to end of line)
         stripped = stripped.replace(/--.*$/gm, '');
 
         // Clean up extra whitespace and empty lines
-        stripped = stripped
+        return stripped
             .split('\n')
             .map(line => line.trim())
             .filter(line => line.length > 0)
-            .join('\n');
-
-        return stripped.trim();
-    }
-
-    /**
-     * Strip comments from dmAPI commands.
-     * Handles line comments (--)
-     */
-    private stripDmApiComments(command: string): string {
-        // Remove line comments (-- to end of line)
-        let stripped = command.replace(/--.*$/gm, '');
-
-        // Clean up extra whitespace and empty lines
-        stripped = stripped
-            .split('\n')
-            .map(line => line.trim())
-            .filter(line => line.length > 0)
-            .join('\n');
-
-        return stripped.trim();
+            .join('\n')
+            .trim();
     }
 
     /**
@@ -187,8 +173,8 @@ export class DctmNotebookController {
         connection: ActiveConnection
     ): Promise<void> {
         try {
-            // Strip comments before execution
-            const cleanQuery = this.stripDqlComments(query);
+            // Strip comments before execution (DQL supports block comments)
+            const cleanQuery = this.stripComments(query, true);
             if (!cleanQuery) {
                 execution.replaceOutput([]);
                 execution.end(true, Date.now());
@@ -749,17 +735,16 @@ export class DctmNotebookController {
         connection: ActiveConnection
     ): Promise<void> {
         try {
-            // Strip comments before execution
-            const cleanCommand = this.stripDmApiComments(command);
+            // Strip comments before execution (dmAPI only supports line comments)
+            const cleanCommand = this.stripComments(command);
             if (!cleanCommand) {
                 execution.replaceOutput([]);
                 execution.end(true, Date.now());
                 return;
             }
-            const trimmed = cleanCommand.trim();
 
             // Check if this is a dmAPI command (dmAPIGet, dmAPIExec, dmAPISet)
-            const dmApiMatch = trimmed.match(/^dmAPI(Get|Exec|Set)\s*\(\s*["'](.+?)["']\s*\)$/i);
+            const dmApiMatch = cleanCommand.match(/^dmAPI(Get|Exec|Set)\s*\(\s*["'](.+?)["']\s*\)$/i);
 
             let result: ApiMethodResponse;
 

@@ -15,6 +15,22 @@ interface WebviewMessage {
 }
 
 /**
+ * Extract objectId from various argument types (string, ObjectBrowserItem, or node data)
+ */
+function extractObjectId(arg: unknown): string | undefined {
+    if (typeof arg === 'string') {
+        return arg;
+    }
+    if (arg && typeof arg === 'object') {
+        const item = arg as { data?: { objectId?: string } };
+        if (item.data && typeof item.data.objectId === 'string') {
+            return item.data.objectId;
+        }
+    }
+    return undefined;
+}
+
+/**
  * Webview panel for executing DFC API methods
  */
 export class ApiPanel {
@@ -780,12 +796,8 @@ export class ApiPanel {
     public dispose(): void {
         ApiPanel.currentPanel = undefined;
         this.panel.dispose();
-        while (this.disposables.length) {
-            const d = this.disposables.pop();
-            if (d) {
-                d.dispose();
-            }
-        }
+        this.disposables.forEach(d => d.dispose());
+        this.disposables = [];
     }
 }
 
@@ -807,44 +819,19 @@ export function registerApiPanel(
     context.subscriptions.push(openApiPanelCommand);
 
     // Command to execute API on selected object
-    // When called from context menu, receives ObjectBrowserItem; when called programmatically, may receive string
     const executeApiOnObjectCommand = vscode.commands.registerCommand(
         'dctm.executeApiOnObject',
         (arg?: unknown) => {
-            let objectId: string | undefined;
-
-            if (typeof arg === 'string') {
-                // Direct string objectId passed
-                objectId = arg;
-            } else if (arg && typeof arg === 'object') {
-                // ObjectBrowserItem from context menu - extract objectId from data
-                const item = arg as { data?: { objectId?: string } };
-                if (item.data && typeof item.data.objectId === 'string') {
-                    objectId = item.data.objectId;
-                }
-            }
-
-            ApiPanel.createOrShow(context.extensionUri, apiExecutor, objectId);
+            ApiPanel.createOrShow(context.extensionUri, apiExecutor, extractObjectId(arg));
         }
     );
     context.subscriptions.push(executeApiOnObjectCommand);
 
     // Quick execute common operations
-    // When called from context menu, receives ObjectBrowserItem; when called programmatically, may receive string
     const checkoutCommand = vscode.commands.registerCommand(
         'dctm.checkout',
         async (arg?: unknown) => {
-            let objectId: string | undefined;
-
-            if (typeof arg === 'string') {
-                objectId = arg;
-            } else if (arg && typeof arg === 'object') {
-                const item = arg as { data?: { objectId?: string } };
-                if (item.data && typeof item.data.objectId === 'string') {
-                    objectId = item.data.objectId;
-                }
-            }
-
+            const objectId = extractObjectId(arg);
             if (!objectId) {
                 vscode.window.showErrorMessage('No object selected');
                 return;
@@ -875,17 +862,7 @@ export function registerApiPanel(
     const checkinCommand = vscode.commands.registerCommand(
         'dctm.checkin',
         async (arg?: unknown) => {
-            let objectId: string | undefined;
-
-            if (typeof arg === 'string') {
-                objectId = arg;
-            } else if (arg && typeof arg === 'object') {
-                const item = arg as { data?: { objectId?: string } };
-                if (item.data && typeof item.data.objectId === 'string') {
-                    objectId = item.data.objectId;
-                }
-            }
-
+            const objectId = extractObjectId(arg);
             if (!objectId) {
                 vscode.window.showErrorMessage('No object selected');
                 return;
@@ -926,17 +903,7 @@ export function registerApiPanel(
     const cancelCheckoutCommand = vscode.commands.registerCommand(
         'dctm.cancelCheckout',
         async (arg?: unknown) => {
-            let objectId: string | undefined;
-
-            if (typeof arg === 'string') {
-                objectId = arg;
-            } else if (arg && typeof arg === 'object') {
-                const item = arg as { data?: { objectId?: string } };
-                if (item.data && typeof item.data.objectId === 'string') {
-                    objectId = item.data.objectId;
-                }
-            }
-
+            const objectId = extractObjectId(arg);
             if (!objectId) {
                 vscode.window.showErrorMessage('No object selected');
                 return;

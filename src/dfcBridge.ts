@@ -383,6 +383,36 @@ export class DfcBridge {
     }
 
     /**
+     * Get an object by ID via the REST /objects endpoint.
+     * Returns object info with all attributes.
+     *
+     * @param sessionId Active session ID
+     * @param objectId The r_object_id to fetch
+     * @returns Object info with objectId, type, name, and attributes map
+     */
+    async getObject(sessionId: string, objectId: string): Promise<{
+        objectId: string;
+        type: string;
+        name: string;
+        attributes: Record<string, unknown>;
+    }> {
+        const client = this.getClientForSession(sessionId);
+        const response = await client.get(`/api/v1/objects/${objectId}`, { params: { sessionId } });
+        return response.data;
+    }
+
+    /**
+     * Check if a session is using REST connection (vs DFC).
+     * Useful for feature detection - some features like dmAPI are DFC-only.
+     *
+     * @param sessionId The session ID to check
+     * @returns true if the session is using REST connection, false for DFC
+     */
+    isRestSession(sessionId: string): boolean {
+        return this.sessionTypes.get(sessionId) === 'rest';
+    }
+
+    /**
      * Stop the bridges if we started them
      */
     async stop(): Promise<void> {

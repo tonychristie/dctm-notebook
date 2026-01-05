@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosError } from 'axios';
 import { DfcProfile } from './connectionManager';
+import { extractBridgeError } from './errorUtils';
 
 export interface DfcConnectParams {
     // For DFC connections - docbroker and port
@@ -141,6 +142,15 @@ export class DfcBridge {
             timeout: 30000 // 30 second timeout for DFC operations
         });
 
+        // Add response interceptor to transform errors
+        // This extracts meaningful error messages from bridge responses
+        client.interceptors.response.use(
+            (response) => response,
+            (error: AxiosError) => {
+                throw extractBridgeError(error);
+            }
+        );
+
         // Store client in the appropriate slot
         if (connectionType === 'rest') {
             this.restClient = client;
@@ -218,11 +228,6 @@ export class DfcBridge {
         }
 
         const response = await client.post('/api/v1/connect', requestBody);
-
-        if (response.status !== 200) {
-            throw new Error(response.data?.message || 'Connection failed');
-        }
-
         const sessionId = response.data.sessionId;
 
         // Track session type for routing future requests
@@ -255,10 +260,6 @@ export class DfcBridge {
 
         const response = await client.post('/api/v1/dql', { sessionId, query });
         const executionTime = Date.now() - startTime;
-
-        if (response.status !== 200) {
-            throw new Error(response.data?.message || 'DQL execution failed');
-        }
 
         // Bridge returns columns as ColumnInfo objects, extract just the names
         const columns = (response.data.columns || []).map(
@@ -379,6 +380,36 @@ export class DfcBridge {
         const client = this.getClientForSession(sessionId);
         const response = await client.post(`/api/v1/objects/${objectId}/versions`, null, { params: { sessionId, versionLabel } });
         return response.data;
+    }
+
+    /**
+     * Get an object by ID via the REST /objects endpoint.
+     * Returns object info with all attributes.
+     *
+     * @param sessionId Active session ID
+     * @param objectId The r_object_id to fetch
+     * @returns Object info with objectId, type, name, and attributes map
+     */
+    async getObject(sessionId: string, objectId: string): Promise<{
+        objectId: string;
+        type: string;
+        name: string;
+        attributes: Record<string, unknown>;
+    }> {
+        const client = this.getClientForSession(sessionId);
+        const response = await client.get(`/api/v1/objects/${objectId}`, { params: { sessionId } });
+        return response.data;
+    }
+
+    /**
+     * Check if a session is using REST connection (vs DFC).
+     * Useful for feature detection - some features like dmAPI are DFC-only.
+     *
+     * @param sessionId The session ID to check
+     * @returns true if the session is using REST connection, false for DFC
+     */
+    isRestSession(sessionId: string): boolean {
+        return this.sessionTypes.get(sessionId) === 'rest';
     }
 
     /**

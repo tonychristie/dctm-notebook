@@ -640,14 +640,19 @@
           "group": "navigation@1"
         },
         {
+          "command": "dctm.notebook.unbindConnection",
+          "when": "notebookType == dctmbook && dctm.notebookBound",
+          "group": "navigation@2"
+        },
+        {
           "command": "dctm.notebook.connectNotebook",
           "when": "notebookType == dctmbook && dctm.notebookBound && !dctm.notebookConnected",
-          "group": "navigation@2"
+          "group": "navigation@3"
         },
         {
           "command": "dctm.notebook.disconnectNotebook",
           "when": "notebookType == dctmbook && dctm.notebookConnected",
-          "group": "navigation@3"
+          "group": "navigation@4"
         }
       ],
       "commandPalette": [

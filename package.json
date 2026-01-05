@@ -636,36 +636,36 @@
       "notebook/toolbar": [
         {
           "command": "dctm.notebook.bindConnection",
-          "when": "notebookType == dctmbook",
+          "when": "notebookType == dctmbook && !dctm.notebookBound",
           "group": "navigation@1"
         },
         {
           "command": "dctm.notebook.connectNotebook",
-          "when": "notebookType == dctmbook",
+          "when": "notebookType == dctmbook && dctm.notebookBound && !dctm.notebookConnected",
           "group": "navigation@2"
         },
         {
           "command": "dctm.notebook.disconnectNotebook",
-          "when": "notebookType == dctmbook",
+          "when": "notebookType == dctmbook && dctm.notebookConnected",
           "group": "navigation@3"
         }
       ],
       "commandPalette": [
         {
           "command": "dctm.notebook.bindConnection",
-          "when": "notebookType == dctmbook"
+          "when": "notebookType == dctmbook && !dctm.notebookBound"
         },
         {
           "command": "dctm.notebook.unbindConnection",
-          "when": "notebookType == dctmbook"
+          "when": "notebookType == dctmbook && dctm.notebookBound"
         },
         {
           "command": "dctm.notebook.connectNotebook",
-          "when": "notebookType == dctmbook"
+          "when": "notebookType == dctmbook && dctm.notebookBound && !dctm.notebookConnected"
         },
         {
           "command": "dctm.notebook.disconnectNotebook",
-          "when": "notebookType == dctmbook"
+          "when": "notebookType == dctmbook && dctm.notebookConnected"
         }
       ]
     },

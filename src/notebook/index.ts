@@ -443,6 +443,12 @@ function registerNotebookCommands(
             ]);
 
             await vscode.workspace.applyEdit(edit);
+
+            // Manually update context keys since metadata change doesn't trigger status update
+            vscode.commands.executeCommand('setContext', 'dctm.notebookBound', true);
+            vscode.commands.executeCommand('setContext', 'dctm.notebookConnected', false);
+            vscode.commands.executeCommand('setContext', 'dctm.notebookConnectionName', selected.connectionName);
+
             vscode.window.showInformationMessage(
                 `Notebook bound to "${selected.connectionName}". Use "Connect Notebook" to establish connection.`
             );
@@ -480,6 +486,12 @@ function registerNotebookCommands(
             ]);
 
             await vscode.workspace.applyEdit(edit);
+
+            // Manually update context keys since metadata change doesn't trigger status update
+            vscode.commands.executeCommand('setContext', 'dctm.notebookBound', false);
+            vscode.commands.executeCommand('setContext', 'dctm.notebookConnected', false);
+            vscode.commands.executeCommand('setContext', 'dctm.notebookConnectionName', '');
+
             vscode.window.showInformationMessage(
                 `Notebook unbound from "${currentBinding}". Will use global connection.`
             );

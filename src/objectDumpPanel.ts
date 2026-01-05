@@ -220,7 +220,8 @@ export class ObjectDumpPanel {
     }
 
     /**
-     * Fetch object dump via the DFC Bridge
+     * Fetch object dump via the DFC Bridge.
+     * Uses dmAPI dump for DFC connections, REST /objects endpoint for REST connections.
      */
     private async fetchObjectDump(objectId: string): Promise<ObjectDump> {
         const connection = this.connectionManager.getActiveConnection();
@@ -231,7 +232,12 @@ export class ObjectDumpPanel {
         const bridge = this.connectionManager.getDfcBridge();
         const startTime = Date.now();
 
-        // Use dmAPIGet to get the dump
+        // Check if this is a REST connection - REST doesn't support dmAPI
+        if (bridge.isRestSession(connection.sessionId)) {
+            return this.fetchObjectViaRest(bridge, connection.sessionId, objectId, startTime);
+        }
+
+        // DFC connection - use dmAPIGet to get the dump
         const dumpResult = await bridge.executeDmApi(
             connection.sessionId,
             'get',
@@ -255,6 +261,70 @@ export class ObjectDumpPanel {
             attributes,
             fetchTime
         };
+    }
+
+    /**
+     * Fetch object via REST /objects endpoint.
+     * Used for REST connections where dmAPI is not available.
+     */
+    private async fetchObjectViaRest(
+        bridge: ReturnType<ConnectionManager['getDfcBridge']>,
+        sessionId: string,
+        objectId: string,
+        startTime: number
+    ): Promise<ObjectDump> {
+        const objectInfo = await bridge.getObject(sessionId, objectId);
+        const fetchTime = Date.now() - startTime;
+
+        // Convert REST response to AttributeInfo format
+        const attributes: AttributeInfo[] = [];
+
+        for (const [name, value] of Object.entries(objectInfo.attributes)) {
+            const isRepeating = Array.isArray(value);
+            const group = this.categorizeAttribute(name, -1);
+
+            attributes.push({
+                name,
+                type: this.inferType(value),
+                value,
+                isRepeating,
+                group
+            });
+        }
+
+        return {
+            objectId: objectInfo.objectId,
+            typeName: objectInfo.type || 'unknown',
+            objectName: objectInfo.name || objectId,
+            attributes,
+            fetchTime
+        };
+    }
+
+    /**
+     * Infer the type of a value for display purposes
+     */
+    private inferType(value: unknown): string {
+        if (value === null || value === undefined) {
+            return 'null';
+        }
+        if (Array.isArray(value)) {
+            return value.length > 0 ? `${this.inferType(value[0])}[]` : 'array';
+        }
+        if (typeof value === 'boolean') {
+            return 'bool';
+        }
+        if (typeof value === 'number') {
+            return Number.isInteger(value) ? 'int' : 'double';
+        }
+        if (typeof value === 'string') {
+            // Check if it looks like a date
+            if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+                return 'time';
+            }
+            return 'string';
+        }
+        return 'object';
     }
 
     /**

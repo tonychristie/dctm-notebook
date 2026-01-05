@@ -794,9 +794,16 @@ export class DctmNotebookController {
             throw new Error('No active session');
         }
 
-        // Execute via bridge - bridge handles backend type (DFC or REST)
-        // If REST backend is configured, bridge will return appropriate error for dmAPI
         const bridge = this.connectionManager.getDfcBridge();
+
+        // Check if this is a REST connection - REST doesn't support dmAPI
+        if (bridge.isRestSession(connection.sessionId)) {
+            throw new Error(
+                'dmAPI commands are not available with REST connections. ' +
+                'dmAPI requires a DFC connection to the repository.'
+            );
+        }
+
         const result = await bridge.executeDmApi(connection.sessionId, apiType, commandString);
 
         return {

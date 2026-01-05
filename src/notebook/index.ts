@@ -119,6 +119,17 @@ function registerNotebookStatusBar(
     notebookStatusBar.command = 'dctm.notebook.connectNotebook';
     context.subscriptions.push(notebookStatusBar);
 
+    // Function to update context keys for conditional menu visibility
+    const updateContextKeys = (
+        isNotebookConnected: boolean,
+        isNotebookBound: boolean,
+        connectionName?: string
+    ) => {
+        vscode.commands.executeCommand('setContext', 'dctm.notebookConnected', isNotebookConnected);
+        vscode.commands.executeCommand('setContext', 'dctm.notebookBound', isNotebookBound);
+        vscode.commands.executeCommand('setContext', 'dctm.notebookConnectionName', connectionName || '');
+    };
+
     // Function to update the status bar based on active notebook
     const updateNotebookStatus = () => {
         const editor = vscode.window.activeNotebookEditor;
@@ -126,6 +137,8 @@ function registerNotebookStatusBar(
         // Hide if no notebook is active or it's not a dctmbook
         if (!editor || editor.notebook.notebookType !== 'dctmbook') {
             notebookStatusBar.hide();
+            // Reset context keys when no notebook is active
+            updateContextKeys(false, false);
             return;
         }
 
@@ -136,15 +149,17 @@ function registerNotebookStatusBar(
         if (notebookConnection) {
             // Notebook has its own active connection
             notebookStatusBar.text = `$(notebook) ${notebookConnection.config.name} (${notebookConnection.username})`;
-            notebookStatusBar.tooltip = `Notebook connected to ${notebookConnection.config.name} as ${notebookConnection.username}. Click to manage.`;
+            notebookStatusBar.tooltip = `Notebook connected to ${notebookConnection.config.name} as ${notebookConnection.username}. Click to disconnect.`;
             notebookStatusBar.backgroundColor = undefined;
             notebookStatusBar.command = 'dctm.notebook.disconnectNotebook';
+            updateContextKeys(true, true, notebookConnection.config.name);
         } else if (boundConnection) {
             // Notebook is bound but not connected
             notebookStatusBar.text = `$(notebook) ${boundConnection} (disconnected)`;
             notebookStatusBar.tooltip = `Notebook bound to ${boundConnection} but not connected. Click to connect.`;
             notebookStatusBar.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
             notebookStatusBar.command = 'dctm.notebook.connectNotebook';
+            updateContextKeys(false, true, boundConnection);
         } else {
             // Notebook uses global connection
             const globalConn = connectionManager.getActiveConnection();
@@ -158,6 +173,7 @@ function registerNotebookStatusBar(
                 notebookStatusBar.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
             }
             notebookStatusBar.command = 'dctm.notebook.bindConnection';
+            updateContextKeys(false, false);
         }
 
         notebookStatusBar.show();

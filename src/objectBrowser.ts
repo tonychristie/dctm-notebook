@@ -78,10 +78,10 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
     }
 
     /**
-     * Get parent of an item (optional, enables reveal API)
+     * Get parent of an item (optional, enables reveal API).
+     * Not currently implemented - returns null.
      */
     getParent(_element: ObjectBrowserItem): vscode.ProviderResult<ObjectBrowserItem> {
-        // TODO: Implement if needed for reveal functionality
         return null;
     }
 

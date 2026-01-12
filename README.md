@@ -1,6 +1,6 @@
-# Documentum Tools for VS Code
+# DCTM Notebook
 
-A VS Code extension for Documentum development - DQL queries and DFC integration.
+A VS Code notebook interface for DQL queries with REST and DFC connectivity.
 
 ## Features
 

@@ -100,8 +100,6 @@ export function registerNotebook(
     if (apiReference) {
         registerNotebookCompletions(context, apiReference);
     }
-
-    console.log('Documentum notebook support registered');
 }
 
 /**
@@ -193,7 +191,6 @@ function registerNotebookStatusBar(
                 const notebookUri = notebook.uri.toString();
                 if (connectionManager.hasNotebookConnection(notebookUri)) {
                     await connectionManager.disconnectNotebook(notebookUri);
-                    console.log(`Disconnected notebook session for ${notebook.uri.fsPath}`);
                 }
             }
         })

@@ -24,8 +24,6 @@ let userCache: UserCache;
 let groupCache: GroupCache;
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('Documentum Tools extension is now active');
-
     // Initialize managers
     connectionManager = new ConnectionManager(context);
     dqlExecutor = new DqlExecutor(connectionManager);

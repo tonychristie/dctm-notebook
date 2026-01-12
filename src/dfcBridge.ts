@@ -125,7 +125,6 @@ export class DfcBridge {
             try {
                 const response = await existingClient.get('/health');
                 if (response.status === 200) {
-                    console.log(`${connectionType === 'rest' ? 'REST' : 'DFC'} Bridge already running`);
                     return;
                 }
             } catch {
@@ -162,7 +161,6 @@ export class DfcBridge {
         try {
             const response = await client.get('/health');
             if (response.status === 200) {
-                console.log(`${connectionType === 'rest' ? 'REST' : 'DFC'} Bridge already running`);
                 return;
             }
         } catch {

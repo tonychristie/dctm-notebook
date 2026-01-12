@@ -303,11 +303,7 @@ export function registerApiMethodReference(
     const reference = new ApiMethodReference(context.extensionPath);
 
     // Load reference data asynchronously
-    reference.load().then(() => {
-        if (reference.hasData()) {
-            console.log('API method reference data loaded');
-        }
-    });
+    reference.load();
 
     // Register completion provider for DQL and API files
     const completionProvider = new ApiMethodCompletionProvider(reference);

@@ -2,8 +2,9 @@
   "name": "dctm-notebook",
   "displayName": "DCTM Notebook",
   "description": "VS Code notebook interface for DQL queries with REST and DFC connectivity",
-  "version": "0.0.1",
-  "publisher": "spire",
+  "version": "1.0.0",
+  "publisher": "spirecentral",
+  "icon": "resources/icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -709,6 +710,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "http://colossus:3000/tchristie/dctm-notebook.git"
+    "url": "https://github.com/tonychristie/dctm-notebook.git"
+  },
+  "homepage": "https://github.com/tonychristie/dctm-notebook",
+  "bugs": {
+    "url": "https://github.com/tonychristie/dctm-notebook/issues"
   }
 }

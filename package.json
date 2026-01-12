@@ -1,7 +1,7 @@
 {
-  "name": "dctm-vscode",
-  "displayName": "Documentum Tools",
-  "description": "VS Code extension for Documentum development - DQL queries and DFC integration",
+  "name": "dctm-notebook",
+  "displayName": "DCTM Notebook",
+  "description": "VS Code notebook interface for DQL queries with REST and DFC connectivity",
   "version": "0.0.1",
   "publisher": "spire",
   "engines": {
@@ -709,6 +709,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "http://colossus:3000/tchristie/dctm-vscode.git"
+    "url": "http://colossus:3000/tchristie/dctm-notebook.git"
   }
 }

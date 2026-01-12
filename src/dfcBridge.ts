@@ -37,7 +37,7 @@ export class DfcBridge {
     private context: vscode.ExtensionContext;
     private dfcClient: AxiosInstance | null = null;
     private restClient: AxiosInstance | null = null;
-    private bridgeProcess: unknown = null; // TODO: ChildProcess when auto-start implemented
+    private bridgeProcess: unknown = null;
 
     /**
      * Track which session IDs belong to which connection type.
@@ -183,8 +183,8 @@ export class DfcBridge {
     }
 
     /**
-     * Start the DFC Bridge process
-     * TODO: Implement auto-start of Java process
+     * Start the DFC Bridge process.
+     * Auto-start not yet implemented - requires manual bridge startup.
      */
     private async startBridge(_profile?: DfcProfile): Promise<void> {
         // For now, require manual start
@@ -417,7 +417,6 @@ export class DfcBridge {
      */
     async stop(): Promise<void> {
         if (this.bridgeProcess) {
-            // TODO: Kill the process
             this.bridgeProcess = null;
         }
         this.dfcClient = null;

@@ -1,6 +1,22 @@
 # DCTM Notebook
 
-A VS Code notebook interface for DQL queries with REST and DFC connectivity.
+A VS Code notebook interface for DQL queries with REST and DFC connectivity to OpenText Documentum repositories.
+
+## Installation
+
+### From VS Code Marketplace
+
+1. Open VS Code
+2. Go to Extensions (Ctrl+Shift+X / Cmd+Shift+X)
+3. Search for "DCTM Notebook"
+4. Click Install
+
+### From VSIX
+
+1. Download the `.vsix` file from the [releases page](https://github.com/tonychristie/dctm-notebook/releases)
+2. In VS Code, go to Extensions
+3. Click the `...` menu and select "Install from VSIX..."
+4. Select the downloaded file
 
 ## Features
 
@@ -311,4 +327,6 @@ npm run watch
 
 ## License
 
-See LICENSE file.
+MIT License - see [LICENSE](LICENSE) file for details.
+
+Copyright (c) 2024-2026 SPIRE Solutions Ltd

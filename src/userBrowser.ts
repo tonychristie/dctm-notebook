@@ -89,6 +89,7 @@ export class UserBrowserProvider implements vscode.TreeDataProvider<UserBrowserI
 
     setSearchFilter(filter: string): void {
         this.searchFilter = filter.toLowerCase();
+        vscode.commands.executeCommand('setContext', 'dctm.userBrowserFiltered', this.searchFilter.length > 0);
         this._onDidChangeTreeData.fire();
     }
 

@@ -89,6 +89,7 @@ export class GroupBrowserProvider implements vscode.TreeDataProvider<GroupBrowse
 
     setSearchFilter(filter: string): void {
         this.searchFilter = filter.toLowerCase();
+        vscode.commands.executeCommand('setContext', 'dctm.groupBrowserFiltered', this.searchFilter.length > 0);
         this._onDidChangeTreeData.fire();
     }
 

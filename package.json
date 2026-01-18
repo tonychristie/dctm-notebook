@@ -2,7 +2,7 @@
   "name": "dctm-notebook",
   "displayName": "DCTM Notebook",
   "description": "VS Code notebook interface for DQL queries with REST and DFC connectivity",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "spirecentral",
   "icon": "resources/icon.png",
   "engines": {
@@ -700,9 +700,13 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./ && tsc -p ./tsconfig.renderer.json",
-    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && node esbuild.js --production",
+    "check-types": "tsc --noEmit",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "vscode-test"
@@ -716,7 +720,9 @@
     "@typescript-eslint/parser": "^6.15.0",
     "@vscode/test-cli": "^0.0.4",
     "@vscode/test-electron": "^2.3.8",
+    "esbuild": "^0.27.2",
     "eslint": "^8.56.0",
+    "npm-run-all": "^4.1.5",
     "typescript": "^5.3.3"
   },
   "dependencies": {

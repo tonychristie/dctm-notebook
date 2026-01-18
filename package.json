@@ -525,6 +525,11 @@
           "group": "navigation"
         },
         {
+          "command": "dctm.clearTypeSearch",
+          "when": "view == documentumTypeBrowser && dctm.typeBrowserFiltered",
+          "group": "navigation"
+        },
+        {
           "command": "dctm.refreshUserBrowser",
           "when": "view == documentumUserBrowser",
           "group": "navigation"
@@ -535,6 +540,11 @@
           "group": "navigation"
         },
         {
+          "command": "dctm.clearUserSearch",
+          "when": "view == documentumUserBrowser && dctm.userBrowserFiltered",
+          "group": "navigation"
+        },
+        {
           "command": "dctm.refreshGroupBrowser",
           "when": "view == documentumGroupBrowser",
           "group": "navigation"
@@ -542,6 +552,11 @@
         {
           "command": "dctm.searchGroups",
           "when": "view == documentumGroupBrowser",
+          "group": "navigation"
+        },
+        {
+          "command": "dctm.clearGroupSearch",
+          "when": "view == documentumGroupBrowser && dctm.groupBrowserFiltered",
           "group": "navigation"
         }
       ],

@@ -329,4 +329,4 @@ npm run watch
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-Copyright (c) 2024-2026 SPIRE Solutions Ltd
+Copyright (c) 2024-2026 Spire Professional Services Ltd

@@ -1,6 +1,7 @@
 .vscode/**
 .vscode-test/**
 src/**
+test/**
 .gitignore
 .yarnrc
 vsc-extension-quickstart.md
@@ -11,3 +12,7 @@ vsc-extension-quickstart.md
 !data/**
 node_modules/**
 .claude/
+out/test/**
+esbuild.js
+tsconfig.renderer.json
+.vscode-test.mjs

@@ -2,11 +2,11 @@
   "name": "dctm-notebook",
   "displayName": "DCTM Notebook",
   "description": "VS Code notebook interface for DQL queries with REST and DFC connectivity",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": "spirecentral",
   "icon": "resources/icon.png",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.84.0"
   },
   "categories": [
     "Programming Languages",
@@ -714,7 +714,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.6",
     "@types/node": "^18.19.130",
-    "@types/vscode": "^1.85.0",
+    "@types/vscode": "^1.84.0",
     "@types/vscode-notebook-renderer": "^1.72.4",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",

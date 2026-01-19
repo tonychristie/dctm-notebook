@@ -483,11 +483,6 @@
           "default": 9877,
           "description": "Port for REST Bridge microservice (REST connections)"
         },
-        "documentum.bridge.autoStart": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically start DFC Bridge when connecting"
-        },
         "documentum.dumpPanel.reuseWindow": {
           "type": "boolean",
           "default": true,

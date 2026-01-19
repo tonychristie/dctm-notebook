@@ -342,7 +342,6 @@ suite('DfcBridge Test Suite', () => {
         interface BridgeConfig {
             port: number;
             restPort: number;
-            autoStart: boolean;
         }
 
         /**
@@ -357,8 +356,7 @@ suite('DfcBridge Test Suite', () => {
 
         const defaultConfig: BridgeConfig = {
             port: 9876,
-            restPort: 9877,
-            autoStart: true
+            restPort: 9877
         };
 
         test('DFC connection uses port 9876 by default', () => {
@@ -374,8 +372,7 @@ suite('DfcBridge Test Suite', () => {
         test('DFC connection uses custom port from config', () => {
             const customConfig: BridgeConfig = {
                 port: 8000,
-                restPort: 9877,
-                autoStart: true
+                restPort: 9877
             };
             const baseUrl = getBaseUrlForType(customConfig, 'dfc');
             assert.strictEqual(baseUrl, 'http://localhost:8000');
@@ -384,8 +381,7 @@ suite('DfcBridge Test Suite', () => {
         test('REST connection uses custom restPort from config', () => {
             const customConfig: BridgeConfig = {
                 port: 9876,
-                restPort: 8001,
-                autoStart: true
+                restPort: 8001
             };
             const baseUrl = getBaseUrlForType(customConfig, 'rest');
             assert.strictEqual(baseUrl, 'http://localhost:8001');
@@ -394,8 +390,7 @@ suite('DfcBridge Test Suite', () => {
         test('both ports can be customized independently', () => {
             const customConfig: BridgeConfig = {
                 port: 7000,
-                restPort: 7001,
-                autoStart: true
+                restPort: 7001
             };
             const dfcUrl = getBaseUrlForType(customConfig, 'dfc');
             const restUrl = getBaseUrlForType(customConfig, 'rest');
@@ -407,8 +402,7 @@ suite('DfcBridge Test Suite', () => {
         test('same port for both is allowed (though not recommended)', () => {
             const samePortConfig: BridgeConfig = {
                 port: 9999,
-                restPort: 9999,
-                autoStart: true
+                restPort: 9999
             };
             const dfcUrl = getBaseUrlForType(samePortConfig, 'dfc');
             const restUrl = getBaseUrlForType(samePortConfig, 'rest');

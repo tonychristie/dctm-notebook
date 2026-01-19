@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Lowered minimum VS Code version requirement from 1.85.0 to 1.84.0 for broader compatibility
 
+### Removed
+- Removed unimplemented `documentum.bridge.autoStart` setting
+
 ## [1.0.2] - 2026-01-14
 
 ### Added

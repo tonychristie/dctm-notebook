@@ -2,11 +2,11 @@
   "name": "dctm-notebook",
   "displayName": "DCTM Notebook",
   "description": "VS Code notebook interface for DQL queries with REST and DFC connectivity",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": "spirecentral",
   "icon": "resources/icon.png",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.84.0"
   },
   "categories": [
     "Programming Languages",
@@ -451,7 +451,7 @@
         "documentum.dfc.profiles": {
           "type": "object",
           "default": {},
-          "description": "DFC profile configurations (like dqMan profiles)",
+          "description": "DFC profile configurations",
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -473,6 +473,11 @@
             ]
           }
         },
+        "documentum.bridge.host": {
+          "type": "string",
+          "default": "localhost",
+          "description": "Hostname or IP address where the bridge services are running"
+        },
         "documentum.bridge.port": {
           "type": "number",
           "default": 9876,
@@ -482,11 +487,6 @@
           "type": "number",
           "default": 9877,
           "description": "Port for REST Bridge microservice (REST connections)"
-        },
-        "documentum.bridge.autoStart": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically start DFC Bridge when connecting"
         },
         "documentum.dumpPanel.reuseWindow": {
           "type": "boolean",
@@ -714,7 +714,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.6",
     "@types/node": "^18.19.130",
-    "@types/vscode": "^1.85.0",
+    "@types/vscode": "^1.84.0",
     "@types/vscode-notebook-renderer": "^1.72.4",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",

@@ -113,7 +113,7 @@ The API Panel allows you to execute DFC methods on repository objects interactiv
 
 ## Requirements
 
-- VS Code 1.85.0 or higher
+- VS Code 1.84.0 or higher
 - DFC Bridge service for DFC connectivity (optional for REST-only connections)
 
 ## DQL Syntax Highlighting
@@ -289,8 +289,9 @@ This extension contributes the following settings:
 * `documentum.connections`: List of Documentum connection configurations
 * `documentum.defaultConnection`: Name of the default connection
 * `documentum.dfc.profiles`: DFC profile configurations
+* `documentum.bridge.host`: Hostname or IP address where the bridge services are running (default: localhost)
 * `documentum.bridge.port`: Port for DFC Bridge microservice (default: 9876)
-* `documentum.bridge.autoStart`: Automatically start DFC Bridge when connecting
+* `documentum.bridge.restPort`: Port for REST Bridge microservice (default: 9877)
 
 ## Sample Files
 

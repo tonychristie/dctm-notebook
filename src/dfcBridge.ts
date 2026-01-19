@@ -85,8 +85,7 @@ export class DfcBridge {
         const config = vscode.workspace.getConfiguration('documentum');
         return {
             port: config.get<number>('bridge.port', 9876),
-            restPort: config.get<number>('bridge.restPort', 9877),
-            autoStart: config.get<boolean>('bridge.autoStart', true)
+            restPort: config.get<number>('bridge.restPort', 9877)
         };
     }
 
@@ -164,33 +163,14 @@ export class DfcBridge {
                 return;
             }
         } catch {
-            // Bridge not running
+            // Bridge not running, throw error
         }
 
-        // Auto-start bridge if configured
-        if (config.autoStart) {
-            await this.startBridge(profile);
-        } else {
-            const bridgeName = connectionType === 'rest' ? 'REST Bridge' : 'DFC Bridge';
-            const port = connectionType === 'rest' ? config.restPort : config.port;
-            throw new Error(
-                `${bridgeName} not running on port ${port}. ` +
-                `Start it manually or enable documentum.bridge.autoStart`
-            );
-        }
-    }
-
-    /**
-     * Start the DFC Bridge process.
-     * Auto-start not yet implemented - requires manual bridge startup.
-     */
-    private async startBridge(_profile?: DfcProfile): Promise<void> {
-        // For now, require manual start
-        // In future: spawn Java process with profile's DFC JARs on classpath
+        const bridgeName = connectionType === 'rest' ? 'REST Bridge' : 'DFC Bridge';
+        const port = connectionType === 'rest' ? config.restPort : config.port;
         throw new Error(
-            'DFC Bridge auto-start not yet implemented. ' +
-            'Please start the DFC Bridge manually: ' +
-            'java -jar dfc-bridge.jar --server.port=' + this.getConfig().port
+            `${bridgeName} not running on port ${port}. ` +
+            `Please start the bridge manually.`
         );
     }
 

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.3] - 2026-01-19
 
+### Added
+- New `documentum.bridge.host` setting to configure remote bridge host (default: localhost)
+
 ### Changed
 - Lowered minimum VS Code version requirement from 1.85.0 to 1.84.0 for broader compatibility
 

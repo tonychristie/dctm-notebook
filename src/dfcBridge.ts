@@ -84,6 +84,7 @@ export class DfcBridge {
     private getConfig() {
         const config = vscode.workspace.getConfiguration('documentum');
         return {
+            host: config.get<string>('bridge.host', 'localhost'),
             port: config.get<number>('bridge.port', 9876),
             restPort: config.get<number>('bridge.restPort', 9877)
         };
@@ -91,14 +92,15 @@ export class DfcBridge {
 
     /**
      * Get the base URL for a given connection type.
+     * Uses bridge.host for the hostname (default: localhost).
      * DFC connections use bridge.port (9876), REST connections use bridge.restPort (9877).
      */
     private getBaseUrlForType(connectionType: 'dfc' | 'rest'): string {
         const config = this.getConfig();
         if (connectionType === 'rest') {
-            return `http://localhost:${config.restPort}`;
+            return `http://${config.host}:${config.restPort}`;
         }
-        return `http://localhost:${config.port}`;
+        return `http://${config.host}:${config.port}`;
     }
 
     /**

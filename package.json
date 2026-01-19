@@ -473,6 +473,11 @@
             ]
           }
         },
+        "documentum.bridge.host": {
+          "type": "string",
+          "default": "localhost",
+          "description": "Hostname or IP address where the bridge services are running"
+        },
         "documentum.bridge.port": {
           "type": "number",
           "default": 9876,

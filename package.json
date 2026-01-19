@@ -451,7 +451,7 @@
         "documentum.dfc.profiles": {
           "type": "object",
           "default": {},
-          "description": "DFC profile configurations (like dqMan profiles)",
+          "description": "DFC profile configurations",
           "additionalProperties": {
             "type": "object",
             "properties": {

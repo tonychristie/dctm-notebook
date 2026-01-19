@@ -113,7 +113,7 @@ The API Panel allows you to execute DFC methods on repository objects interactiv
 
 ## Requirements
 
-- VS Code 1.85.0 or higher
+- VS Code 1.84.0 or higher
 - DFC Bridge service for DFC connectivity (optional for REST-only connections)
 
 ## DQL Syntax Highlighting

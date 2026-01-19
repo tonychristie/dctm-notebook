@@ -290,7 +290,7 @@ This extension contributes the following settings:
 * `documentum.defaultConnection`: Name of the default connection
 * `documentum.dfc.profiles`: DFC profile configurations
 * `documentum.bridge.port`: Port for DFC Bridge microservice (default: 9876)
-* `documentum.bridge.autoStart`: Automatically start DFC Bridge when connecting
+* `documentum.bridge.restPort`: Port for REST Bridge microservice (default: 9877)
 
 ## Sample Files
 

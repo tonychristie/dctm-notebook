@@ -65,8 +65,8 @@ export class ObjectDumpPanel {
             : undefined;
 
         // Check the reuseWindow setting
-        const config = vscode.workspace.getConfiguration('documentum.dumpPanel');
-        const reuseWindow = config.get<boolean>('reuseWindow', true);
+        const config = vscode.workspace.getConfiguration('documentum.panels');
+        const reuseWindow = config.get<boolean>('reuseWindow', false);
 
         // If reuseWindow is true and we already have a panel, show it and update content
         if (reuseWindow && ObjectDumpPanel.currentPanel) {

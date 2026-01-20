@@ -12,6 +12,8 @@ type AttributeGroup = 'custom' | 'standard' | 'system' | 'application' | 'intern
  */
 export class TypeDumpPanel {
     public static currentPanel: TypeDumpPanel | undefined;
+    private static allPanels: Set<TypeDumpPanel> = new Set();
+    private static panelCounter: number = 0;
     private static readonly viewType = 'dctmTypeDump';
 
     private readonly panel: vscode.WebviewPanel;
@@ -30,17 +32,23 @@ export class TypeDumpPanel {
             ? vscode.window.activeTextEditor.viewColumn
             : undefined;
 
-        // If we already have a panel, show it and update content
-        if (TypeDumpPanel.currentPanel) {
+        // Check the reuseWindow setting
+        const config = vscode.workspace.getConfiguration('documentum.panels');
+        const reuseWindow = config.get<boolean>('reuseWindow', false);
+
+        // If reuseWindow is true and we already have a panel, show it and update content
+        if (reuseWindow && TypeDumpPanel.currentPanel) {
             TypeDumpPanel.currentPanel.panel.reveal(column);
             await TypeDumpPanel.currentPanel.loadType(typeName);
             return;
         }
 
         // Create a new panel
+        TypeDumpPanel.panelCounter++;
+        const panelTitle = reuseWindow ? `Type: ${typeName}` : `Type #${TypeDumpPanel.panelCounter}: ${typeName}`;
         const panel = vscode.window.createWebviewPanel(
             TypeDumpPanel.viewType,
-            `Type: ${typeName}`,
+            panelTitle,
             column || vscode.ViewColumn.One,
             {
                 enableScripts: true,
@@ -49,8 +57,15 @@ export class TypeDumpPanel {
             }
         );
 
-        TypeDumpPanel.currentPanel = new TypeDumpPanel(panel, typeCache, extensionUri);
-        await TypeDumpPanel.currentPanel.loadType(typeName);
+        const typePanel = new TypeDumpPanel(panel, typeCache, extensionUri);
+        TypeDumpPanel.allPanels.add(typePanel);
+
+        // Only track as currentPanel when reuseWindow is true
+        if (reuseWindow) {
+            TypeDumpPanel.currentPanel = typePanel;
+        }
+
+        await typePanel.loadType(typeName);
     }
 
     private constructor(
@@ -724,7 +739,10 @@ export class TypeDumpPanel {
     }
 
     public dispose(): void {
-        TypeDumpPanel.currentPanel = undefined;
+        TypeDumpPanel.allPanels.delete(this);
+        if (TypeDumpPanel.currentPanel === this) {
+            TypeDumpPanel.currentPanel = undefined;
+        }
 
         this.panel.dispose();
 

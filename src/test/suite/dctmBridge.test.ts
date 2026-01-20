@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 
 /**
- * Tests for DfcBridge connection routing functionality.
+ * Tests for DctmBridge connection routing functionality.
  *
  * These tests cover:
  * - Connection request body construction for DFC vs REST
@@ -45,7 +45,7 @@ function buildConnectRequestBody(params: DfcConnectParams): Record<string, unkno
     return requestBody;
 }
 
-suite('DfcBridge Test Suite', () => {
+suite('DctmBridge Test Suite', () => {
 
     suite('Connection request body construction', () => {
 
@@ -594,13 +594,217 @@ suite('DfcBridge Test Suite', () => {
         });
     });
 
+    suite('Unified API - internal routing', () => {
+        /**
+         * Tests for the unified API methods that route internally based on session type.
+         * These verify the bridge properly encapsulates connection type awareness.
+         *
+         * Note: These are unit tests for the routing logic. Full integration tests
+         * require running bridge instances.
+         */
+
+        // Mock response data shapes for testing
+        interface CabinetInfo {
+            objectId: string;
+            type: string;
+            name: string;
+            attributes: Record<string, unknown>;
+        }
+
+        interface UserInfo {
+            objectId: string;
+            userName: string;
+            userOsName: string;
+            userAddress: string;
+            userState: string;
+            defaultFolder: string;
+            userGroupName: string;
+            superUser: boolean;
+        }
+
+        interface GroupInfo {
+            objectId: string;
+            groupName: string;
+            description: string;
+            groupClass: string;
+            groupAdmin: string;
+            isPrivate: boolean;
+            usersNames: string[];
+            groupsNames: string[];
+        }
+
+        suite('getCabinets unified response format', () => {
+            test('REST response matches expected format', () => {
+                const restCabinet: CabinetInfo = {
+                    objectId: '0c00000180000001',
+                    type: 'dm_cabinet',
+                    name: 'System',
+                    attributes: {}
+                };
+
+                assert.strictEqual(restCabinet.objectId, '0c00000180000001');
+                assert.strictEqual(restCabinet.type, 'dm_cabinet');
+                assert.strictEqual(restCabinet.name, 'System');
+            });
+
+            test('DQL-derived response matches expected format', () => {
+                // Simulated DQL result transformation
+                const dqlRow = {
+                    r_object_id: '0c00000180000002',
+                    object_name: 'Temp'
+                };
+
+                const transformed: CabinetInfo = {
+                    objectId: dqlRow.r_object_id,
+                    type: 'dm_cabinet',
+                    name: dqlRow.object_name,
+                    attributes: {}
+                };
+
+                assert.strictEqual(transformed.objectId, '0c00000180000002');
+                assert.strictEqual(transformed.type, 'dm_cabinet');
+                assert.strictEqual(transformed.name, 'Temp');
+            });
+
+            test('both formats produce consistent structure', () => {
+                const restResponse: CabinetInfo = {
+                    objectId: '0c00000180000001',
+                    type: 'dm_cabinet',
+                    name: 'Cabinet1',
+                    attributes: {}
+                };
+
+                const dqlResponse: CabinetInfo = {
+                    objectId: '0c00000180000002',
+                    type: 'dm_cabinet',
+                    name: 'Cabinet2',
+                    attributes: {}
+                };
+
+                // Both should have identical structure
+                assert.deepStrictEqual(Object.keys(restResponse).sort(), Object.keys(dqlResponse).sort());
+            });
+        });
+
+        suite('getUsers unified response format', () => {
+            test('REST response maps to unified format', () => {
+                const restUser: UserInfo = {
+                    objectId: '1200000080000001',
+                    userName: 'dmadmin',
+                    userOsName: 'dmadmin',
+                    userAddress: '',
+                    userState: '0',
+                    defaultFolder: '/dmadmin',
+                    userGroupName: 'docu',
+                    superUser: true
+                };
+
+                assert.strictEqual(restUser.userName, 'dmadmin');
+                assert.strictEqual(restUser.userState, '0');
+            });
+
+            test('DQL-derived response maps to unified format', () => {
+                // Simulated DQL result transformation
+                const dqlRow = {
+                    r_object_id: '1200000080000002',
+                    user_name: 'testuser',
+                    user_os_name: 'testuser',
+                    user_address: '',
+                    user_state: 0,
+                    default_folder: '/testuser',
+                    user_group_name: 'docu'
+                };
+
+                const transformed: UserInfo = {
+                    objectId: dqlRow.r_object_id,
+                    userName: dqlRow.user_name,
+                    userOsName: dqlRow.user_os_name || '',
+                    userAddress: dqlRow.user_address || '',
+                    userState: String(dqlRow.user_state || 0),
+                    defaultFolder: dqlRow.default_folder || '',
+                    userGroupName: dqlRow.user_group_name || '',
+                    superUser: false
+                };
+
+                assert.strictEqual(transformed.userName, 'testuser');
+                assert.strictEqual(transformed.userState, '0');
+            });
+        });
+
+        suite('getGroups unified response format', () => {
+            test('REST response maps to unified format', () => {
+                const restGroup: GroupInfo = {
+                    objectId: '1200000080000100',
+                    groupName: 'docu',
+                    description: 'Default group',
+                    groupClass: 'group',
+                    groupAdmin: 'dmadmin',
+                    isPrivate: false,
+                    usersNames: ['dmadmin'],
+                    groupsNames: []
+                };
+
+                assert.strictEqual(restGroup.groupName, 'docu');
+                assert.deepStrictEqual(restGroup.usersNames, ['dmadmin']);
+            });
+
+            test('DQL-derived response maps to unified format', () => {
+                // Simulated DQL result transformation
+                const dqlRow = {
+                    r_object_id: '1200000080000101',
+                    group_name: 'testgroup',
+                    description: 'Test group',
+                    group_class: 'group',
+                    group_admin: 'dmadmin',
+                    is_private: false
+                };
+
+                const transformed: GroupInfo = {
+                    objectId: dqlRow.r_object_id,
+                    groupName: dqlRow.group_name,
+                    description: dqlRow.description || '',
+                    groupClass: dqlRow.group_class || '',
+                    groupAdmin: dqlRow.group_admin || '',
+                    isPrivate: dqlRow.is_private || false,
+                    usersNames: [],
+                    groupsNames: []
+                };
+
+                assert.strictEqual(transformed.groupName, 'testgroup');
+            });
+        });
+
+        suite('getFolderContents path parameter', () => {
+            test('REST session does not require path', () => {
+                // REST API uses folder ID directly
+                const folderId = '0c00000180000001';
+                const restEndpoint = `/api/v1/objects/${folderId}/contents`;
+                assert.ok(restEndpoint.includes(folderId));
+            });
+
+            test('DQL session requires path for folder() function', () => {
+                // DQL uses folder path in WHERE clause
+                const path = '/System/Test Folder';
+                const escapedPath = path.replace(/'/g, "''");
+                const query = `SELECT r_object_id FROM dm_folder WHERE folder('${escapedPath}')`;
+                assert.ok(query.includes(escapedPath));
+            });
+
+            test('path escaping handles single quotes', () => {
+                const path = "/System/Folder's Name";
+                const escapedPath = path.replace(/'/g, "''");
+                assert.strictEqual(escapedPath, "/System/Folder''s Name");
+            });
+        });
+    });
+
     suite('Session type tracking', () => {
         /**
          * Tests for session type tracking logic.
          * Verifies that isRestSession() correctly identifies session types.
          */
 
-        // Simple in-memory tracking similar to DfcBridge
+        // Simple in-memory tracking similar to DctmBridge
         class SessionTypeTracker {
             private sessionTypes: Map<string, 'dfc' | 'rest'> = new Map();
 

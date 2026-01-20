@@ -8,18 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Renamed `DfcBridge` to `DctmBridge` to better reflect its role as a unified interface to Documentum (both DFC and REST)
+- Refactored bridge to encapsulate connection type routing internally - feature files no longer need to branch on connection type
 - Explorer, Users browser, and Groups browser now use REST endpoints instead of DQL when connected via REST. This improves compatibility with REST-only Documentum setups where DQL may not be available.
 
 ### Added
-- New REST endpoint methods in dfcBridge.ts:
-  - `getCabinets()` - List cabinets via REST
-  - `getFolderContents()` - List folder contents via REST
-  - `getUsers()` - List users via REST
-  - `getUser()` - Get user details via REST
-  - `getGroups()` - List groups via REST
-  - `getGroup()` - Get group details via REST
-  - `getGroupsForUser()` - Get groups containing a user via REST
-  - `getParentGroups()` - Get parent groups via REST
+- Unified API methods in dctmBridge.ts that automatically route to REST or DQL based on session type:
+  - `getCabinets()` - List cabinets
+  - `getFolderContents()` - List folder contents
+  - `getUsers()` - List users
+  - `getUser()` - Get user details
+  - `getGroups()` - List groups
+  - `getGroup()` - Get group details
+  - `getGroupsForUser()` - Get groups containing a user
+  - `getParentGroups()` - Get parent groups
+- Tests for unified API response format consistency
 
 ## [1.0.3] - 2026-01-19
 

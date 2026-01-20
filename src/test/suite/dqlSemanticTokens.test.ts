@@ -6,7 +6,7 @@ import { TypeCache } from '../../typeCache';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockConnectionManager: any = {
     getActiveConnection: () => null,
-    getDfcBridge: () => null,
+    getDctmBridge: () => null,
     onConnectionChange: () => {}
 };
 

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ConnectionManager, ActiveConnection } from './connectionManager';
+import { ConnectionManager } from './connectionManager';
 import {
     ObjectBrowserItem,
     AnyNodeData,
@@ -8,8 +8,7 @@ import {
     CabinetNodeData,
     FolderNodeData,
     DocumentNodeData,
-    createNodeId,
-    escapeDqlString
+    createNodeId
 } from './objectBrowserNodes';
 
 /**
@@ -136,7 +135,7 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
 
     /**
      * Fetch cabinets from the repository.
-     * Uses REST endpoint for REST sessions, DQL for DFC sessions.
+     * The bridge handles REST vs DQL routing internally.
      */
     private async getCabinets(data: ContainerNodeData): Promise<ObjectBrowserItem[]> {
         const connection = this.connectionManager.getActiveConnection();
@@ -145,39 +144,20 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
         }
 
         try {
-            const bridge = this.connectionManager.getDfcBridge();
+            const bridge = this.connectionManager.getDctmBridge();
+            const cabinets = await bridge.getCabinets(connection.sessionId);
 
-            if (bridge.isRestSession(connection.sessionId)) {
-                // Use REST endpoint for REST sessions
-                const cabinets = await bridge.getCabinets(connection.sessionId);
-                return cabinets.map(cabinet => {
-                    const cabinetData: CabinetNodeData = {
-                        id: createNodeId(data.connectionName, 'cabinet', cabinet.objectId),
-                        name: cabinet.name,
-                        type: 'cabinet',
-                        objectId: cabinet.objectId,
-                        path: '/' + cabinet.name,
-                        connectionName: data.connectionName
-                    };
-                    return new ObjectBrowserItem(cabinetData, vscode.TreeItemCollapsibleState.Collapsed);
-                });
-            } else {
-                // Use DQL for DFC sessions
-                const query = "SELECT r_object_id, object_name FROM dm_cabinet ORDER BY object_name";
-                const results = await this.executeDql(connection, query);
-
-                return results.rows.map(row => {
-                    const cabinetData: CabinetNodeData = {
-                        id: createNodeId(data.connectionName, 'cabinet', row.r_object_id as string),
-                        name: row.object_name as string,
-                        type: 'cabinet',
-                        objectId: row.r_object_id as string,
-                        path: '/' + (row.object_name as string),
-                        connectionName: data.connectionName
-                    };
-                    return new ObjectBrowserItem(cabinetData, vscode.TreeItemCollapsibleState.Collapsed);
-                });
-            }
+            return cabinets.map(cabinet => {
+                const cabinetData: CabinetNodeData = {
+                    id: createNodeId(data.connectionName, 'cabinet', cabinet.objectId),
+                    name: cabinet.name,
+                    type: 'cabinet',
+                    objectId: cabinet.objectId,
+                    path: '/' + cabinet.name,
+                    connectionName: data.connectionName
+                };
+                return new ObjectBrowserItem(cabinetData, vscode.TreeItemCollapsibleState.Collapsed);
+            });
         } catch (error) {
             this.showError('Failed to fetch cabinets', error);
             return [];
@@ -186,7 +166,7 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
 
     /**
      * Fetch folder contents (subfolders and documents).
-     * Uses REST endpoint for REST sessions, DQL for DFC sessions.
+     * The bridge handles REST vs DQL routing internally.
      */
     private async getFolderContents(data: CabinetNodeData | FolderNodeData): Promise<ObjectBrowserItem[]> {
         const connection = this.connectionManager.getActiveConnection();
@@ -195,105 +175,48 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
         }
 
         try {
-            const bridge = this.connectionManager.getDfcBridge();
+            const bridge = this.connectionManager.getDctmBridge();
+            // Pass the path for DFC sessions (required for DQL queries)
+            const contents = await bridge.getFolderContents(connection.sessionId, data.objectId, data.path);
+            const items: ObjectBrowserItem[] = [];
 
-            if (bridge.isRestSession(connection.sessionId)) {
-                // Use REST endpoint for REST sessions - returns both folders and documents
-                const contents = await bridge.getFolderContents(connection.sessionId, data.objectId);
-                const items: ObjectBrowserItem[] = [];
+            // Sort by name
+            const sorted = contents.sort((a, b) => a.name.localeCompare(b.name));
 
-                // Sort by name and separate folders from documents
-                const sorted = contents.sort((a, b) => a.name.localeCompare(b.name));
+            for (const item of sorted) {
+                const isFolder = item.type === 'dm_folder' || item.type === 'dm_cabinet';
 
-                for (const item of sorted) {
-                    const isFolder = item.type === 'dm_folder' || item.type === 'dm_cabinet';
-
-                    if (isFolder) {
-                        const folderData: FolderNodeData = {
-                            id: createNodeId(data.connectionName, 'folder', item.objectId),
-                            name: item.name,
-                            type: 'folder',
-                            objectId: item.objectId,
-                            path: data.path + '/' + item.name,
-                            parentId: data.objectId,
-                            connectionName: data.connectionName
-                        };
-                        items.push(new ObjectBrowserItem(folderData, vscode.TreeItemCollapsibleState.Collapsed));
-                    } else {
-                        const docData: DocumentNodeData = {
-                            id: createNodeId(data.connectionName, 'document', item.objectId),
-                            name: item.name,
-                            type: 'document',
-                            objectId: item.objectId,
-                            objectType: item.type,
-                            format: item.attributes?.a_content_type as string | undefined,
-                            parentId: data.objectId,
-                            connectionName: data.connectionName
-                        };
-                        items.push(new ObjectBrowserItem(docData, vscode.TreeItemCollapsibleState.None));
-                    }
-                }
-
-                return items;
-            } else {
-                // Use DQL for DFC sessions
-                const items: ObjectBrowserItem[] = [];
-
-                // Get subfolders - escape path to prevent SQL injection
-                const escapedPath = escapeDqlString(data.path);
-                const folderQuery = `SELECT r_object_id, object_name FROM dm_folder WHERE folder('${escapedPath}') ORDER BY object_name`;
-                const folderResults = await this.executeDql(connection, folderQuery);
-
-                for (const row of folderResults.rows) {
+                if (isFolder) {
                     const folderData: FolderNodeData = {
-                        id: createNodeId(data.connectionName, 'folder', row.r_object_id as string),
-                        name: row.object_name as string,
+                        id: createNodeId(data.connectionName, 'folder', item.objectId),
+                        name: item.name,
                         type: 'folder',
-                        objectId: row.r_object_id as string,
-                        path: data.path + '/' + (row.object_name as string),
+                        objectId: item.objectId,
+                        path: data.path + '/' + item.name,
                         parentId: data.objectId,
                         connectionName: data.connectionName
                     };
                     items.push(new ObjectBrowserItem(folderData, vscode.TreeItemCollapsibleState.Collapsed));
-                }
-
-                // Get documents (non-folder sysobjects) - use same escaped path
-                const docQuery = `SELECT r_object_id, object_name, r_object_type, a_content_type FROM dm_sysobject WHERE folder('${escapedPath}') AND r_object_type != 'dm_folder' ORDER BY object_name`;
-                const docResults = await this.executeDql(connection, docQuery);
-
-                for (const row of docResults.rows) {
+                } else {
                     const docData: DocumentNodeData = {
-                        id: createNodeId(data.connectionName, 'document', row.r_object_id as string),
-                        name: row.object_name as string,
+                        id: createNodeId(data.connectionName, 'document', item.objectId),
+                        name: item.name,
                         type: 'document',
-                        objectId: row.r_object_id as string,
-                        objectType: row.r_object_type as string,
-                        format: row.a_content_type as string | undefined,
+                        objectId: item.objectId,
+                        objectType: item.type,
+                        format: item.attributes?.a_content_type as string | undefined,
                         parentId: data.objectId,
                         connectionName: data.connectionName
                     };
                     items.push(new ObjectBrowserItem(docData, vscode.TreeItemCollapsibleState.None));
                 }
-
-                return items;
             }
+
+            return items;
         } catch (error) {
             this.showError('Failed to fetch folder contents', error);
             return [];
         }
-    }
-
-    /**
-     * Execute a DQL query via the bridge.
-     * The bridge handles backend type (DFC or REST) internally.
-     */
-    private async executeDql(
-        connection: ActiveConnection,
-        query: string
-    ): Promise<{ rows: Record<string, unknown>[] }> {
-        const bridge = this.connectionManager.getDfcBridge();
-        const result = await bridge.executeDql(connection.sessionId, query);
-        return { rows: result.rows };
     }
 
     /**

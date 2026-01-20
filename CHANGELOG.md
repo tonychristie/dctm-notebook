@@ -9,10 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Renamed `DfcBridge` to `DctmBridge` to better reflect its role as a unified interface to Documentum (both DFC and REST)
-- Refactored bridge to encapsulate connection type routing internally - feature files no longer need to branch on connection type
+- Refactored bridge architecture to use polymorphism instead of if/else branching:
+  - `IUnifiedBridge` interface defines the contract for unified API methods
+  - `DfcBridgeImpl` contains pure DFC/DQL implementation (no branching)
+  - `RestBridgeImpl` contains pure REST implementation (no branching)
+  - `DctmBridge` creates the appropriate implementation at connect time
 - Explorer, Users browser, and Groups browser now use REST endpoints instead of DQL when connected via REST. This improves compatibility with REST-only Documentum setups where DQL may not be available.
 
 ### Added
+- New `bridgeTypes.ts` with shared type definitions (`ObjectInfo`, `UserInfo`, `GroupInfo`, etc.)
+- New `dfcBridgeImpl.ts` with pure DFC/DQL implementation of `IUnifiedBridge`
+- New `restBridgeImpl.ts` with pure REST implementation of `IUnifiedBridge`
 - Unified API methods in dctmBridge.ts that automatically route to REST or DQL based on session type:
   - `getCabinets()` - List cabinets
   - `getFolderContents()` - List folder contents
@@ -22,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `getGroup()` - Get group details
   - `getGroupsForUser()` - Get groups containing a user
   - `getParentGroups()` - Get parent groups
-- Tests for unified API response format consistency
+- Tests for polymorphic implementation pattern and interface contract
 
 ## [1.0.3] - 2026-01-19
 

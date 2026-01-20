@@ -392,6 +392,170 @@ export class DfcBridge {
         return this.sessionTypes.get(sessionId) === 'rest';
     }
 
+    // ========================================
+    // REST-native endpoints for REST sessions
+    // These endpoints call the rest-bridge's native REST API
+    // (instead of DQL) for better REST connection support.
+    // ========================================
+
+    /**
+     * Object info returned by REST endpoints
+     */
+
+
+    /**
+     * Get cabinets via REST endpoint.
+     * Use this instead of DQL for REST sessions.
+     */
+    async getCabinets(sessionId: string): Promise<Array<{
+        objectId: string;
+        type: string;
+        name: string;
+        attributes: Record<string, unknown>;
+    }>> {
+        const client = this.getClientForSession(sessionId);
+        const response = await client.get('/api/v1/cabinets', { params: { sessionId } });
+        return response.data;
+    }
+
+    /**
+     * Get folder contents via REST endpoint.
+     * Returns both folders and documents in a single call.
+     * Use this instead of DQL for REST sessions.
+     */
+    async getFolderContents(sessionId: string, folderId: string): Promise<Array<{
+        objectId: string;
+        type: string;
+        name: string;
+        attributes: Record<string, unknown>;
+    }>> {
+        const client = this.getClientForSession(sessionId);
+        const response = await client.get(`/api/v1/objects/${folderId}/contents`, { params: { sessionId } });
+        return response.data;
+    }
+
+    /**
+     * Get users via REST endpoint.
+     * Use this instead of DQL for REST sessions.
+     */
+    async getUsers(sessionId: string, pattern?: string): Promise<Array<{
+        objectId: string;
+        userName: string;
+        userOsName: string;
+        userAddress: string;
+        userState: string;
+        defaultFolder: string;
+        userGroupName: string;
+        superUser: boolean;
+    }>> {
+        const client = this.getClientForSession(sessionId);
+        const params: Record<string, string> = { sessionId };
+        if (pattern) {
+            params.pattern = pattern;
+        }
+        const response = await client.get('/api/v1/users', { params });
+        return response.data;
+    }
+
+    /**
+     * Get a single user via REST endpoint.
+     * Use this instead of DQL for REST sessions.
+     */
+    async getUser(sessionId: string, userName: string): Promise<{
+        objectId: string;
+        userName: string;
+        userOsName: string;
+        userAddress: string;
+        userState: string;
+        defaultFolder: string;
+        userGroupName: string;
+        superUser: boolean;
+    }> {
+        const client = this.getClientForSession(sessionId);
+        const response = await client.get(`/api/v1/users/${encodeURIComponent(userName)}`, { params: { sessionId } });
+        return response.data;
+    }
+
+    /**
+     * Get groups via REST endpoint.
+     * Use this instead of DQL for REST sessions.
+     */
+    async getGroups(sessionId: string, pattern?: string): Promise<Array<{
+        objectId: string;
+        groupName: string;
+        description: string;
+        groupClass: string;
+        groupAdmin: string;
+        isPrivate: boolean;
+        usersNames: string[];
+        groupsNames: string[];
+    }>> {
+        const client = this.getClientForSession(sessionId);
+        const params: Record<string, string> = { sessionId };
+        if (pattern) {
+            params.pattern = pattern;
+        }
+        const response = await client.get('/api/v1/groups', { params });
+        return response.data;
+    }
+
+    /**
+     * Get a single group via REST endpoint.
+     * Use this instead of DQL for REST sessions.
+     */
+    async getGroup(sessionId: string, groupName: string): Promise<{
+        objectId: string;
+        groupName: string;
+        description: string;
+        groupClass: string;
+        groupAdmin: string;
+        isPrivate: boolean;
+        usersNames: string[];
+        groupsNames: string[];
+    }> {
+        const client = this.getClientForSession(sessionId);
+        const response = await client.get(`/api/v1/groups/${encodeURIComponent(groupName)}`, { params: { sessionId } });
+        return response.data;
+    }
+
+    /**
+     * Get groups that contain a user via REST endpoint.
+     * Use this instead of DQL for REST sessions.
+     */
+    async getGroupsForUser(sessionId: string, userName: string): Promise<Array<{
+        objectId: string;
+        groupName: string;
+        description: string;
+        groupClass: string;
+        groupAdmin: string;
+        isPrivate: boolean;
+        usersNames: string[];
+        groupsNames: string[];
+    }>> {
+        const client = this.getClientForSession(sessionId);
+        const response = await client.get(`/api/v1/users/${encodeURIComponent(userName)}/groups`, { params: { sessionId } });
+        return response.data;
+    }
+
+    /**
+     * Get parent groups that contain a group via REST endpoint.
+     * Use this instead of DQL for REST sessions.
+     */
+    async getParentGroups(sessionId: string, groupName: string): Promise<Array<{
+        objectId: string;
+        groupName: string;
+        description: string;
+        groupClass: string;
+        groupAdmin: string;
+        isPrivate: boolean;
+        usersNames: string[];
+        groupsNames: string[];
+    }>> {
+        const client = this.getClientForSession(sessionId);
+        const response = await client.get(`/api/v1/groups/${encodeURIComponent(groupName)}/parents`, { params: { sessionId } });
+        return response.data;
+    }
+
     /**
      * Stop the bridges if we started them
      */

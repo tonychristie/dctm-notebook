@@ -10,7 +10,7 @@ import * as assert from 'assert';
  * - Multiple concurrent notebook sessions
  * - Session cleanup
  *
- * Note: These are unit tests that mock the DfcBridge.
+ * Note: These are unit tests that mock the DctmBridge.
  * Full integration tests require a running bridge instance.
  */
 
@@ -33,9 +33,9 @@ interface ActiveConnection {
 }
 
 /**
- * Mock DfcBridge for testing without actual Documentum connection
+ * Mock DctmBridge for testing without actual Documentum connection
  */
-class MockDfcBridge {
+class MockDctmBridge {
     private sessionCounter = 0;
     private activeSessions: Map<string, boolean> = new Map();
     public lastConnectionType: 'dfc' | 'rest' | null = null;
@@ -78,15 +78,15 @@ class MockDfcBridge {
 class TestableConnectionManager {
     private activeConnection: ActiveConnection | null = null;
     private notebookConnections: Map<string, ActiveConnection> = new Map();
-    private mockBridge: MockDfcBridge;
+    private mockBridge: MockDctmBridge;
     private savedConnections: DocumentumConnection[];
 
     constructor(connections: DocumentumConnection[] = []) {
-        this.mockBridge = new MockDfcBridge();
+        this.mockBridge = new MockDctmBridge();
         this.savedConnections = connections;
     }
 
-    getMockBridge(): MockDfcBridge {
+    getMockBridge(): MockDctmBridge {
         return this.mockBridge;
     }
 

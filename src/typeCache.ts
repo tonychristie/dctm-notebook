@@ -133,7 +133,7 @@ export class TypeCache {
 
         this.refreshing = true;
         try {
-            const bridge = this.connectionManager.getDfcBridge();
+            const bridge = this.connectionManager.getDctmBridge();
 
             // Fetch type list from bridge
             const typesResponse = await bridge.getTypes(connection.sessionId!);
@@ -220,7 +220,7 @@ export class TypeCache {
         }
 
         try {
-            const bridge = this.connectionManager.getDfcBridge();
+            const bridge = this.connectionManager.getDctmBridge();
             const details = await bridge.getTypeDetails(connection.sessionId!, typeName);
 
             const typeDetails = details as {

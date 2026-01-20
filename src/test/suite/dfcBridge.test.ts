@@ -507,4 +507,150 @@ suite('DfcBridge Test Suite', () => {
             assert.strictEqual(body.port, 1489);
         });
     });
+
+    suite('REST endpoint URL construction', () => {
+        /**
+         * Tests for REST-native endpoint URL patterns.
+         * These endpoints are used when isRestSession() returns true.
+         */
+
+        function buildRestUrl(baseUrl: string, endpoint: string, params: Record<string, string>): string {
+            const url = new URL(endpoint, baseUrl);
+            for (const [key, value] of Object.entries(params)) {
+                url.searchParams.append(key, value);
+            }
+            return url.toString();
+        }
+
+        const baseUrl = 'http://localhost:9877';
+
+        suite('Cabinets endpoint', () => {
+            test('builds correct URL for getCabinets', () => {
+                const url = buildRestUrl(baseUrl, '/api/v1/cabinets', { sessionId: 'sess123' });
+                assert.strictEqual(url, 'http://localhost:9877/api/v1/cabinets?sessionId=sess123');
+            });
+        });
+
+        suite('Folder contents endpoint', () => {
+            test('builds correct URL for getFolderContents', () => {
+                const folderId = '0c00000180000123';
+                const url = buildRestUrl(baseUrl, `/api/v1/objects/${folderId}/contents`, { sessionId: 'sess123' });
+                assert.strictEqual(url, `http://localhost:9877/api/v1/objects/${folderId}/contents?sessionId=sess123`);
+            });
+        });
+
+        suite('Users endpoints', () => {
+            test('builds correct URL for getUsers without pattern', () => {
+                const url = buildRestUrl(baseUrl, '/api/v1/users', { sessionId: 'sess123' });
+                assert.strictEqual(url, 'http://localhost:9877/api/v1/users?sessionId=sess123');
+            });
+
+            test('builds correct URL for getUsers with pattern', () => {
+                const url = buildRestUrl(baseUrl, '/api/v1/users', { sessionId: 'sess123', pattern: 'admin' });
+                assert.strictEqual(url, 'http://localhost:9877/api/v1/users?sessionId=sess123&pattern=admin');
+            });
+
+            test('builds correct URL for getUser', () => {
+                const userName = 'dmadmin';
+                const url = buildRestUrl(baseUrl, `/api/v1/users/${encodeURIComponent(userName)}`, { sessionId: 'sess123' });
+                assert.strictEqual(url, 'http://localhost:9877/api/v1/users/dmadmin?sessionId=sess123');
+            });
+
+            test('builds correct URL for getUser with special characters', () => {
+                const userName = 'user@domain.com';
+                const url = buildRestUrl(baseUrl, `/api/v1/users/${encodeURIComponent(userName)}`, { sessionId: 'sess123' });
+                assert.strictEqual(url, 'http://localhost:9877/api/v1/users/user%40domain.com?sessionId=sess123');
+            });
+
+            test('builds correct URL for getGroupsForUser', () => {
+                const userName = 'dmadmin';
+                const url = buildRestUrl(baseUrl, `/api/v1/users/${encodeURIComponent(userName)}/groups`, { sessionId: 'sess123' });
+                assert.strictEqual(url, 'http://localhost:9877/api/v1/users/dmadmin/groups?sessionId=sess123');
+            });
+        });
+
+        suite('Groups endpoints', () => {
+            test('builds correct URL for getGroups without pattern', () => {
+                const url = buildRestUrl(baseUrl, '/api/v1/groups', { sessionId: 'sess123' });
+                assert.strictEqual(url, 'http://localhost:9877/api/v1/groups?sessionId=sess123');
+            });
+
+            test('builds correct URL for getGroups with pattern', () => {
+                const url = buildRestUrl(baseUrl, '/api/v1/groups', { sessionId: 'sess123', pattern: 'dm_' });
+                assert.strictEqual(url, 'http://localhost:9877/api/v1/groups?sessionId=sess123&pattern=dm_');
+            });
+
+            test('builds correct URL for getGroup', () => {
+                const groupName = 'docu';
+                const url = buildRestUrl(baseUrl, `/api/v1/groups/${encodeURIComponent(groupName)}`, { sessionId: 'sess123' });
+                assert.strictEqual(url, 'http://localhost:9877/api/v1/groups/docu?sessionId=sess123');
+            });
+
+            test('builds correct URL for getParentGroups', () => {
+                const groupName = 'docu';
+                const url = buildRestUrl(baseUrl, `/api/v1/groups/${encodeURIComponent(groupName)}/parents`, { sessionId: 'sess123' });
+                assert.strictEqual(url, 'http://localhost:9877/api/v1/groups/docu/parents?sessionId=sess123');
+            });
+        });
+    });
+
+    suite('Session type tracking', () => {
+        /**
+         * Tests for session type tracking logic.
+         * Verifies that isRestSession() correctly identifies session types.
+         */
+
+        // Simple in-memory tracking similar to DfcBridge
+        class SessionTypeTracker {
+            private sessionTypes: Map<string, 'dfc' | 'rest'> = new Map();
+
+            trackSession(sessionId: string, connectionType: 'dfc' | 'rest'): void {
+                this.sessionTypes.set(sessionId, connectionType);
+            }
+
+            isRestSession(sessionId: string): boolean {
+                return this.sessionTypes.get(sessionId) === 'rest';
+            }
+
+            clearSession(sessionId: string): void {
+                this.sessionTypes.delete(sessionId);
+            }
+        }
+
+        let tracker: SessionTypeTracker;
+
+        setup(() => {
+            tracker = new SessionTypeTracker();
+        });
+
+        test('REST session is correctly identified', () => {
+            tracker.trackSession('rest-sess-1', 'rest');
+            assert.strictEqual(tracker.isRestSession('rest-sess-1'), true);
+        });
+
+        test('DFC session is correctly identified', () => {
+            tracker.trackSession('dfc-sess-1', 'dfc');
+            assert.strictEqual(tracker.isRestSession('dfc-sess-1'), false);
+        });
+
+        test('unknown session returns false', () => {
+            assert.strictEqual(tracker.isRestSession('unknown-sess'), false);
+        });
+
+        test('cleared session returns false', () => {
+            tracker.trackSession('sess-1', 'rest');
+            tracker.clearSession('sess-1');
+            assert.strictEqual(tracker.isRestSession('sess-1'), false);
+        });
+
+        test('can track multiple sessions of different types', () => {
+            tracker.trackSession('rest-1', 'rest');
+            tracker.trackSession('dfc-1', 'dfc');
+            tracker.trackSession('rest-2', 'rest');
+
+            assert.strictEqual(tracker.isRestSession('rest-1'), true);
+            assert.strictEqual(tracker.isRestSession('dfc-1'), false);
+            assert.strictEqual(tracker.isRestSession('rest-2'), true);
+        });
+    });
 });

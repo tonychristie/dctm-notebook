@@ -44,7 +44,7 @@ export class DqlExecutor {
             throw new Error('No active session');
         }
 
-        const bridge = this.connectionManager.getDfcBridge();
+        const bridge = this.connectionManager.getDctmBridge();
         const result = await bridge.executeDql(sessionId, query);
 
         return {

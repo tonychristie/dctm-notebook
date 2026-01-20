@@ -9,7 +9,7 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockConnectionManager: any = {
     getActiveConnection: () => null,
-    getDfcBridge: () => null
+    getDctmBridge: () => null
 };
 
 suite('ApiExecutor Test Suite', () => {

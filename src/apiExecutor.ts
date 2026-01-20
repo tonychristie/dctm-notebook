@@ -502,7 +502,7 @@ export class ApiExecutor {
             throw new Error('No active session');
         }
 
-        const bridge = this.connectionManager.getDfcBridge();
+        const bridge = this.connectionManager.getDctmBridge();
 
         const response = await bridge.executeApi(
             connection.sessionId,

@@ -100,8 +100,7 @@ export class GroupDumpPanel {
                         await GroupDumpPanel.createOrShow(this.extensionUri, this.groupCache, message.groupName);
                         break;
                     case 'openUser':
-                        // Could open user panel here
-                        await vscode.commands.executeCommand('dctm.searchUsers');
+                        await vscode.commands.executeCommand('dctm.openUserByName', message.userName);
                         break;
                     case 'dumpObject':
                         await vscode.commands.executeCommand('dctm.dumpObject', message.objectId);

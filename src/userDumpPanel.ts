@@ -11,6 +11,8 @@ type AttributeGroup = 'identity' | 'access' | 'preferences' | 'system' | 'other'
  */
 export class UserDumpPanel {
     public static currentPanel: UserDumpPanel | undefined;
+    private static allPanels: Set<UserDumpPanel> = new Set();
+    private static panelCounter: number = 0;
     private static readonly viewType = 'dctmUserDump';
 
     private readonly panel: vscode.WebviewPanel;
@@ -30,17 +32,23 @@ export class UserDumpPanel {
             ? vscode.window.activeTextEditor.viewColumn
             : undefined;
 
-        // If we already have a panel, show it and update content
-        if (UserDumpPanel.currentPanel) {
+        // Check the reuseWindow setting
+        const config = vscode.workspace.getConfiguration('documentum.panels');
+        const reuseWindow = config.get<boolean>('reuseWindow', false);
+
+        // If reuseWindow is true and we already have a panel, show it and update content
+        if (reuseWindow && UserDumpPanel.currentPanel) {
             UserDumpPanel.currentPanel.panel.reveal(column);
             await UserDumpPanel.currentPanel.loadUser(userName);
             return;
         }
 
         // Create a new panel
+        UserDumpPanel.panelCounter++;
+        const panelTitle = reuseWindow ? `User: ${userName}` : `User #${UserDumpPanel.panelCounter}: ${userName}`;
         const panel = vscode.window.createWebviewPanel(
             UserDumpPanel.viewType,
-            `User: ${userName}`,
+            panelTitle,
             column || vscode.ViewColumn.One,
             {
                 enableScripts: true,
@@ -49,8 +57,15 @@ export class UserDumpPanel {
             }
         );
 
-        UserDumpPanel.currentPanel = new UserDumpPanel(panel, userCache, extensionUri);
-        await UserDumpPanel.currentPanel.loadUser(userName);
+        const userPanel = new UserDumpPanel(panel, userCache, extensionUri);
+        UserDumpPanel.allPanels.add(userPanel);
+
+        // Only track as currentPanel when reuseWindow is true
+        if (reuseWindow) {
+            UserDumpPanel.currentPanel = userPanel;
+        }
+
+        await userPanel.loadUser(userName);
     }
 
     private constructor(
@@ -670,7 +685,10 @@ WHERE user_name = '${this.currentUserName}'`;
     }
 
     public dispose(): void {
-        UserDumpPanel.currentPanel = undefined;
+        UserDumpPanel.allPanels.delete(this);
+        if (UserDumpPanel.currentPanel === this) {
+            UserDumpPanel.currentPanel = undefined;
+        }
 
         this.panel.dispose();
 

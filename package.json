@@ -488,10 +488,10 @@
           "default": 9877,
           "description": "Port for REST Bridge microservice (REST connections)"
         },
-        "documentum.dumpPanel.reuseWindow": {
+        "documentum.panels.reuseWindow": {
           "type": "boolean",
-          "default": true,
-          "description": "Reuse existing dump panel when dumping objects. When false, each dump opens a new panel for side-by-side comparison."
+          "default": false,
+          "description": "Reuse existing detail panels (users, groups, types, objects). When true, clicking an entity replaces the current panel content."
         }
       }
     },

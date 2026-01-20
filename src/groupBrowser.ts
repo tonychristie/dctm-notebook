@@ -262,6 +262,21 @@ WHERE group_name = '${item.groupName}'`;
         }
     );
 
+    // Open group panel by name (for cross-panel navigation)
+    const openGroupByNameCommand = vscode.commands.registerCommand(
+        'dctm.openGroupByName',
+        async (groupName: string) => {
+            if (!groupName) {
+                return;
+            }
+            await GroupDumpPanel.createOrShow(
+                context.extensionUri,
+                groupCache,
+                groupName
+            );
+        }
+    );
+
     context.subscriptions.push(
         treeView,
         openGroupPanelCommand,
@@ -269,7 +284,8 @@ WHERE group_name = '${item.groupName}'`;
         searchGroupsCommand,
         clearSearchCommand,
         showGroupDetailsCommand,
-        generateDqlCommand
+        generateDqlCommand,
+        openGroupByNameCommand
     );
 
     return provider;

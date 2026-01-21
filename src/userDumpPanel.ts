@@ -97,8 +97,7 @@ export class UserDumpPanel {
                         await this.generateDqlQuery();
                         break;
                     case 'openGroup':
-                        // Could open group panel here
-                        await vscode.commands.executeCommand('dctm.searchGroups');
+                        await vscode.commands.executeCommand('dctm.openGroupByName', message.groupName);
                         break;
                     case 'dumpObject':
                         await vscode.commands.executeCommand('dctm.dumpObject', message.objectId);

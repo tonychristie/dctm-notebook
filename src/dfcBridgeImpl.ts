@@ -152,80 +152,30 @@ export class DfcBridgeImpl implements IUnifiedBridge {
     }
 
     async getGroups(sessionId: string, _pattern?: string): Promise<GroupInfo[]> {
-        const query = `SELECT r_object_id, group_name, group_address, group_source, description,
-            group_class, group_admin, owner_name, is_private, is_dynamic
-            FROM dm_group
-            ORDER BY group_name`;
-
-        const result = await this.executeDql(sessionId, query);
-
-        return result.rows.map(row => ({
-            objectId: row.r_object_id as string,
-            groupName: row.group_name as string,
-            description: row.description as string || '',
-            groupClass: row.group_class as string || '',
-            groupAdmin: row.group_admin as string || '',
-            isPrivate: row.is_private as boolean || false,
-            usersNames: [],
-            groupsNames: [],
-            groupAddress: row.group_address as string || '',
-            groupSource: row.group_source as string || '',
-            ownerName: row.owner_name as string || '',
-            isDynamic: row.is_dynamic as boolean || false
-        }));
+        // Use the dedicated /groups endpoint which properly handles repeating attributes
+        const response = await this.client.get('/api/v1/groups', { params: { sessionId } });
+        return response.data;
     }
 
     async getGroup(sessionId: string, groupName: string): Promise<GroupDetails> {
-        // Fetch all group attributes
-        const query = `SELECT * FROM dm_group WHERE group_name = '${groupName.replace(/'/g, "''")}'`;
-        const result = await this.executeDql(sessionId, query);
+        // Use the dedicated /groups/{name} endpoint which properly handles repeating attributes
+        const response = await this.client.get(`/api/v1/groups/${encodeURIComponent(groupName)}`, { params: { sessionId } });
+        const group = response.data;
 
-        if (result.rows.length === 0) {
-            throw new Error(`Group not found: ${groupName}`);
-        }
+        // Build attributes array from response (matching RestBridgeImpl pattern)
+        const attributes: AttributeInfo[] = [
+            { name: 'group_name', value: group.groupName, dataType: 'string' },
+            { name: 'description', value: group.description, dataType: 'string' },
+            { name: 'group_class', value: group.groupClass, dataType: 'string' },
+            { name: 'group_admin', value: group.groupAdmin, dataType: 'string' },
+            { name: 'is_private', value: group.isPrivate, dataType: 'boolean' },
+            { name: 'owner_name', value: group.ownerName, dataType: 'string' },
+            { name: 'group_address', value: group.groupAddress, dataType: 'string' },
+            { name: 'group_source', value: group.groupSource, dataType: 'string' },
+            { name: 'is_dynamic', value: group.isDynamic, dataType: 'boolean' }
+        ].sort((a, b) => a.name.localeCompare(b.name));
 
-        const row = result.rows[0];
-
-        // Build attributes array
-        const attributes: AttributeInfo[] = [];
-        for (const [key, value] of Object.entries(row)) {
-            if (key !== 'users_names' && key !== 'groups_names') {
-                attributes.push({ name: key, value, dataType: typeof value });
-            }
-        }
-        attributes.sort((a, b) => a.name.localeCompare(b.name));
-
-        // Get members (users_names is repeating)
-        let usersNames: string[] = [];
-        if (row.users_names) {
-            if (Array.isArray(row.users_names)) {
-                usersNames = row.users_names as string[];
-            } else if (typeof row.users_names === 'string') {
-                usersNames = [row.users_names];
-            }
-        }
-
-        // Get group members (groups_names is repeating)
-        let groupsNames: string[] = [];
-        if (row.groups_names) {
-            if (Array.isArray(row.groups_names)) {
-                groupsNames = row.groups_names as string[];
-            } else if (typeof row.groups_names === 'string') {
-                groupsNames = [row.groups_names];
-            }
-        }
-
-        return {
-            objectId: row.r_object_id as string,
-            groupName: row.group_name as string,
-            description: row.description as string || '',
-            groupClass: row.group_class as string || '',
-            groupAdmin: row.group_admin as string || '',
-            isPrivate: row.is_private as boolean || false,
-            usersNames: usersNames.sort(),
-            groupsNames: groupsNames.sort(),
-            attributes
-        };
+        return { ...group, attributes };
     }
 
     async getGroupsForUser(sessionId: string, userName: string): Promise<GroupInfo[]> {

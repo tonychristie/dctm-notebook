@@ -14,6 +14,12 @@ export interface ObjectInfo {
     type: string;
     name: string;
     attributes: Record<string, unknown>;
+    /** User's permission level on this object (only for sysobject types). */
+    permissionLevel?: number;
+    /** Human-readable permission label (e.g., "Read", "Write", "Delete"). */
+    permissionLabel?: string;
+    /** Extended permissions granted to the user. */
+    extendedPermissions?: string[];
 }
 
 /**

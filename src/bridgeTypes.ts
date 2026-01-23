@@ -174,4 +174,27 @@ export interface IUnifiedBridge {
      * Get detailed type information including attributes.
      */
     getTypeDetails(sessionId: string, typeName: string): Promise<TypeInfo>;
+
+    /**
+     * Get an object by ID.
+     * Returns object info with all attributes.
+     */
+    getObject(sessionId: string, objectId: string): Promise<ObjectInfo>;
+
+    /**
+     * Checkout (lock) an object for editing.
+     * Returns the updated object info.
+     */
+    checkout(sessionId: string, objectId: string): Promise<ObjectInfo>;
+
+    /**
+     * Cancel checkout (unlock) an object.
+     */
+    cancelCheckout(sessionId: string, objectId: string): Promise<void>;
+
+    /**
+     * Checkin an object, creating a new version.
+     * Returns the new version's object info.
+     */
+    checkin(sessionId: string, objectId: string, versionLabel?: string): Promise<ObjectInfo>;
 }

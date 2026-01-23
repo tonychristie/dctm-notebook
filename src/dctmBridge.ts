@@ -386,48 +386,39 @@ export class DctmBridge {
     }
 
     /**
-     * Checkout (lock) an object for editing
+     * Checkout (lock) an object for editing.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
      */
-    async checkout(sessionId: string, objectId: string): Promise<unknown> {
-        const client = this.getClientForSession(sessionId);
-        const response = await client.put(`/api/v1/objects/${objectId}/lock`, null, { params: { sessionId } });
-        return response.data;
+    async checkout(sessionId: string, objectId: string): Promise<ObjectInfo> {
+        return this.getImplForSession(sessionId).checkout(sessionId, objectId);
     }
 
     /**
-     * Cancel checkout (unlock) an object
+     * Cancel checkout (unlock) an object.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
      */
     async cancelCheckout(sessionId: string, objectId: string): Promise<void> {
-        const client = this.getClientForSession(sessionId);
-        await client.delete(`/api/v1/objects/${objectId}/lock`, { params: { sessionId } });
+        return this.getImplForSession(sessionId).cancelCheckout(sessionId, objectId);
     }
 
     /**
-     * Checkin an object, creating a new version
+     * Checkin an object, creating a new version.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
      */
-    async checkin(sessionId: string, objectId: string, versionLabel: string = 'CURRENT'): Promise<unknown> {
-        const client = this.getClientForSession(sessionId);
-        const response = await client.post(`/api/v1/objects/${objectId}/versions`, null, { params: { sessionId, versionLabel } });
-        return response.data;
+    async checkin(sessionId: string, objectId: string, versionLabel: string = 'CURRENT'): Promise<ObjectInfo> {
+        return this.getImplForSession(sessionId).checkin(sessionId, objectId, versionLabel);
     }
 
     /**
-     * Get an object by ID via the REST /objects endpoint.
-     * Returns object info with all attributes.
+     * Get an object by ID.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
      *
      * @param sessionId Active session ID
      * @param objectId The r_object_id to fetch
      * @returns Object info with objectId, type, name, and attributes map
      */
-    async getObject(sessionId: string, objectId: string): Promise<{
-        objectId: string;
-        type: string;
-        name: string;
-        attributes: Record<string, unknown>;
-    }> {
-        const client = this.getClientForSession(sessionId);
-        const response = await client.get(`/api/v1/objects/${objectId}`, { params: { sessionId } });
-        return response.data;
+    async getObject(sessionId: string, objectId: string): Promise<ObjectInfo> {
+        return this.getImplForSession(sessionId).getObject(sessionId, objectId);
     }
 
     /**

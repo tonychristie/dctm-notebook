@@ -121,4 +121,23 @@ export class RestBridgeImpl implements IUnifiedBridge {
             }))
         };
     }
+
+    async getObject(sessionId: string, objectId: string): Promise<ObjectInfo> {
+        const response = await this.client.get(`/api/v1/objects/${objectId}`, { params: { sessionId } });
+        return response.data;
+    }
+
+    async checkout(sessionId: string, objectId: string): Promise<ObjectInfo> {
+        const response = await this.client.put(`/api/v1/objects/${objectId}/lock`, null, { params: { sessionId } });
+        return response.data;
+    }
+
+    async cancelCheckout(sessionId: string, objectId: string): Promise<void> {
+        await this.client.delete(`/api/v1/objects/${objectId}/lock`, { params: { sessionId } });
+    }
+
+    async checkin(sessionId: string, objectId: string, versionLabel: string = 'CURRENT'): Promise<ObjectInfo> {
+        const response = await this.client.post(`/api/v1/objects/${objectId}/versions`, null, { params: { sessionId, versionLabel } });
+        return response.data;
+    }
 }

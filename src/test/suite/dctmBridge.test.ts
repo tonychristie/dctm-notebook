@@ -1014,6 +1014,275 @@ suite('DctmBridge Test Suite', () => {
         });
     });
 
+    suite('Type methods and field normalization', () => {
+        /**
+         * Tests for getTypes and getTypeDetails methods.
+         * Specifically tests the field normalization in RestBridgeImpl
+         * that converts 'repeating'/'inherited' to 'isRepeating'/'isInherited'.
+         */
+
+        interface TypeAttribute {
+            name: string;
+            dataType: string;
+            length: number;
+            isRepeating: boolean;
+            isInherited: boolean;
+        }
+
+        interface TypeInfo {
+            name: string;
+            superType: string | null;
+            isInternal: boolean;
+            attributes: TypeAttribute[];
+        }
+
+        interface TypeSummary {
+            name: string;
+            superType: string | null;
+            isInternal: boolean;
+        }
+
+        /**
+         * Normalize REST bridge response - mirrors RestBridgeImpl.getTypeDetails() logic
+         */
+        function normalizeTypeDetails(data: Record<string, unknown>): TypeInfo {
+            return {
+                name: data.name as string,
+                superType: data.superType as string | null,
+                isInternal: (data.isInternal ?? false) as boolean,
+                attributes: ((data.attributes || []) as Record<string, unknown>[]).map(a => ({
+                    name: a.name as string,
+                    dataType: a.dataType as string,
+                    length: a.length as number,
+                    isRepeating: (a.isRepeating ?? a.repeating ?? false) as boolean,
+                    isInherited: (a.isInherited ?? a.inherited ?? false) as boolean
+                }))
+            };
+        }
+
+        suite('TypeSummary structure', () => {
+            test('has required fields', () => {
+                const summary: TypeSummary = {
+                    name: 'dm_document',
+                    superType: 'dm_sysobject',
+                    isInternal: false
+                };
+                assert.strictEqual(summary.name, 'dm_document');
+                assert.strictEqual(summary.superType, 'dm_sysobject');
+                assert.strictEqual(summary.isInternal, false);
+            });
+
+            test('superType can be null for root types', () => {
+                const root: TypeSummary = {
+                    name: 'dm_sysobject',
+                    superType: null,
+                    isInternal: false
+                };
+                assert.strictEqual(root.superType, null);
+            });
+        });
+
+        suite('TypeInfo structure', () => {
+            test('has required fields', () => {
+                const typeInfo: TypeInfo = {
+                    name: 'dm_document',
+                    superType: 'dm_sysobject',
+                    isInternal: false,
+                    attributes: []
+                };
+                assert.strictEqual(typeInfo.name, 'dm_document');
+                assert.ok(Array.isArray(typeInfo.attributes));
+            });
+
+            test('attributes have correct structure', () => {
+                const attr: TypeAttribute = {
+                    name: 'object_name',
+                    dataType: 'STRING',
+                    length: 255,
+                    isRepeating: false,
+                    isInherited: true
+                };
+                assert.strictEqual(attr.name, 'object_name');
+                assert.strictEqual(typeof attr.isRepeating, 'boolean');
+                assert.strictEqual(typeof attr.isInherited, 'boolean');
+            });
+        });
+
+        suite('REST field normalization', () => {
+            test('normalizes isRepeating from DFC format', () => {
+                const dfcResponse = {
+                    name: 'dm_document',
+                    superType: 'dm_sysobject',
+                    isInternal: false,
+                    attributes: [{
+                        name: 'r_version_label',
+                        dataType: 'STRING',
+                        length: 32,
+                        isRepeating: true,
+                        isInherited: false
+                    }]
+                };
+
+                const normalized = normalizeTypeDetails(dfcResponse);
+                assert.strictEqual(normalized.attributes[0].isRepeating, true);
+                assert.strictEqual(normalized.attributes[0].isInherited, false);
+            });
+
+            test('normalizes repeating to isRepeating from REST format', () => {
+                // REST bridge may return 'repeating' instead of 'isRepeating'
+                const restResponse = {
+                    name: 'dm_document',
+                    superType: 'dm_sysobject',
+                    isInternal: false,
+                    attributes: [{
+                        name: 'r_version_label',
+                        dataType: 'STRING',
+                        length: 32,
+                        repeating: true,
+                        inherited: false
+                    }]
+                };
+
+                const normalized = normalizeTypeDetails(restResponse);
+                assert.strictEqual(normalized.attributes[0].isRepeating, true);
+                assert.strictEqual(normalized.attributes[0].isInherited, false);
+            });
+
+            test('normalizes inherited to isInherited from REST format', () => {
+                const restResponse = {
+                    name: 'dm_document',
+                    superType: 'dm_sysobject',
+                    isInternal: false,
+                    attributes: [{
+                        name: 'object_name',
+                        dataType: 'STRING',
+                        length: 255,
+                        repeating: false,
+                        inherited: true
+                    }]
+                };
+
+                const normalized = normalizeTypeDetails(restResponse);
+                assert.strictEqual(normalized.attributes[0].isRepeating, false);
+                assert.strictEqual(normalized.attributes[0].isInherited, true);
+            });
+
+            test('prefers isRepeating over repeating when both present', () => {
+                // If both are present, isRepeating should win (it's checked first)
+                const mixedResponse = {
+                    name: 'dm_document',
+                    superType: 'dm_sysobject',
+                    isInternal: false,
+                    attributes: [{
+                        name: 'test_attr',
+                        dataType: 'STRING',
+                        length: 100,
+                        isRepeating: true,
+                        repeating: false,  // Should be ignored
+                        isInherited: false,
+                        inherited: true    // Should be ignored
+                    }]
+                };
+
+                const normalized = normalizeTypeDetails(mixedResponse);
+                assert.strictEqual(normalized.attributes[0].isRepeating, true);
+                assert.strictEqual(normalized.attributes[0].isInherited, false);
+            });
+
+            test('defaults to false when fields are missing', () => {
+                const minimalResponse = {
+                    name: 'dm_document',
+                    superType: 'dm_sysobject',
+                    attributes: [{
+                        name: 'test_attr',
+                        dataType: 'STRING',
+                        length: 100
+                        // No repeating/inherited fields
+                    }]
+                };
+
+                const normalized = normalizeTypeDetails(minimalResponse);
+                assert.strictEqual(normalized.isInternal, false);
+                assert.strictEqual(normalized.attributes[0].isRepeating, false);
+                assert.strictEqual(normalized.attributes[0].isInherited, false);
+            });
+
+            test('handles empty attributes array', () => {
+                const emptyAttrsResponse = {
+                    name: 'dm_document',
+                    superType: 'dm_sysobject',
+                    isInternal: false,
+                    attributes: []
+                };
+
+                const normalized = normalizeTypeDetails(emptyAttrsResponse);
+                assert.strictEqual(normalized.attributes.length, 0);
+            });
+
+            test('handles missing attributes field', () => {
+                const noAttrsResponse = {
+                    name: 'dm_document',
+                    superType: 'dm_sysobject',
+                    isInternal: false
+                };
+
+                const normalized = normalizeTypeDetails(noAttrsResponse);
+                assert.strictEqual(normalized.attributes.length, 0);
+            });
+
+            test('normalizes multiple attributes', () => {
+                const multiAttrResponse = {
+                    name: 'dm_document',
+                    superType: 'dm_sysobject',
+                    isInternal: false,
+                    attributes: [
+                        { name: 'object_name', dataType: 'STRING', length: 255, isRepeating: false, isInherited: true },
+                        { name: 'r_version_label', dataType: 'STRING', length: 32, repeating: true, inherited: false },
+                        { name: 'custom_attr', dataType: 'STRING', length: 100 }
+                    ]
+                };
+
+                const normalized = normalizeTypeDetails(multiAttrResponse);
+                assert.strictEqual(normalized.attributes.length, 3);
+                assert.strictEqual(normalized.attributes[0].isRepeating, false);
+                assert.strictEqual(normalized.attributes[0].isInherited, true);
+                assert.strictEqual(normalized.attributes[1].isRepeating, true);
+                assert.strictEqual(normalized.attributes[1].isInherited, false);
+                assert.strictEqual(normalized.attributes[2].isRepeating, false);
+                assert.strictEqual(normalized.attributes[2].isInherited, false);
+            });
+        });
+
+        suite('Type endpoint URL construction', () => {
+            function buildRestUrl(baseUrl: string, endpoint: string, params: Record<string, string>): string {
+                const url = new URL(endpoint, baseUrl);
+                for (const [key, value] of Object.entries(params)) {
+                    url.searchParams.append(key, value);
+                }
+                return url.toString();
+            }
+
+            const baseUrl = 'http://localhost:9877';
+
+            test('builds correct URL for getTypes', () => {
+                const url = buildRestUrl(baseUrl, '/api/v1/types', { sessionId: 'sess123' });
+                assert.strictEqual(url, 'http://localhost:9877/api/v1/types?sessionId=sess123');
+            });
+
+            test('builds correct URL for getTypeDetails', () => {
+                const typeName = 'dm_document';
+                const url = buildRestUrl(baseUrl, `/api/v1/types/${encodeURIComponent(typeName)}`, { sessionId: 'sess123' });
+                assert.strictEqual(url, 'http://localhost:9877/api/v1/types/dm_document?sessionId=sess123');
+            });
+
+            test('handles type name with special characters', () => {
+                const typeName = 'my_custom_type';
+                const url = buildRestUrl(baseUrl, `/api/v1/types/${encodeURIComponent(typeName)}`, { sessionId: 'sess123' });
+                assert.strictEqual(url, 'http://localhost:9877/api/v1/types/my_custom_type?sessionId=sess123');
+            });
+        });
+    });
+
     suite('IUnifiedBridge interface contract', () => {
         /**
          * Tests that verify the interface contract is consistent

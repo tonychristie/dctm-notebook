@@ -16,7 +16,9 @@ import {
     UserDetails,
     GroupInfo,
     GroupDetails,
-    AttributeInfo
+    AttributeInfo,
+    TypeSummary,
+    TypeInfo
 } from './bridgeTypes';
 
 export class RestBridgeImpl implements IUnifiedBridge {
@@ -93,5 +95,30 @@ export class RestBridgeImpl implements IUnifiedBridge {
     async getParentGroups(sessionId: string, groupName: string): Promise<GroupInfo[]> {
         const response = await this.client.get(`/api/v1/groups/${encodeURIComponent(groupName)}/parents`, { params: { sessionId } });
         return response.data;
+    }
+
+    async getTypes(sessionId: string): Promise<TypeSummary[]> {
+        const response = await this.client.get('/api/v1/types', { params: { sessionId } });
+        return response.data;
+    }
+
+    async getTypeDetails(sessionId: string, typeName: string): Promise<TypeInfo> {
+        const response = await this.client.get(`/api/v1/types/${encodeURIComponent(typeName)}`, { params: { sessionId } });
+        const data = response.data;
+
+        // Normalize field names from REST bridge format
+        // REST bridge may return 'repeating'/'inherited' instead of 'isRepeating'/'isInherited'
+        return {
+            name: data.name,
+            superType: data.superType,
+            isInternal: data.isInternal ?? false,
+            attributes: (data.attributes || []).map((a: Record<string, unknown>) => ({
+                name: a.name as string,
+                dataType: a.dataType as string,
+                length: a.length as number,
+                isRepeating: (a.isRepeating ?? a.repeating ?? false) as boolean,
+                isInherited: (a.isInherited ?? a.inherited ?? false) as boolean
+            }))
+        };
     }
 }

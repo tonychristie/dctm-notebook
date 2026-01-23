@@ -75,6 +75,36 @@ export interface AttributeInfo {
 }
 
 /**
+ * Attribute information for a type definition.
+ */
+export interface TypeAttribute {
+    name: string;
+    dataType: string;
+    length: number;
+    isRepeating: boolean;
+    isInherited: boolean;
+}
+
+/**
+ * Type information from the repository.
+ */
+export interface TypeInfo {
+    name: string;
+    superType: string | null;
+    isInternal: boolean;
+    attributes: TypeAttribute[];
+}
+
+/**
+ * Summary type info returned by getTypes (without attributes).
+ */
+export interface TypeSummary {
+    name: string;
+    superType: string | null;
+    isInternal: boolean;
+}
+
+/**
  * Unified bridge interface for Documentum operations.
  *
  * This interface abstracts the connection type (DFC or REST).
@@ -128,4 +158,14 @@ export interface IUnifiedBridge {
      * Get parent groups (groups that contain this group).
      */
     getParentGroups(sessionId: string, groupName: string): Promise<GroupInfo[]>;
+
+    /**
+     * Get list of all types in the repository.
+     */
+    getTypes(sessionId: string): Promise<TypeSummary[]>;
+
+    /**
+     * Get detailed type information including attributes.
+     */
+    getTypeDetails(sessionId: string, typeName: string): Promise<TypeInfo>;
 }

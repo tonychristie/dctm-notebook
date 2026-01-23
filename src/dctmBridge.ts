@@ -8,7 +8,9 @@ import {
     UserInfo,
     UserDetails,
     GroupInfo,
-    GroupDetails
+    GroupDetails,
+    TypeSummary,
+    TypeInfo
 } from './bridgeTypes';
 import { DfcBridgeImpl } from './dfcBridgeImpl';
 import { RestBridgeImpl } from './restBridgeImpl';
@@ -33,7 +35,7 @@ export interface DqlQueryResult {
 }
 
 // Re-export types for consumers
-export type { ObjectInfo, UserInfo, UserDetails, GroupInfo, GroupDetails };
+export type { ObjectInfo, UserInfo, UserDetails, GroupInfo, GroupDetails, TypeSummary, TypeInfo };
 
 /**
  * Documentum Bridge client - unified interface to Documentum repositories
@@ -368,21 +370,19 @@ export class DctmBridge {
     }
 
     /**
-     * Get list of all types in the repository
+     * Get list of all types in the repository.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
      */
-    async getTypes(sessionId: string): Promise<unknown> {
-        const client = this.getClientForSession(sessionId);
-        const response = await client.get('/api/v1/types', { params: { sessionId } });
-        return response.data;
+    async getTypes(sessionId: string): Promise<TypeSummary[]> {
+        return this.getImplForSession(sessionId).getTypes(sessionId);
     }
 
     /**
-     * Get detailed type information including attributes
+     * Get detailed type information including attributes.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
      */
-    async getTypeDetails(sessionId: string, typeName: string): Promise<unknown> {
-        const client = this.getClientForSession(sessionId);
-        const response = await client.get(`/api/v1/types/${typeName}`, { params: { sessionId } });
-        return response.data;
+    async getTypeDetails(sessionId: string, typeName: string): Promise<TypeInfo> {
+        return this.getImplForSession(sessionId).getTypeDetails(sessionId, typeName);
     }
 
     /**

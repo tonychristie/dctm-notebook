@@ -16,7 +16,9 @@ import {
     UserDetails,
     GroupInfo,
     GroupDetails,
-    AttributeInfo
+    AttributeInfo,
+    TypeSummary,
+    TypeInfo
 } from './bridgeTypes';
 
 export class DfcBridgeImpl implements IUnifiedBridge {
@@ -208,5 +210,15 @@ export class DfcBridgeImpl implements IUnifiedBridge {
             usersNames: [],
             groupsNames: []
         }));
+    }
+
+    async getTypes(sessionId: string): Promise<TypeSummary[]> {
+        const response = await this.client.get('/api/v1/types', { params: { sessionId } });
+        return response.data;
+    }
+
+    async getTypeDetails(sessionId: string, typeName: string): Promise<TypeInfo> {
+        const response = await this.client.get(`/api/v1/types/${encodeURIComponent(typeName)}`, { params: { sessionId } });
+        return response.data;
     }
 }

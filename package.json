@@ -2,7 +2,7 @@
   "name": "dctm-notebook",
   "displayName": "DCTM Notebook",
   "description": "VS Code notebook interface for DQL queries with REST and DFC connectivity",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "publisher": "spirecentral",
   "icon": "resources/icon.png",
   "engines": {

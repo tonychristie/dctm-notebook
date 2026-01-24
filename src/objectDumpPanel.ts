@@ -328,14 +328,22 @@ export class ObjectDumpPanel {
     }
 
     /**
-     * Parse dump output into structured attributes
+     * Parse dump output into structured attributes.
+     *
+     * Handles two formats:
+     * 1. Standard format: "attr_name[index] [type] : value"
+     * 2. Continuation format: "[index] [type] : value" (for additional values of repeating attributes)
+     *
+     * For repeating attributes, values are stored at their correct index positions.
      */
     private parseDump(dumpText: string, _objectId: string): AttributeInfo[] {
         const attributes: AttributeInfo[] = [];
         const lines = dumpText.split('\n');
 
-        // Track repeating attribute indices
-        const repeatingIndices = new Map<string, number>();
+        // Track repeating attributes by name for value accumulation
+        const repeatingAttrs = new Map<string, AttributeInfo>();
+        // Track the last attribute name seen (for continuation lines)
+        let lastAttrName: string | undefined;
         let customStartPos = -1;
 
         for (const line of lines) {
@@ -344,45 +352,120 @@ export class ObjectDumpPanel {
                 continue;
             }
 
-            // Match attribute line: "  attr_name [type] : value" or "attr_name : value"
-            // Also handle repeating: "  attr_name[0] : value"
+            // First, check for continuation line format: "[index] [type] : value"
+            // This is used for additional values of repeating attributes
+            const contMatch = trimmed.match(/^\[(\d+)\]\s*(?:\[([^\]]+)\])?\s*[:=]\s*(.*)$/);
+            if (contMatch) {
+                // If there's no previous attribute, skip orphaned continuation lines
+                if (!lastAttrName) {
+                    continue;
+                }
+                const [, indexStr, type, rawValue] = contMatch;
+                const index = parseInt(indexStr);
+
+                // Find or create the repeating attribute
+                let existing = repeatingAttrs.get(lastAttrName);
+                if (!existing) {
+                    // First value was non-indexed; convert to repeating
+                    existing = attributes.find(a => a.name === lastAttrName);
+                    if (existing) {
+                        existing.isRepeating = true;
+                        const currentVal = existing.value;
+                        existing.value = Array.isArray(currentVal) ? currentVal : [currentVal];
+                        repeatingAttrs.set(lastAttrName, existing);
+                    }
+                }
+
+                if (existing && Array.isArray(existing.value)) {
+                    // Insert value at the correct index position
+                    const values = existing.value as string[];
+                    // Extend array if needed to accommodate the index
+                    while (values.length <= index) {
+                        values.push('');
+                    }
+                    values[index] = rawValue;
+                    // Update type if provided and not already set
+                    if (type && existing.type === 'string') {
+                        existing.type = type;
+                    }
+                }
+                continue;
+            }
+
+            // Match standard attribute line: "attr_name[index] [type] : value"
             const match = trimmed.match(/^(\S+?)(?:\[(\d+)\])?\s*(?:\[([^\]]+)\])?\s*[:=]\s*(.*)$/);
             if (match) {
                 const [, name, indexStr, type, rawValue] = match;
-                let value: string | string[] = rawValue;
                 const index = indexStr ? parseInt(indexStr) : undefined;
                 const isRepeating = index !== undefined;
+
+                // Track this as the last attribute name for continuation lines
+                lastAttrName = name;
 
                 // Determine attribute group based on Repoint-style categorization
                 const group = this.categorizeAttribute(name, customStartPos);
 
-                // Track if this is a repeating attribute
+                // Check if we already have this repeating attribute
                 if (isRepeating) {
-                    const existingIdx = repeatingIndices.get(name);
-                    if (existingIdx !== undefined) {
-                        // Find and update the existing attribute
-                        const existing = attributes.find(a => a.name === name && a.isRepeating);
-                        if (existing && Array.isArray(existing.value)) {
-                            (existing.value as unknown[]).push(value);
+                    const existing = repeatingAttrs.get(name);
+                    if (existing && Array.isArray(existing.value)) {
+                        // Insert value at the correct index position
+                        const values = existing.value as string[];
+                        while (values.length <= index) {
+                            values.push('');
+                        }
+                        values[index] = rawValue;
+                        // Update type if provided and not already set
+                        if (type && existing.type === 'string') {
+                            existing.type = type;
                         }
                         continue;
                     }
-                    repeatingIndices.set(name, index);
-                    value = [rawValue]; // Start array for repeating
-                }
 
-                // Track start_pos for custom attribute detection
-                if (name === 'start_pos') {
-                    customStartPos = parseInt(rawValue) || -1;
-                }
+                    // Create new repeating attribute with value at correct index
+                    const values: string[] = [];
+                    while (values.length <= index) {
+                        values.push('');
+                    }
+                    values[index] = rawValue;
 
-                attributes.push({
-                    name,
-                    type: type || 'string',
-                    value: isRepeating ? [value] : value,
-                    isRepeating,
-                    group
-                });
+                    const attr: AttributeInfo = {
+                        name,
+                        type: type || 'string',
+                        value: values,
+                        isRepeating: true,
+                        group
+                    };
+                    attributes.push(attr);
+                    repeatingAttrs.set(name, attr);
+                } else {
+                    // Non-repeating attribute
+                    // Track start_pos for custom attribute detection
+                    if (name === 'start_pos') {
+                        customStartPos = parseInt(rawValue) || -1;
+                    }
+
+                    attributes.push({
+                        name,
+                        type: type || 'string',
+                        value: rawValue,
+                        isRepeating: false,
+                        group
+                    });
+                }
+            }
+        }
+
+        // Clean up empty values in repeating attributes
+        for (const attr of attributes) {
+            if (attr.isRepeating && Array.isArray(attr.value)) {
+                // Filter out empty placeholder values, but preserve actual empty strings
+                // Only filter if we have a mix of empty and non-empty
+                const values = attr.value as string[];
+                const hasContent = values.some(v => v !== '');
+                if (hasContent) {
+                    attr.value = values.filter(v => v !== '' || values.indexOf(v) === values.lastIndexOf(v));
+                }
             }
         }
 

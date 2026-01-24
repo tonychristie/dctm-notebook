@@ -2,6 +2,18 @@ import * as vscode from 'vscode';
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { DfcProfile } from './connectionManager';
 import { extractBridgeError } from './errorUtils';
+import {
+    IUnifiedBridge,
+    ObjectInfo,
+    UserInfo,
+    UserDetails,
+    GroupInfo,
+    GroupDetails,
+    TypeSummary,
+    TypeInfo
+} from './bridgeTypes';
+import { DfcBridgeImpl } from './dfcBridgeImpl';
+import { RestBridgeImpl } from './restBridgeImpl';
 
 export interface DfcConnectParams {
     // For DFC connections - docbroker and port
@@ -22,18 +34,30 @@ export interface DqlQueryResult {
     executionTime: number;
 }
 
+// Re-export types for consumers
+export type { ObjectInfo, UserInfo, UserDetails, GroupInfo, GroupDetails, TypeSummary, TypeInfo };
+
 /**
- * DFC Bridge client - communicates with the Java DFC Bridge microservice
+ * Documentum Bridge client - unified interface to Documentum repositories
  *
- * The DFC Bridge is a separate Java/Spring Boot application that wraps DFC
- * and exposes a REST API for the VS Code extension to call.
+ * Abstracts the connection type (DFC or REST) using polymorphism.
+ * At connect time, the appropriate implementation is created and stored
+ * for the session. Subsequent calls use that implementation directly -
+ * no if/else branching on connection type.
+ *
+ * Architecture:
+ * - DfcBridgeImpl: Pure DFC/DQL implementation
+ * - RestBridgeImpl: Pure REST implementation
+ * - DctmBridge: Factory + routing layer that delegates to implementations
  *
  * This allows:
  * - DFC operations from TypeScript without Java bindings
  * - Multiple DFC profiles (different DFC versions per environment)
- * - Process isolation between extension and DFC
+ * - REST-only connections without DFC
+ * - Process isolation between extension and backend
+ * - Adding new connection types by implementing IUnifiedBridge
  */
-export class DfcBridge {
+export class DctmBridge {
     private context: vscode.ExtensionContext;
     private dfcClient: AxiosInstance | null = null;
     private restClient: AxiosInstance | null = null;
@@ -44,6 +68,12 @@ export class DfcBridge {
      * This allows us to route requests to the correct bridge.
      */
     private sessionTypes: Map<string, 'dfc' | 'rest'> = new Map();
+
+    /**
+     * Polymorphic implementations per session.
+     * Created at connect time based on connection type.
+     */
+    private sessionImpls: Map<string, IUnifiedBridge> = new Map();
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
@@ -79,6 +109,18 @@ export class DfcBridge {
             throw new Error('No bridge client initialized. Call ensureRunning() first.');
         }
         return this.getClientForType(connectionType);
+    }
+
+    /**
+     * Get the unified implementation for a session.
+     * Returns the appropriate DfcBridgeImpl or RestBridgeImpl.
+     */
+    private getImplForSession(sessionId: string): IUnifiedBridge {
+        const impl = this.sessionImpls.get(sessionId);
+        if (!impl) {
+            throw new Error(`No implementation found for session ${sessionId}. Was connect() called?`);
+        }
+        return impl;
     }
 
     private getConfig() {
@@ -182,8 +224,8 @@ export class DfcBridge {
      * - endpoint field present -> REST connection
      * - docbroker field present -> DFC connection
      *
-     * The session ID is tracked along with its connection type so that
-     * subsequent requests are routed to the correct bridge.
+     * Creates the appropriate polymorphic implementation for the session.
+     * Subsequent unified API calls use this implementation directly.
      */
     async connect(params: DfcConnectParams): Promise<string> {
         // Determine connection type based on params
@@ -213,6 +255,14 @@ export class DfcBridge {
         // Track session type for routing future requests
         this.sessionTypes.set(sessionId, connectionType);
 
+        // Create polymorphic implementation for this session
+        // This is the key change: we create the implementation once at connect time
+        // and all subsequent calls use it directly - no branching needed
+        const impl = connectionType === 'rest'
+            ? new RestBridgeImpl(client)
+            : new DfcBridgeImpl(client);
+        this.sessionImpls.set(sessionId, impl);
+
         return sessionId;
     }
 
@@ -228,6 +278,7 @@ export class DfcBridge {
         } finally {
             // Always clean up the session tracking
             this.sessionTypes.delete(sessionId);
+            this.sessionImpls.delete(sessionId);
         }
     }
 
@@ -319,66 +370,55 @@ export class DfcBridge {
     }
 
     /**
-     * Get list of all types in the repository
+     * Get list of all types in the repository.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
      */
-    async getTypes(sessionId: string): Promise<unknown> {
-        const client = this.getClientForSession(sessionId);
-        const response = await client.get('/api/v1/types', { params: { sessionId } });
-        return response.data;
+    async getTypes(sessionId: string): Promise<TypeSummary[]> {
+        return this.getImplForSession(sessionId).getTypes(sessionId);
     }
 
     /**
-     * Get detailed type information including attributes
+     * Get detailed type information including attributes.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
      */
-    async getTypeDetails(sessionId: string, typeName: string): Promise<unknown> {
-        const client = this.getClientForSession(sessionId);
-        const response = await client.get(`/api/v1/types/${typeName}`, { params: { sessionId } });
-        return response.data;
+    async getTypeDetails(sessionId: string, typeName: string): Promise<TypeInfo> {
+        return this.getImplForSession(sessionId).getTypeDetails(sessionId, typeName);
     }
 
     /**
-     * Checkout (lock) an object for editing
+     * Checkout (lock) an object for editing.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
      */
-    async checkout(sessionId: string, objectId: string): Promise<unknown> {
-        const client = this.getClientForSession(sessionId);
-        const response = await client.put(`/api/v1/objects/${objectId}/lock`, null, { params: { sessionId } });
-        return response.data;
+    async checkout(sessionId: string, objectId: string): Promise<ObjectInfo> {
+        return this.getImplForSession(sessionId).checkout(sessionId, objectId);
     }
 
     /**
-     * Cancel checkout (unlock) an object
+     * Cancel checkout (unlock) an object.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
      */
     async cancelCheckout(sessionId: string, objectId: string): Promise<void> {
-        const client = this.getClientForSession(sessionId);
-        await client.delete(`/api/v1/objects/${objectId}/lock`, { params: { sessionId } });
+        return this.getImplForSession(sessionId).cancelCheckout(sessionId, objectId);
     }
 
     /**
-     * Checkin an object, creating a new version
+     * Checkin an object, creating a new version.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
      */
-    async checkin(sessionId: string, objectId: string, versionLabel: string = 'CURRENT'): Promise<unknown> {
-        const client = this.getClientForSession(sessionId);
-        const response = await client.post(`/api/v1/objects/${objectId}/versions`, null, { params: { sessionId, versionLabel } });
-        return response.data;
+    async checkin(sessionId: string, objectId: string, versionLabel: string = 'CURRENT'): Promise<ObjectInfo> {
+        return this.getImplForSession(sessionId).checkin(sessionId, objectId, versionLabel);
     }
 
     /**
-     * Get an object by ID via the REST /objects endpoint.
-     * Returns object info with all attributes.
+     * Get an object by ID.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
      *
      * @param sessionId Active session ID
      * @param objectId The r_object_id to fetch
      * @returns Object info with objectId, type, name, and attributes map
      */
-    async getObject(sessionId: string, objectId: string): Promise<{
-        objectId: string;
-        type: string;
-        name: string;
-        attributes: Record<string, unknown>;
-    }> {
-        const client = this.getClientForSession(sessionId);
-        const response = await client.get(`/api/v1/objects/${objectId}`, { params: { sessionId } });
-        return response.data;
+    async getObject(sessionId: string, objectId: string): Promise<ObjectInfo> {
+        return this.getImplForSession(sessionId).getObject(sessionId, objectId);
     }
 
     /**
@@ -392,6 +432,78 @@ export class DfcBridge {
         return this.sessionTypes.get(sessionId) === 'rest';
     }
 
+    // ========================================
+    // Unified API methods - delegate to polymorphic implementations
+    // ========================================
+
+    /**
+     * Get cabinets from the repository.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
+     */
+    async getCabinets(sessionId: string): Promise<ObjectInfo[]> {
+        return this.getImplForSession(sessionId).getCabinets(sessionId);
+    }
+
+    /**
+     * Get folder contents (subfolders and documents).
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
+     *
+     * @param sessionId Active session ID
+     * @param folderId The folder object ID
+     * @param folderPath The folder path (required for DFC sessions)
+     */
+    async getFolderContents(sessionId: string, folderId: string, folderPath?: string): Promise<ObjectInfo[]> {
+        return this.getImplForSession(sessionId).getFolderContents(sessionId, folderId, folderPath);
+    }
+
+    /**
+     * Get users from the repository.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
+     */
+    async getUsers(sessionId: string, pattern?: string): Promise<UserInfo[]> {
+        return this.getImplForSession(sessionId).getUsers(sessionId, pattern);
+    }
+
+    /**
+     * Get a single user by username.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
+     */
+    async getUser(sessionId: string, userName: string): Promise<UserDetails> {
+        return this.getImplForSession(sessionId).getUser(sessionId, userName);
+    }
+
+    /**
+     * Get groups from the repository.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
+     */
+    async getGroups(sessionId: string, pattern?: string): Promise<GroupInfo[]> {
+        return this.getImplForSession(sessionId).getGroups(sessionId, pattern);
+    }
+
+    /**
+     * Get a single group by name.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
+     */
+    async getGroup(sessionId: string, groupName: string): Promise<GroupDetails> {
+        return this.getImplForSession(sessionId).getGroup(sessionId, groupName);
+    }
+
+    /**
+     * Get groups that contain a user.
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
+     */
+    async getGroupsForUser(sessionId: string, userName: string): Promise<GroupInfo[]> {
+        return this.getImplForSession(sessionId).getGroupsForUser(sessionId, userName);
+    }
+
+    /**
+     * Get parent groups (groups that contain this group).
+     * Delegates to the appropriate implementation (DFC or REST) for this session.
+     */
+    async getParentGroups(sessionId: string, groupName: string): Promise<GroupInfo[]> {
+        return this.getImplForSession(sessionId).getParentGroups(sessionId, groupName);
+    }
+
     /**
      * Stop the bridges if we started them
      */
@@ -402,5 +514,6 @@ export class DfcBridge {
         this.dfcClient = null;
         this.restClient = null;
         this.sessionTypes.clear();
+        this.sessionImpls.clear();
     }
 }

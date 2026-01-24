@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { DfcBridge } from './dfcBridge';
+import { DctmBridge } from './dctmBridge';
 
 export interface DocumentumConnection {
     name: string;
@@ -57,7 +57,7 @@ export class ConnectionManager {
     private activeConnection: ActiveConnection | null = null;
     private connectionChangeCallbacks: ConnectionChangeCallback[] = [];
     private notebookConnectionCallbacks: NotebookConnectionChangeCallback[] = [];
-    private dfcBridge: DfcBridge;
+    private dctmBridge: DctmBridge;
 
     /**
      * Notebook-bound connections: Map from notebook URI to ActiveConnection.
@@ -67,7 +67,7 @@ export class ConnectionManager {
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
-        this.dfcBridge = new DfcBridge(context);
+        this.dctmBridge = new DctmBridge(context);
     }
 
     onConnectionChange(callback: ConnectionChangeCallback): void {
@@ -172,13 +172,13 @@ export class ConnectionManager {
                 cancellable: false
             }, async () => {
                 // Ensure bridge is running - route to appropriate bridge based on connection type
-                await this.dfcBridge.ensureRunning(
+                await this.dctmBridge.ensureRunning(
                     profileName ? profiles[profileName] : undefined,
                     connection.type
                 );
 
                 // Connect via bridge - route to DFC or REST based on connection type
-                const sessionId = await this.dfcBridge.connect(
+                const sessionId = await this.dctmBridge.connect(
                     connection.type === 'rest'
                         ? {
                             endpoint: connection.endpoint,
@@ -218,7 +218,7 @@ export class ConnectionManager {
             const name = this.activeConnection.config.name;
 
             try {
-                await this.dfcBridge.disconnect(this.activeConnection.sessionId);
+                await this.dctmBridge.disconnect(this.activeConnection.sessionId);
             } catch (error) {
                 // Log but don't fail
                 console.error('Error disconnecting:', error);
@@ -280,8 +280,8 @@ export class ConnectionManager {
         return this.activeConnection;
     }
 
-    getDfcBridge(): DfcBridge {
-        return this.dfcBridge;
+    getDctmBridge(): DctmBridge {
+        return this.dctmBridge;
     }
 
     isConnected(): boolean {
@@ -393,13 +393,13 @@ export class ConnectionManager {
         }
 
         // Ensure bridge is running - route to appropriate bridge based on connection type
-        await this.dfcBridge.ensureRunning(
+        await this.dctmBridge.ensureRunning(
             profileName ? profiles[profileName] : undefined,
             connection.type
         );
 
         // Connect via bridge - route to DFC or REST based on connection type
-        const sessionId = await this.dfcBridge.connect(
+        const sessionId = await this.dctmBridge.connect(
             connection.type === 'rest'
                 ? {
                     endpoint: connection.endpoint,
@@ -438,7 +438,7 @@ export class ConnectionManager {
         const connection = this.notebookConnections.get(notebookUri);
         if (connection) {
             try {
-                await this.dfcBridge.disconnect(connection.sessionId);
+                await this.dctmBridge.disconnect(connection.sessionId);
             } catch (error) {
                 console.error('Error disconnecting notebook session:', error);
             }

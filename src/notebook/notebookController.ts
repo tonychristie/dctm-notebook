@@ -794,7 +794,7 @@ export class DctmNotebookController {
             throw new Error('No active session');
         }
 
-        const bridge = this.connectionManager.getDfcBridge();
+        const bridge = this.connectionManager.getDctmBridge();
 
         // Check if this is a REST connection - REST doesn't support dmAPI
         if (bridge.isRestSession(connection.sessionId)) {

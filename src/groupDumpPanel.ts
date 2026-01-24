@@ -11,6 +11,8 @@ type AttributeGroup = 'identity' | 'access' | 'members' | 'system' | 'other';
  */
 export class GroupDumpPanel {
     public static currentPanel: GroupDumpPanel | undefined;
+    private static allPanels: Set<GroupDumpPanel> = new Set();
+    private static panelCounter: number = 0;
     private static readonly viewType = 'dctmGroupDump';
 
     private readonly panel: vscode.WebviewPanel;
@@ -30,17 +32,23 @@ export class GroupDumpPanel {
             ? vscode.window.activeTextEditor.viewColumn
             : undefined;
 
-        // If we already have a panel, show it and update content
-        if (GroupDumpPanel.currentPanel) {
+        // Check the reuseWindow setting
+        const config = vscode.workspace.getConfiguration('documentum.panels');
+        const reuseWindow = config.get<boolean>('reuseWindow', false);
+
+        // If reuseWindow is true and we already have a panel, show it and update content
+        if (reuseWindow && GroupDumpPanel.currentPanel) {
             GroupDumpPanel.currentPanel.panel.reveal(column);
             await GroupDumpPanel.currentPanel.loadGroup(groupName);
             return;
         }
 
         // Create a new panel
+        GroupDumpPanel.panelCounter++;
+        const panelTitle = reuseWindow ? `Group: ${groupName}` : `Group #${GroupDumpPanel.panelCounter}: ${groupName}`;
         const panel = vscode.window.createWebviewPanel(
             GroupDumpPanel.viewType,
-            `Group: ${groupName}`,
+            panelTitle,
             column || vscode.ViewColumn.One,
             {
                 enableScripts: true,
@@ -49,8 +57,15 @@ export class GroupDumpPanel {
             }
         );
 
-        GroupDumpPanel.currentPanel = new GroupDumpPanel(panel, groupCache, extensionUri);
-        await GroupDumpPanel.currentPanel.loadGroup(groupName);
+        const groupPanel = new GroupDumpPanel(panel, groupCache, extensionUri);
+        GroupDumpPanel.allPanels.add(groupPanel);
+
+        // Only track as currentPanel when reuseWindow is true
+        if (reuseWindow) {
+            GroupDumpPanel.currentPanel = groupPanel;
+        }
+
+        await groupPanel.loadGroup(groupName);
     }
 
     private constructor(
@@ -85,8 +100,7 @@ export class GroupDumpPanel {
                         await GroupDumpPanel.createOrShow(this.extensionUri, this.groupCache, message.groupName);
                         break;
                     case 'openUser':
-                        // Could open user panel here
-                        await vscode.commands.executeCommand('dctm.searchUsers');
+                        await vscode.commands.executeCommand('dctm.openUserByName', message.userName);
                         break;
                     case 'dumpObject':
                         await vscode.commands.executeCommand('dctm.dumpObject', message.objectId);
@@ -746,7 +760,10 @@ WHERE group_name = '${this.currentGroupName}'`;
     }
 
     public dispose(): void {
-        GroupDumpPanel.currentPanel = undefined;
+        GroupDumpPanel.allPanels.delete(this);
+        if (GroupDumpPanel.currentPanel === this) {
+            GroupDumpPanel.currentPanel = undefined;
+        }
 
         this.panel.dispose();
 

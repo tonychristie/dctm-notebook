@@ -262,6 +262,21 @@ WHERE user_name = '${item.userName}'`;
         }
     );
 
+    // Open user panel by name (for cross-panel navigation)
+    const openUserByNameCommand = vscode.commands.registerCommand(
+        'dctm.openUserByName',
+        async (userName: string) => {
+            if (!userName) {
+                return;
+            }
+            await UserDumpPanel.createOrShow(
+                context.extensionUri,
+                userCache,
+                userName
+            );
+        }
+    );
+
     context.subscriptions.push(
         treeView,
         openUserPanelCommand,
@@ -269,7 +284,8 @@ WHERE user_name = '${item.userName}'`;
         searchUsersCommand,
         clearSearchCommand,
         showUserDetailsCommand,
-        generateDqlCommand
+        generateDqlCommand,
+        openUserByNameCommand
     );
 
     return provider;

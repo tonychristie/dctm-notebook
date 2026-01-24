@@ -88,7 +88,8 @@ export class GroupCache {
     }
 
     /**
-     * Refresh cache from the bridge
+     * Refresh cache from the bridge.
+     * The bridge handles REST vs DQL routing internally.
      */
     async refresh(): Promise<void> {
         if (this.refreshing) {
@@ -102,40 +103,34 @@ export class GroupCache {
 
         this.refreshing = true;
         try {
-            const bridge = this.connectionManager.getDfcBridge();
-
-            // Fetch group list with basic info
-            const query = `SELECT group_name, group_address, group_source, description,
-                group_class, group_admin, owner_name, is_private, is_dynamic
-                FROM dm_group
-                ORDER BY group_name`;
-
-            const result = await bridge.executeDql(connection.sessionId, query);
+            const bridge = this.connectionManager.getDctmBridge();
 
             // Clear existing cache
             this.groupMap.clear();
             this.groupNames = [];
 
-            // Build group map
-            for (const row of result.rows) {
-                const groupName = row.group_name as string;
+            // Bridge handles REST vs DQL routing internally
+            const groups = await bridge.getGroups(connection.sessionId);
+
+            for (const group of groups) {
+                const groupName = group.groupName;
                 const groupKey = groupName.toLowerCase();
 
                 this.groupNames.push(groupName);
                 this.groupMap.set(groupKey, {
                     groupName: groupName,
-                    groupAddress: row.group_address as string || '',
-                    groupSource: row.group_source as string || '',
-                    description: row.description as string || '',
-                    groupClass: row.group_class as string || '',
-                    groupAdmin: row.group_admin as string || '',
-                    owner: row.owner_name as string || '',
-                    isPrivate: row.is_private as boolean || false,
-                    isDynamic: row.is_dynamic as boolean || false,
+                    groupAddress: group.groupAddress || '',
+                    groupSource: group.groupSource || '',
+                    description: group.description || '',
+                    groupClass: group.groupClass || '',
+                    groupAdmin: group.groupAdmin || '',
+                    owner: group.ownerName || '',
+                    isPrivate: group.isPrivate || false,
+                    isDynamic: group.isDynamic || false,
                     aliasSetId: '',
                     acl: '',
-                    members: [],
-                    groupMembers: [],
+                    members: group.usersNames || [],
+                    groupMembers: group.groupsNames || [],
                     attributes: []
                 });
             }
@@ -155,7 +150,8 @@ export class GroupCache {
     }
 
     /**
-     * Fetch detailed group info including all attributes and members
+     * Fetch detailed group info including all attributes and members.
+     * The bridge handles REST vs DQL routing internally.
      */
     async fetchGroupDetails(groupName: string): Promise<GroupInfo | undefined> {
         const connection = this.connectionManager.getActiveConnection();
@@ -172,79 +168,43 @@ export class GroupCache {
         }
 
         try {
-            const bridge = this.connectionManager.getDfcBridge();
+            const bridge = this.connectionManager.getDctmBridge();
 
-            // Fetch all group attributes
-            const query = `SELECT * FROM dm_group WHERE group_name = '${groupName.replace(/'/g, "''")}'`;
-            const result = await bridge.executeDql(connection.sessionId, query);
+            // Bridge handles REST vs DQL routing internally and returns attributes
+            const bridgeGroup = await bridge.getGroup(connection.sessionId, groupName);
 
-            if (result.rows.length === 0) {
-                return undefined;
-            }
+            // Convert bridge attributes to GroupAttribute format
+            const attributes: GroupAttribute[] = bridgeGroup.attributes.map(attr => ({
+                name: attr.name,
+                value: attr.value,
+                dataType: attr.dataType
+            }));
 
-            const row = result.rows[0];
-
-            // Build attributes array
-            const attributes: GroupAttribute[] = [];
-            for (const [key, value] of Object.entries(row)) {
-                // Skip users_names and groups_names as they're handled separately
-                if (key !== 'users_names' && key !== 'groups_names') {
-                    attributes.push({
-                        name: key,
-                        value: value,
-                        dataType: typeof value
-                    });
-                }
-            }
-
-            // Sort attributes by name
-            attributes.sort((a, b) => a.name.localeCompare(b.name));
-
-            // Get members (users_names is repeating)
-            let members: string[] = [];
-            if (row.users_names) {
-                if (Array.isArray(row.users_names)) {
-                    members = row.users_names as string[];
-                } else if (typeof row.users_names === 'string') {
-                    members = [row.users_names];
-                }
-            }
-
-            // Get group members (groups_names is repeating)
-            let groupMembers: string[] = [];
-            if (row.groups_names) {
-                if (Array.isArray(row.groups_names)) {
-                    groupMembers = row.groups_names as string[];
-                } else if (typeof row.groups_names === 'string') {
-                    groupMembers = [row.groups_names];
-                }
-            }
+            const members = (bridgeGroup.usersNames || []).sort();
+            const groupMembers = (bridgeGroup.groupsNames || []).sort();
 
             // Create or update group info
             if (!group) {
                 group = {
-                    groupName: row.group_name as string,
-                    groupAddress: row.group_address as string || '',
-                    groupSource: row.group_source as string || '',
-                    description: row.description as string || '',
-                    groupClass: row.group_class as string || '',
-                    groupAdmin: row.group_admin as string || '',
-                    owner: row.owner_name as string || '',
-                    isPrivate: row.is_private as boolean || false,
-                    isDynamic: row.is_dynamic as boolean || false,
-                    aliasSetId: row.alias_set_id as string || '',
-                    acl: row.acl_name as string || '',
-                    members: members.sort(),
-                    groupMembers: groupMembers.sort(),
+                    groupName: bridgeGroup.groupName,
+                    groupAddress: '',
+                    groupSource: '',
+                    description: bridgeGroup.description || '',
+                    groupClass: bridgeGroup.groupClass || '',
+                    groupAdmin: bridgeGroup.groupAdmin || '',
+                    owner: '',
+                    isPrivate: bridgeGroup.isPrivate || false,
+                    isDynamic: false,
+                    aliasSetId: '',
+                    acl: '',
+                    members: members,
+                    groupMembers: groupMembers,
                     attributes: attributes
                 };
                 this.groupMap.set(groupKey, group);
             } else {
-                // Update existing group with detailed attributes
-                group.aliasSetId = row.alias_set_id as string || '';
-                group.acl = row.acl_name as string || '';
-                group.members = members.sort();
-                group.groupMembers = groupMembers.sort();
+                group.members = members;
+                group.groupMembers = groupMembers;
                 group.attributes = attributes;
             }
 
@@ -256,7 +216,8 @@ export class GroupCache {
     }
 
     /**
-     * Get parent groups (groups that contain this group)
+     * Get parent groups (groups that contain this group).
+     * The bridge handles REST vs DQL routing internally.
      */
     async getParentGroups(groupName: string): Promise<string[]> {
         const connection = this.connectionManager.getActiveConnection();
@@ -265,11 +226,9 @@ export class GroupCache {
         }
 
         try {
-            const bridge = this.connectionManager.getDfcBridge();
-            const query = `SELECT group_name FROM dm_group WHERE any groups_names = '${groupName.replace(/'/g, "''")}'`;
-            const result = await bridge.executeDql(connection.sessionId, query);
-
-            return result.rows.map(row => row.group_name as string).sort();
+            const bridge = this.connectionManager.getDctmBridge();
+            const groups = await bridge.getParentGroups(connection.sessionId, groupName);
+            return groups.map(g => g.groupName).sort();
         } catch {
             return [];
         }

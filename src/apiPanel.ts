@@ -844,7 +844,7 @@ export function registerApiPanel(
             }
 
             try {
-                const bridge = connectionManager.getDfcBridge();
+                const bridge = connectionManager.getDctmBridge();
                 const result = await bridge.checkout(connection.sessionId, objectId);
                 const objectInfo = result as { objectId?: string };
                 vscode.window.showInformationMessage(
@@ -885,7 +885,7 @@ export function registerApiPanel(
             }
 
             try {
-                const bridge = connectionManager.getDfcBridge();
+                const bridge = connectionManager.getDctmBridge();
                 const result = await bridge.checkin(connection.sessionId, objectId, versionLabel);
                 const objectInfo = result as { objectId?: string };
                 vscode.window.showInformationMessage(
@@ -926,7 +926,7 @@ export function registerApiPanel(
             }
 
             try {
-                const bridge = connectionManager.getDfcBridge();
+                const bridge = connectionManager.getDctmBridge();
                 await bridge.cancelCheckout(connection.sessionId, objectId);
                 vscode.window.showInformationMessage('Checkout cancelled');
             } catch (error) {

@@ -1,24 +1,14 @@
 import { ConnectionManager } from './connectionManager';
+import { TypeAttribute, TypeInfo as BridgeTypeInfo } from './bridgeTypes';
+
+// Re-export for consumers that import from typeCache
+export type { TypeAttribute };
 
 /**
- * Attribute information for a type
+ * Extended type information with children for cache use.
+ * Extends the bridge TypeInfo with children array for hierarchy navigation.
  */
-export interface TypeAttribute {
-    name: string;
-    dataType: string;
-    length: number;
-    isRepeating: boolean;
-    isInherited: boolean;
-}
-
-/**
- * Type information from the repository
- */
-export interface TypeInfo {
-    name: string;
-    superType: string | null;
-    isInternal: boolean;
-    attributes: TypeAttribute[];
+export interface TypeInfo extends BridgeTypeInfo {
     children: string[];
 }
 
@@ -133,15 +123,10 @@ export class TypeCache {
 
         this.refreshing = true;
         try {
-            const bridge = this.connectionManager.getDfcBridge();
+            const bridge = this.connectionManager.getDctmBridge();
 
-            // Fetch type list from bridge
-            const typesResponse = await bridge.getTypes(connection.sessionId!);
-            const types = typesResponse as Array<{
-                name: string;
-                superType: string | null;
-                isInternal: boolean;
-            }>;
+            // Fetch type list from bridge (returns TypeSummary[])
+            const types = await bridge.getTypes(connection.sessionId!);
 
             // Clear existing cache
             this.typeMap.clear();
@@ -220,29 +205,11 @@ export class TypeCache {
         }
 
         try {
-            const bridge = this.connectionManager.getDfcBridge();
+            const bridge = this.connectionManager.getDctmBridge();
             const details = await bridge.getTypeDetails(connection.sessionId!, typeName);
 
-            const typeDetails = details as {
-                name: string;
-                superType: string | null;
-                attributes: Array<{
-                    name: string;
-                    dataType: string;
-                    length: number;
-                    isRepeating: boolean;
-                    isInherited: boolean;
-                }>;
-            };
-
-            // Update cached type with attributes
-            type.attributes = typeDetails.attributes.map(a => ({
-                name: a.name,
-                dataType: a.dataType,
-                length: a.length,
-                isRepeating: a.isRepeating,
-                isInherited: a.isInherited
-            }));
+            // Update cached type with attributes (details is now strongly typed as TypeInfo)
+            type.attributes = details.attributes;
 
             return type;
         } catch {

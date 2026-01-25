@@ -231,18 +231,14 @@ export class ObjectDumpPanel {
         }
 
         const bridge = this.connectionManager.getDctmBridge();
-        const startTime = Date.now();
-
-        // Use bridge.getObject() for all connection types
-        // Both DFC and REST bridges return structured JSON with type metadata
-        return this.fetchObjectViaRest(bridge, connection.sessionId, objectId, startTime);
+        return this.fetchObjectFromBridge(bridge, connection.sessionId, objectId, Date.now());
     }
 
     /**
-     * Fetch object via REST /objects endpoint.
-     * Used for REST connections where dmAPI is not available.
+     * Fetch object via bridge /objects endpoint.
+     * Both DFC and REST bridges return structured JSON with type metadata.
      */
-    private async fetchObjectViaRest(
+    private async fetchObjectFromBridge(
         bridge: ReturnType<ConnectionManager['getDctmBridge']>,
         sessionId: string,
         objectId: string,
@@ -251,8 +247,7 @@ export class ObjectDumpPanel {
         const objectInfo = await bridge.getObject(sessionId, objectId);
         const fetchTime = Date.now() - startTime;
 
-        // Convert REST response to AttributeInfo format
-        // Bridge now returns attributes with type metadata: { type, value, repeating }
+        // Bridge returns attributes with type metadata: { type, value, repeating }
         const attributes: AttributeInfo[] = [];
 
         for (const [name, attrData] of Object.entries(objectInfo.attributes)) {

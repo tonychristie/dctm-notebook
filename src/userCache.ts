@@ -40,7 +40,7 @@ export class UserCache {
     private userMap: Map<string, UserInfo> = new Map();
     private userNames: string[] = [];
     private lastRefresh: Date | null = null;
-    private refreshing: boolean = false;
+    private refreshPromise: Promise<void> | null = null;
 
     // Event callbacks
     private onRefreshCallbacks: Array<() => void> = [];
@@ -90,10 +90,12 @@ export class UserCache {
     /**
      * Refresh cache from the bridge.
      * The bridge handles REST vs DQL routing internally.
+     * If a refresh is already in progress, waits for it to complete.
      */
     async refresh(): Promise<void> {
-        if (this.refreshing) {
-            return;
+        // If refresh already in progress, wait for it
+        if (this.refreshPromise) {
+            return this.refreshPromise;
         }
 
         const connection = this.connectionManager.getActiveConnection();
@@ -101,52 +103,61 @@ export class UserCache {
             throw new Error('No active connection');
         }
 
-        this.refreshing = true;
+        // Create and store the refresh promise
+        this.refreshPromise = this.doRefresh(connection.sessionId);
+
         try {
-            const bridge = this.connectionManager.getDctmBridge();
-
-            // Clear existing cache
-            this.userMap.clear();
-            this.userNames = [];
-
-            // Bridge handles REST vs DQL routing internally
-            const users = await bridge.getUsers(connection.sessionId);
-
-            for (const user of users) {
-                const userName = user.userName;
-                const userKey = userName.toLowerCase();
-
-                this.userNames.push(userName);
-                this.userMap.set(userKey, {
-                    userName: userName,
-                    userLoginName: user.userLoginName || '',
-                    userOsName: user.userOsName || '',
-                    userAddress: user.userAddress || '',
-                    userState: parseInt(user.userState, 10) || 0,
-                    userSource: user.userSource || '',
-                    defaultFolder: user.defaultFolder || '',
-                    defaultGroup: user.userGroupName || '',
-                    description: user.description || '',
-                    email: '',
-                    homeDocbase: '',
-                    clientCapability: 0,
-                    aliasSetId: '',
-                    acl: '',
-                    attributes: []
-                });
-            }
-
-            // Sort user names
-            this.userNames.sort();
-
-            this.lastRefresh = new Date();
-
-            // Notify listeners
-            for (const callback of this.onRefreshCallbacks) {
-                callback();
-            }
+            await this.refreshPromise;
         } finally {
-            this.refreshing = false;
+            this.refreshPromise = null;
+        }
+    }
+
+    /**
+     * Internal refresh implementation.
+     */
+    private async doRefresh(sessionId: string): Promise<void> {
+        const bridge = this.connectionManager.getDctmBridge();
+
+        // Clear existing cache
+        this.userMap.clear();
+        this.userNames = [];
+
+        // Bridge handles REST vs DQL routing internally
+        const users = await bridge.getUsers(sessionId);
+
+        for (const user of users) {
+            const userName = user.userName;
+            const userKey = userName.toLowerCase();
+
+            this.userNames.push(userName);
+            this.userMap.set(userKey, {
+                userName: userName,
+                userLoginName: user.userLoginName || '',
+                userOsName: user.userOsName || '',
+                userAddress: user.userAddress || '',
+                userState: parseInt(user.userState, 10) || 0,
+                userSource: user.userSource || '',
+                defaultFolder: user.defaultFolder || '',
+                defaultGroup: user.userGroupName || '',
+                description: user.description || '',
+                email: '',
+                homeDocbase: '',
+                clientCapability: 0,
+                aliasSetId: '',
+                acl: '',
+                attributes: []
+            });
+        }
+
+        // Sort user names
+        this.userNames.sort();
+
+        this.lastRefresh = new Date();
+
+        // Notify listeners
+        for (const callback of this.onRefreshCallbacks) {
+            callback();
         }
     }
 

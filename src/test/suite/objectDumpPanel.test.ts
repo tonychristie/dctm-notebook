@@ -161,6 +161,211 @@ suite('ObjectDumpPanel Test Suite', () => {
                 isRepeating: false
             });
         });
+
+        test('parses continuation line format', () => {
+            // Continuation lines start with [index] and are used for additional values
+            // of repeating attributes in Documentum dump output
+            const contMatch = '[1] [string] : CURRENT'.match(/^\[(\d+)\]\s*(?:\[([^\]]+)\])?\s*[:=]\s*(.*)$/);
+            assert.ok(contMatch, 'Should match continuation line format');
+            assert.strictEqual(contMatch[1], '1');
+            assert.strictEqual(contMatch[2], 'string');
+            assert.strictEqual(contMatch[3], 'CURRENT');
+        });
+
+        test('parses continuation line without type', () => {
+            const contMatch = '[2] = third_value'.match(/^\[(\d+)\]\s*(?:\[([^\]]+)\])?\s*[:=]\s*(.*)$/);
+            assert.ok(contMatch, 'Should match continuation line without type');
+            assert.strictEqual(contMatch[1], '2');
+            assert.strictEqual(contMatch[2], undefined);
+            assert.strictEqual(contMatch[3], 'third_value');
+        });
+    });
+
+    suite('Multi-line dump parsing', () => {
+        // Test the full parseDump behavior with multi-line input
+        type AttributeGroup = 'standard' | 'custom' | 'system' | 'application' | 'internal';
+
+        interface AttributeInfo {
+            name: string;
+            type: string;
+            value: unknown;
+            isRepeating: boolean;
+            group: AttributeGroup;
+        }
+
+        function categorizeAttribute(name: string): AttributeGroup {
+            if (name.startsWith('r_')) {return 'system';}
+            if (name.startsWith('i_')) {return 'internal';}
+            if (name.startsWith('a_')) {return 'application';}
+            return 'standard';
+        }
+
+        /**
+         * Simplified version of parseDump for testing the core logic
+         */
+        function parseDump(dumpText: string): AttributeInfo[] {
+            const attributes: AttributeInfo[] = [];
+            const lines = dumpText.split('\n');
+            const repeatingAttrs = new Map<string, AttributeInfo>();
+            let lastAttrName: string | undefined;
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed.startsWith('---')) {continue;}
+
+                // Check for continuation line format: "[index] [type] : value"
+                const contMatch = trimmed.match(/^\[(\d+)\]\s*(?:\[([^\]]+)\])?\s*[:=]\s*(.*)$/);
+                if (contMatch) {
+                    // If there's no previous attribute, skip orphaned continuation lines
+                    if (!lastAttrName) {
+                        continue;
+                    }
+                    const [, indexStr, type, rawValue] = contMatch;
+                    const index = parseInt(indexStr);
+
+                    let existing = repeatingAttrs.get(lastAttrName);
+                    if (!existing) {
+                        existing = attributes.find(a => a.name === lastAttrName);
+                        if (existing) {
+                            existing.isRepeating = true;
+                            const currentVal = existing.value;
+                            existing.value = Array.isArray(currentVal) ? currentVal : [currentVal];
+                            repeatingAttrs.set(lastAttrName, existing);
+                        }
+                    }
+
+                    if (existing && Array.isArray(existing.value)) {
+                        const values = existing.value as string[];
+                        while (values.length <= index) {values.push('');}
+                        values[index] = rawValue;
+                        if (type && existing.type === 'string') {existing.type = type;}
+                    }
+                    continue;
+                }
+
+                // Standard attribute line
+                const match = trimmed.match(/^(\S+?)(?:\[(\d+)\])?\s*(?:\[([^\]]+)\])?\s*[:=]\s*(.*)$/);
+                if (match) {
+                    const [, name, indexStr, type, rawValue] = match;
+                    const index = indexStr ? parseInt(indexStr) : undefined;
+                    const isRepeating = index !== undefined;
+                    lastAttrName = name;
+                    const group = categorizeAttribute(name);
+
+                    if (isRepeating) {
+                        const existing = repeatingAttrs.get(name);
+                        if (existing && Array.isArray(existing.value)) {
+                            const values = existing.value as string[];
+                            while (values.length <= index) {values.push('');}
+                            values[index] = rawValue;
+                            if (type && existing.type === 'string') {existing.type = type;}
+                            continue;
+                        }
+
+                        const values: string[] = [];
+                        while (values.length <= index) {values.push('');}
+                        values[index] = rawValue;
+
+                        const attr: AttributeInfo = {
+                            name, type: type || 'string', value: values, isRepeating: true, group
+                        };
+                        attributes.push(attr);
+                        repeatingAttrs.set(name, attr);
+                    } else {
+                        attributes.push({
+                            name, type: type || 'string', value: rawValue, isRepeating: false, group
+                        });
+                    }
+                }
+            }
+
+            return attributes;
+        }
+
+        test('parses repeating attribute with continuation lines', () => {
+            const dump = `r_version_label[0] : 1.0
+[1] : CURRENT`;
+            const result = parseDump(dump);
+            const attr = result.find(a => a.name === 'r_version_label');
+            assert.ok(attr, 'Should find r_version_label');
+            assert.strictEqual(attr.isRepeating, true);
+            assert.deepStrictEqual(attr.value, ['1.0', 'CURRENT']);
+        });
+
+        test('handles out-of-order indices', () => {
+            const dump = `r_version_label[1] : CURRENT
+r_version_label[0] : 1.0`;
+            const result = parseDump(dump);
+            const attr = result.find(a => a.name === 'r_version_label');
+            assert.ok(attr, 'Should find r_version_label');
+            assert.strictEqual(attr.isRepeating, true);
+            assert.deepStrictEqual(attr.value, ['1.0', 'CURRENT']);
+        });
+
+        test('parses continuation line that follows non-indexed attribute', () => {
+            // This tests the case where the first line has no index but subsequent lines do
+            const dump = `keywords : first_keyword
+[1] : second_keyword
+[2] : third_keyword`;
+            const result = parseDump(dump);
+            const attr = result.find(a => a.name === 'keywords');
+            assert.ok(attr, 'Should find keywords');
+            assert.strictEqual(attr.isRepeating, true);
+            // First value was at implicit index 0
+            assert.deepStrictEqual(attr.value, ['first_keyword', 'second_keyword', 'third_keyword']);
+        });
+
+        test('does not treat [index] as attribute when no previous attribute', () => {
+            // If [index] appears at the start with no previous attribute, it should be ignored
+            const dump = `[1] : orphan_value
+object_name : test`;
+            const result = parseDump(dump);
+            // Should only have object_name, not [1] as an attribute
+            assert.strictEqual(result.length, 1);
+            assert.strictEqual(result[0].name, 'object_name');
+        });
+
+        test('handles multiple repeating attributes', () => {
+            const dump = `r_version_label[0] : 1.0
+[1] : CURRENT
+keywords[0] : tag1
+[1] : tag2
+[2] : tag3`;
+            const result = parseDump(dump);
+
+            const versionLabel = result.find(a => a.name === 'r_version_label');
+            assert.ok(versionLabel);
+            assert.deepStrictEqual(versionLabel.value, ['1.0', 'CURRENT']);
+
+            const keywords = result.find(a => a.name === 'keywords');
+            assert.ok(keywords);
+            assert.deepStrictEqual(keywords.value, ['tag1', 'tag2', 'tag3']);
+        });
+
+        test('mixes repeating and non-repeating attributes', () => {
+            const dump = `object_name : My Document
+r_version_label[0] : 1.0
+[1] : CURRENT
+title : Document Title`;
+            const result = parseDump(dump);
+
+            assert.strictEqual(result.length, 3);
+
+            const name = result.find(a => a.name === 'object_name');
+            assert.ok(name);
+            assert.strictEqual(name.isRepeating, false);
+            assert.strictEqual(name.value, 'My Document');
+
+            const version = result.find(a => a.name === 'r_version_label');
+            assert.ok(version);
+            assert.strictEqual(version.isRepeating, true);
+            assert.deepStrictEqual(version.value, ['1.0', 'CURRENT']);
+
+            const title = result.find(a => a.name === 'title');
+            assert.ok(title);
+            assert.strictEqual(title.isRepeating, false);
+            assert.strictEqual(title.value, 'Document Title');
+        });
     });
 
     suite('Attribute value formatting', () => {

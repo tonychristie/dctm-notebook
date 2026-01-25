@@ -22,7 +22,7 @@ export class TypeCache {
     private typeNames: Set<string> = new Set();
     private rootTypes: string[] = [];
     private lastRefresh: Date | null = null;
-    private refreshing: boolean = false;
+    private refreshPromise: Promise<void> | null = null;
 
     // Event callbacks
     private onRefreshCallbacks: Array<() => void> = [];
@@ -110,10 +110,12 @@ export class TypeCache {
     /**
      * Refresh cache from the bridge.
      * The bridge handles backend type (DFC or REST) internally.
+     * If a refresh is already in progress, waits for it to complete.
      */
     async refresh(): Promise<void> {
-        if (this.refreshing) {
-            return;
+        // If refresh already in progress, wait for it
+        if (this.refreshPromise) {
+            return this.refreshPromise;
         }
 
         const connection = this.connectionManager.getActiveConnection();
@@ -121,66 +123,75 @@ export class TypeCache {
             throw new Error('No active connection');
         }
 
-        this.refreshing = true;
+        // Create and store the refresh promise
+        this.refreshPromise = this.doRefresh(connection.sessionId);
+
         try {
-            const bridge = this.connectionManager.getDctmBridge();
-
-            // Fetch type list from bridge (returns TypeSummary[])
-            const types = await bridge.getTypes(connection.sessionId!);
-
-            // Clear existing cache
-            this.typeMap.clear();
-            this.typeNames.clear();
-            this.rootTypes = [];
-
-            // Build type map and name set
-            const childrenMap = new Map<string, string[]>();
-
-            for (const type of types) {
-                const typeName = type.name.toLowerCase();
-                this.typeNames.add(typeName);
-
-                // Initialize type info (attributes fetched on demand)
-                this.typeMap.set(typeName, {
-                    name: type.name,
-                    superType: type.superType,
-                    isInternal: type.isInternal,
-                    attributes: [],
-                    children: []
-                });
-
-                // Track parent-child relationships
-                if (type.superType) {
-                    const parentName = type.superType.toLowerCase();
-                    if (!childrenMap.has(parentName)) {
-                        childrenMap.set(parentName, []);
-                    }
-                    childrenMap.get(parentName)!.push(typeName);
-                } else {
-                    // Root type (no super type)
-                    this.rootTypes.push(typeName);
-                }
-            }
-
-            // Populate children arrays
-            for (const [parent, children] of childrenMap) {
-                const typeInfo = this.typeMap.get(parent);
-                if (typeInfo) {
-                    typeInfo.children = children.sort();
-                }
-            }
-
-            // Sort root types
-            this.rootTypes.sort();
-
-            this.lastRefresh = new Date();
-
-            // Notify listeners
-            for (const callback of this.onRefreshCallbacks) {
-                callback();
-            }
+            await this.refreshPromise;
         } finally {
-            this.refreshing = false;
+            this.refreshPromise = null;
+        }
+    }
+
+    /**
+     * Internal refresh implementation.
+     */
+    private async doRefresh(sessionId: string): Promise<void> {
+        const bridge = this.connectionManager.getDctmBridge();
+
+        // Fetch type list from bridge (returns TypeSummary[])
+        const types = await bridge.getTypes(sessionId);
+
+        // Clear existing cache
+        this.typeMap.clear();
+        this.typeNames.clear();
+        this.rootTypes = [];
+
+        // Build type map and name set
+        const childrenMap = new Map<string, string[]>();
+
+        for (const type of types) {
+            const typeName = type.name.toLowerCase();
+            this.typeNames.add(typeName);
+
+            // Initialize type info (attributes fetched on demand)
+            this.typeMap.set(typeName, {
+                name: type.name,
+                superType: type.superType,
+                isInternal: type.isInternal,
+                attributes: [],
+                children: []
+            });
+
+            // Track parent-child relationships
+            if (type.superType) {
+                const parentName = type.superType.toLowerCase();
+                if (!childrenMap.has(parentName)) {
+                    childrenMap.set(parentName, []);
+                }
+                childrenMap.get(parentName)!.push(typeName);
+            } else {
+                // Root type (no super type)
+                this.rootTypes.push(typeName);
+            }
+        }
+
+        // Populate children arrays
+        for (const [parent, children] of childrenMap) {
+            const typeInfo = this.typeMap.get(parent);
+            if (typeInfo) {
+                typeInfo.children = children.sort();
+            }
+        }
+
+        // Sort root types
+        this.rootTypes.sort();
+
+        this.lastRefresh = new Date();
+
+        // Notify listeners
+        for (const callback of this.onRefreshCallbacks) {
+            callback();
         }
     }
 

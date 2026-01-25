@@ -221,8 +221,8 @@ export class ObjectDumpPanel {
     }
 
     /**
-     * Fetch object dump via the DFC Bridge.
-     * Uses dmAPI dump for DFC connections, REST /objects endpoint for REST connections.
+     * Fetch object dump via the bridge /objects endpoint.
+     * Both DFC and REST bridges now return structured JSON with type metadata.
      */
     private async fetchObjectDump(objectId: string): Promise<ObjectDump> {
         const connection = this.connectionManager.getActiveConnection();
@@ -233,35 +233,9 @@ export class ObjectDumpPanel {
         const bridge = this.connectionManager.getDctmBridge();
         const startTime = Date.now();
 
-        // Check if this is a REST connection - REST doesn't support dmAPI
-        if (bridge.isRestSession(connection.sessionId)) {
-            return this.fetchObjectViaRest(bridge, connection.sessionId, objectId, startTime);
-        }
-
-        // DFC connection - use dmAPIGet to get the dump
-        const dumpResult = await bridge.executeDmApi(
-            connection.sessionId,
-            'get',
-            `dump,${connection.sessionId},${objectId}`
-        );
-
-        const fetchTime = Date.now() - startTime;
-
-        // Parse the dump result (format is attribute=value lines)
-        const dumpText = String(dumpResult.result);
-        const attributes = this.parseDump(dumpText, objectId);
-
-        // Extract type and name from attributes
-        const typeAttr = attributes.find(a => a.name === 'r_object_type');
-        const nameAttr = attributes.find(a => a.name === 'object_name');
-
-        return {
-            objectId,
-            typeName: typeAttr ? String(typeAttr.value) : 'unknown',
-            objectName: nameAttr ? String(nameAttr.value) : objectId,
-            attributes,
-            fetchTime
-        };
+        // Use bridge.getObject() for all connection types
+        // Both DFC and REST bridges return structured JSON with type metadata
+        return this.fetchObjectViaRest(bridge, connection.sessionId, objectId, startTime);
     }
 
     /**

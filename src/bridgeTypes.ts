@@ -8,6 +8,9 @@
 /**
  * Standard object info returned by unified methods.
  * Used for cabinets, folders, and documents.
+ *
+ * For getObject() responses from bridges, attributes contain BridgeAttributeValue objects.
+ * For other methods (getFolderContents, getCabinets), attributes may contain simple values.
  */
 export interface ObjectInfo {
     objectId: string;
@@ -78,6 +81,16 @@ export interface AttributeInfo {
     name: string;
     value: unknown;
     dataType: string;
+}
+
+/**
+ * Attribute value with type metadata as returned by bridges.
+ * Used in ObjectInfo.attributes for /objects/{id} responses.
+ */
+export interface BridgeAttributeValue {
+    type: string;      // boolean, integer, string, id, time, double
+    value: unknown;    // scalar or array for repeating
+    repeating: boolean;
 }
 
 /**

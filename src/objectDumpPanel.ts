@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
+import { BridgeAttributeValue } from './bridgeTypes';
 
 /**
  * Attribute grouping categories similar to Repoint's PropertiesView
@@ -277,17 +278,18 @@ export class ObjectDumpPanel {
         const fetchTime = Date.now() - startTime;
 
         // Convert REST response to AttributeInfo format
+        // Bridge now returns attributes with type metadata: { type, value, repeating }
         const attributes: AttributeInfo[] = [];
 
-        for (const [name, value] of Object.entries(objectInfo.attributes)) {
-            const isRepeating = Array.isArray(value);
+        for (const [name, attrData] of Object.entries(objectInfo.attributes)) {
+            const bridgeAttr = attrData as BridgeAttributeValue;
             const group = this.categorizeAttribute(name, -1);
 
             attributes.push({
                 name,
-                type: this.inferType(value),
-                value,
-                isRepeating,
+                type: bridgeAttr.type,
+                value: bridgeAttr.value,
+                isRepeating: bridgeAttr.repeating,
                 group
             });
         }
@@ -299,32 +301,6 @@ export class ObjectDumpPanel {
             attributes,
             fetchTime
         };
-    }
-
-    /**
-     * Infer the type of a value for display purposes
-     */
-    private inferType(value: unknown): string {
-        if (value === null || value === undefined) {
-            return 'null';
-        }
-        if (Array.isArray(value)) {
-            return value.length > 0 ? `${this.inferType(value[0])}[]` : 'array';
-        }
-        if (typeof value === 'boolean') {
-            return 'bool';
-        }
-        if (typeof value === 'number') {
-            return Number.isInteger(value) ? 'int' : 'double';
-        }
-        if (typeof value === 'string') {
-            // Check if it looks like a date
-            if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
-                return 'time';
-            }
-            return 'string';
-        }
-        return 'object';
     }
 
     /**

@@ -506,7 +506,7 @@ export class GroupDumpPanel {
                 <div class="header-badges">
                     ${group.isPrivate ? '<span class="badge private">Private</span>' : ''}
                     ${group.isDynamic ? '<span class="badge dynamic">Dynamic</span>' : ''}
-                    <span class="badge">${group.groupClass || 'group'}</span>
+                    <span class="badge">${escapeHtml(group.groupClass || 'group')}</span>
                 </div>
                 <div class="header-info">
                     Owner: ${escapeHtml(group.owner || 'N/A')} |

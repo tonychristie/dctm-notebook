@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
 import { ObjectDumpPanel } from './objectDumpPanel';
-import { isObjectId } from './htmlUtils';
+import { escapeHtml, isObjectId } from './htmlUtils';
 import { addToRecent } from './navigationHistory';
 import { webviewAssets, webviewResourceRoots } from './webviewHtml';
 
@@ -281,7 +281,7 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
                 </div>
                 <div class="hint">e.g., 0900000180000102</div>
                 <div id="status" class="status ${isConnected ? 'connected' : 'disconnected'}">
-                    ${isConnected ? 'Connected to ' + connection?.config.repository : 'Not connected'}
+                    ${isConnected ? 'Connected to ' + escapeHtml(connection?.config.repository ?? '') : 'Not connected'}
                 </div>
             </div>
 

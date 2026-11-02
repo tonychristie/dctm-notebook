@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { GroupCache } from './groupCache';
 import { ConnectionManager } from './connectionManager';
 import { GroupDumpPanel } from './groupDumpPanel';
+import { buildGroupQuery } from './dqlQueries';
 
 /**
  * Tree item types for the Group Browser
@@ -247,15 +248,8 @@ export function registerGroupBrowser(
                 return;
             }
 
-            // Generate a sample DQL query
-            const dql = `SELECT group_name, group_address, group_class, owner_name,
-    description, users_names, groups_names
-FROM dm_group
-WHERE group_name = '${item.groupName}'`;
-
-            // Open in new editor
             const doc = await vscode.workspace.openTextDocument({
-                content: dql,
+                content: buildGroupQuery(item.groupName),
                 language: 'dql'
             });
             await vscode.window.showTextDocument(doc);

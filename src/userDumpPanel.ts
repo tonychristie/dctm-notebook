@@ -1,10 +1,8 @@
 import * as vscode from 'vscode';
 import { UserCache, UserInfo, UserAttribute } from './userCache';
-
-/**
- * Attribute grouping categories
- */
-type AttributeGroup = 'identity' | 'access' | 'preferences' | 'system' | 'other';
+import { escapeHtml } from './htmlUtils';
+import { buildUserQuery } from './dqlQueries';
+import { UserAttributeGroup as AttributeGroup, describeAttributeValue, groupUserAttributes } from './attributeGroups';
 
 /**
  * WebviewPanel for displaying Documentum user details with grouped attributes
@@ -135,43 +133,11 @@ export class UserDumpPanel {
     }
 
     /**
-     * Categorize attribute based on name
-     */
-    private categorizeAttribute(name: string): AttributeGroup {
-        // Identity-related
-        if (['user_name', 'user_login_name', 'user_os_name', 'user_address', 'user_db_name',
-             'user_source', 'user_ldap_dn', 'user_global_unique_id'].includes(name)) {
-            return 'identity';
-        }
-        // Access-related
-        if (['acl_domain', 'acl_name', 'owner_name', 'owner_permit', 'user_privileges',
-             'user_xprivileges', 'client_capability', 'alias_set_id'].includes(name)) {
-            return 'access';
-        }
-        // Preferences
-        if (['default_folder', 'default_group', 'home_docbase', 'user_web_page',
-             'user_delegation', 'user_email'].includes(name)) {
-            return 'preferences';
-        }
-        // System attributes (r_, i_)
-        if (name.startsWith('r_') || name.startsWith('i_')) {
-            return 'system';
-        }
-        return 'other';
-    }
-
-    /**
      * Generate a DQL query for the current user
      */
     private async generateDqlQuery(): Promise<void> {
-        const dql = `SELECT user_name, user_login_name, user_os_name, user_address,
-    default_folder, default_group, description, user_state
-FROM dm_user
-WHERE user_name = '${this.currentUserName}'`;
-
-        // Open in new editor
         const doc = await vscode.workspace.openTextDocument({
-            content: dql,
+            content: buildUserQuery(this.currentUserName),
             language: 'dql'
         });
         await vscode.window.showTextDocument(doc);
@@ -266,8 +232,8 @@ WHERE user_name = '${this.currentUserName}'`;
         </head>
         <body>
             <div class="error">
-                <div class="error-title">Failed to load user: ${this.escapeHtml(userName)}</div>
-                <div>${this.escapeHtml(error)}</div>
+                <div class="error-title">Failed to load user: ${escapeHtml(userName)}</div>
+                <div>${escapeHtml(error)}</div>
                 <button onclick="refresh()">Retry</button>
             </div>
             <script>
@@ -284,24 +250,7 @@ WHERE user_name = '${this.currentUserName}'`;
      * Generate content HTML with user details and grouped attributes
      */
     private getContentHtml(user: UserInfo): string {
-        // Group attributes by category
-        const groups: Record<AttributeGroup, UserAttribute[]> = {
-            identity: [],
-            access: [],
-            preferences: [],
-            system: [],
-            other: []
-        };
-
-        for (const attr of user.attributes) {
-            const group = this.categorizeAttribute(attr.name);
-            groups[group].push(attr);
-        }
-
-        // Sort attributes within each group
-        for (const group of Object.values(groups)) {
-            group.sort((a, b) => a.name.localeCompare(b.name));
-        }
+        const groups = groupUserAttributes(user.attributes);
 
         const groupLabels: Record<AttributeGroup, string> = {
             identity: 'Identity',
@@ -506,12 +455,12 @@ WHERE user_name = '${this.currentUserName}'`;
             <div class="header">
                 <div class="header-title">
                     <span class="icon">&#128100;</span>
-                    ${this.escapeHtml(user.userName)}
+                    ${escapeHtml(user.userName)}
                 </div>
                 <div class="header-info">
-                    Login: ${this.escapeHtml(user.userLoginName || 'N/A')} |
+                    Login: ${escapeHtml(user.userLoginName || 'N/A')} |
                     State: ${user.userState === 0 ? 'Active' : 'Inactive'} |
-                    Source: ${this.escapeHtml(user.userSource || 'N/A')} |
+                    Source: ${escapeHtml(user.userSource || 'N/A')} |
                     Groups: ${this.userGroups.length}
                 </div>
                 <div class="header-actions">
@@ -534,7 +483,7 @@ WHERE user_name = '${this.currentUserName}'`;
                     </div>
                     <div class="group-content" id="group-memberof">
                         ${this.userGroups.length > 0
-                            ? `<div class="group-tags">${this.userGroups.map(g => `<span class="group-tag" onclick="openGroup('${this.escapeHtml(g)}')">${this.escapeHtml(g)}</span>`).join('')}</div>`
+                            ? `<div class="group-tags">${this.userGroups.map(g => `<span class="group-tag" onclick="openGroup('${escapeHtml(g)}')">${escapeHtml(g)}</span>`).join('')}</div>`
                             : '<div class="no-groups">User is not a member of any groups</div>'
                         }
                     </div>
@@ -561,7 +510,7 @@ WHERE user_name = '${this.currentUserName}'`;
             </div>
             <script>
                 const vscode = acquireVsCodeApi();
-                const userName = '${this.escapeHtml(user.userName)}';
+                const userName = '${escapeHtml(user.userName)}';
 
                 function refresh() {
                     vscode.postMessage({ command: 'refresh' });
@@ -643,44 +592,19 @@ WHERE user_name = '${this.currentUserName}'`;
     }
 
     /**
-     * Check if a value looks like an object ID (16 hex chars)
-     */
-    private isObjectId(value: string): boolean {
-        return /^[0-9a-f]{16}$/i.test(value);
-    }
-
-    /**
      * Render a single attribute row
      */
     private renderAttribute(attr: UserAttribute): string {
-        const valueStr = attr.value === null || attr.value === undefined
-            ? 'null'
-            : String(attr.value);
-        const isNull = attr.value === null || attr.value === undefined || valueStr === '';
-
-        // Check if this is an object ID field that should be clickable
-        const isObjectIdField = !isNull && this.isObjectId(valueStr);
+        const { text: valueStr, isEmpty: isNull, isObjectId: isObjectIdField } = describeAttributeValue(attr.value);
         const valueClass = isNull ? ' null' : (isObjectIdField ? ' object-id' : '');
         const valueOnClick = isObjectIdField
-            ? `dumpObject('${this.escapeHtml(valueStr)}')`
-            : `copyValue('${this.escapeHtml(valueStr)}')`;
+            ? `dumpObject('${escapeHtml(valueStr)}')`
+            : `copyValue('${escapeHtml(valueStr)}')`;
 
-        return `<div class="attribute" data-name="${this.escapeHtml(attr.name)}" data-value="${this.escapeHtml(valueStr)}">
-            <div class="attr-name" title="${this.escapeHtml(attr.name)}" onclick="copyValue('${this.escapeHtml(attr.name)}')">${this.escapeHtml(attr.name)}</div>
-            <div class="attr-value${valueClass}" onclick="${valueOnClick}">${isNull ? '(empty)' : this.escapeHtml(valueStr)}</div>
+        return `<div class="attribute" data-name="${escapeHtml(attr.name)}" data-value="${escapeHtml(valueStr)}">
+            <div class="attr-name" title="${escapeHtml(attr.name)}" onclick="copyValue('${escapeHtml(attr.name)}')">${escapeHtml(attr.name)}</div>
+            <div class="attr-value${valueClass}" onclick="${valueOnClick}">${isNull ? '(empty)' : escapeHtml(valueStr)}</div>
         </div>`;
-    }
-
-    /**
-     * Escape HTML special characters
-     */
-    private escapeHtml(text: string): string {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
     }
 
     public dispose(): void {

@@ -1,11 +1,14 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
 import { BridgeAttributeValue } from './bridgeTypes';
-
-/**
- * Attribute grouping categories similar to Repoint's PropertiesView
- */
-export type AttributeGroup = 'standard' | 'custom' | 'system' | 'application' | 'internal';
+import { escapeHtml, isObjectId } from './htmlUtils';
+import { NavigationHistory } from './navigationHistory';
+import {
+    ObjectAttributeGroup as AttributeGroup,
+    categorizeObjectAttribute,
+    formatAttributeValue,
+    groupObjectAttributes
+} from './attributeGroups';
 
 /**
  * Attribute information with value
@@ -52,9 +55,7 @@ export class ObjectDumpPanel {
     private readonly connectionManager: ConnectionManager;
     private disposables: vscode.Disposable[] = [];
 
-    // Navigation history
-    private navigationHistory: NavigationEntry[] = [];
-    private historyIndex: number = -1;
+    private history = new NavigationHistory<NavigationEntry>();
 
     public static async createOrShow(
         extensionUri: vscode.Uri,
@@ -161,20 +162,12 @@ export class ObjectDumpPanel {
             titleParts.push(dump.typeName);
             this.panel.title = titleParts.join(' ');
 
-            // Update navigation history
             if (addToHistory) {
-                // Remove any forward history when navigating to a new object
-                if (this.historyIndex < this.navigationHistory.length - 1) {
-                    this.navigationHistory = this.navigationHistory.slice(0, this.historyIndex + 1);
-                }
-
-                // Add new entry to history
-                this.navigationHistory.push({
+                this.history.add({
                     objectId: dump.objectId,
                     objectName: dump.objectName,
                     typeName: dump.typeName
                 });
-                this.historyIndex = this.navigationHistory.length - 1;
             }
 
             this.panel.webview.html = this.getContentHtml(dump);
@@ -188,9 +181,8 @@ export class ObjectDumpPanel {
      * Navigate back in history
      */
     private async goBack(): Promise<void> {
-        if (this.historyIndex > 0) {
-            this.historyIndex--;
-            const entry = this.navigationHistory[this.historyIndex];
+        const entry = this.history.back();
+        if (entry) {
             await this.loadObject(entry.objectId, false);
         }
     }
@@ -199,25 +191,10 @@ export class ObjectDumpPanel {
      * Navigate forward in history
      */
     private async goForward(): Promise<void> {
-        if (this.historyIndex < this.navigationHistory.length - 1) {
-            this.historyIndex++;
-            const entry = this.navigationHistory[this.historyIndex];
+        const entry = this.history.forward();
+        if (entry) {
             await this.loadObject(entry.objectId, false);
         }
-    }
-
-    /**
-     * Check if back navigation is available
-     */
-    private canGoBack(): boolean {
-        return this.historyIndex > 0;
-    }
-
-    /**
-     * Check if forward navigation is available
-     */
-    private canGoForward(): boolean {
-        return this.historyIndex < this.navigationHistory.length - 1;
     }
 
     /**
@@ -252,7 +229,7 @@ export class ObjectDumpPanel {
 
         for (const [name, attrData] of Object.entries(objectInfo.attributes)) {
             const bridgeAttr = attrData as BridgeAttributeValue;
-            const group = this.categorizeAttribute(name, -1);
+            const group = categorizeObjectAttribute(name);
 
             attributes.push({
                 name,
@@ -348,7 +325,7 @@ export class ObjectDumpPanel {
                 lastAttrName = name;
 
                 // Determine attribute group based on Repoint-style categorization
-                const group = this.categorizeAttribute(name, customStartPos);
+                const group = categorizeObjectAttribute(name);
 
                 // Check if we already have this repeating attribute
                 if (isRepeating) {
@@ -431,29 +408,6 @@ export class ObjectDumpPanel {
         }
 
         return attributes;
-    }
-
-    /**
-     * Categorize attribute based on Repoint-style grouping
-     * - System: r_ prefix
-     * - Internal: i_ prefix
-     * - Application: a_ prefix
-     * - Custom: determined by start_pos from type definition
-     * - Standard: everything else
-     */
-    private categorizeAttribute(name: string, _customStartPos: number): AttributeGroup {
-        if (name.startsWith('r_')) {
-            return 'system';
-        }
-        if (name.startsWith('i_')) {
-            return 'internal';
-        }
-        if (name.startsWith('a_')) {
-            return 'application';
-        }
-        // Custom vs Standard determined by position in type hierarchy
-        // Will be refined in parseDump after we know start_pos
-        return 'standard';
     }
 
     /**
@@ -545,8 +499,8 @@ export class ObjectDumpPanel {
         </head>
         <body>
             <div class="error">
-                <div class="error-title">Failed to load object: ${this.escapeHtml(objectId)}</div>
-                <div>${this.escapeHtml(error)}</div>
+                <div class="error-title">Failed to load object: ${escapeHtml(objectId)}</div>
+                <div>${escapeHtml(error)}</div>
                 <button onclick="refresh()">Retry</button>
             </div>
             <script>
@@ -563,23 +517,7 @@ export class ObjectDumpPanel {
      * Generate content HTML with grouped attributes
      */
     private getContentHtml(dump: ObjectDump): string {
-        // Group attributes
-        const groups: Record<AttributeGroup, AttributeInfo[]> = {
-            custom: [],
-            standard: [],
-            system: [],
-            application: [],
-            internal: []
-        };
-
-        for (const attr of dump.attributes) {
-            groups[attr.group].push(attr);
-        }
-
-        // Sort attributes within each group
-        for (const group of Object.values(groups)) {
-            group.sort((a, b) => a.name.localeCompare(b.name));
-        }
+        const groups = groupObjectAttributes(dump.attributes);
 
         const groupLabels: Record<AttributeGroup, string> = {
             custom: 'Custom Attributes',
@@ -785,17 +723,17 @@ export class ObjectDumpPanel {
         </head>
         <body>
             <div class="header">
-                <div class="header-title">${this.escapeHtml(dump.objectName)}</div>
+                <div class="header-title">${escapeHtml(dump.objectName)}</div>
                 <div class="header-info">
-                    Type: ${this.escapeHtml(dump.typeName)} |
+                    Type: ${escapeHtml(dump.typeName)} |
                     ID: <span class="object-id" style="color: var(--vscode-textLink-foreground);">${dump.objectId}</span> |
                     ${dump.attributes.length} attributes |
                     Loaded in ${dump.fetchTime}ms
                 </div>
                 <div class="header-actions">
                     <span class="nav-buttons">
-                        <button onclick="goBack()" ${this.canGoBack() ? '' : 'disabled'} title="Go back">&#9664;</button>
-                        <button onclick="goForward()" ${this.canGoForward() ? '' : 'disabled'} title="Go forward">&#9654;</button>
+                        <button onclick="goBack()" ${this.history.canGoBack() ? '' : 'disabled'} title="Go back">&#9664;</button>
+                        <button onclick="goForward()" ${this.history.canGoForward() ? '' : 'disabled'} title="Go forward">&#9654;</button>
                     </span>
                     <button onclick="refresh()">Refresh</button>
                     <button onclick="copyObjectId()">Copy Object ID</button>
@@ -913,72 +851,37 @@ export class ObjectDumpPanel {
      * Render a single attribute row
      */
     private renderAttribute(attr: AttributeInfo): string {
-        const valueStr = this.formatAttributeValue(attr.value, attr.isRepeating);
-        const isObjectId = this.isObjectId(attr.value);
-        const valueClass = attr.value === null ? 'null' : (isObjectId ? 'object-id' : '');
+        const valueStr = formatAttributeValue(attr.value, attr.isRepeating);
+        const valueIsObjId = isObjectId(attr.value);
+        const valueClass = attr.value === null ? 'null' : (valueIsObjId ? 'object-id' : '');
 
         let valueHtml: string;
         if (attr.isRepeating && Array.isArray(attr.value)) {
             valueHtml = `<div class="repeating-values">
                 ${(attr.value as unknown[]).map((v, i) => {
-                    const itemIsObjId = this.isObjectId(v);
+                    const itemIsObjId = isObjectId(v);
                     const itemClass = v === null ? 'null' : (itemIsObjId ? 'object-id' : '');
                     const onclick = itemIsObjId
-                        ? `dumpObject('${this.escapeHtml(String(v))}')`
-                        : `copyValue('${this.escapeHtml(String(v ?? ''))}')`;
+                        ? `dumpObject('${escapeHtml(String(v))}')`
+                        : `copyValue('${escapeHtml(String(v ?? ''))}')`;
                     return `<div class="repeating-value">
                         <span class="repeating-index">[${i}]</span>
-                        <span class="${itemClass}" onclick="${onclick}">${this.escapeHtml(String(v ?? 'NULL'))}</span>
+                        <span class="${itemClass}" onclick="${onclick}">${escapeHtml(String(v ?? 'NULL'))}</span>
                     </div>`;
                 }).join('')}
             </div>`;
         } else {
-            const onclick = isObjectId
-                ? `dumpObject('${this.escapeHtml(String(attr.value))}')`
-                : `copyValue('${this.escapeHtml(String(attr.value ?? ''))}')`;
-            valueHtml = `<span class="${valueClass}" onclick="${onclick}">${this.escapeHtml(valueStr)}</span>`;
+            const onclick = valueIsObjId
+                ? `dumpObject('${escapeHtml(String(attr.value))}')`
+                : `copyValue('${escapeHtml(String(attr.value ?? ''))}')`;
+            valueHtml = `<span class="${valueClass}" onclick="${onclick}">${escapeHtml(valueStr)}</span>`;
         }
 
-        return `<div class="attribute" data-name="${this.escapeHtml(attr.name)}" data-value="${this.escapeHtml(valueStr)}">
-            <div class="attr-name" title="${this.escapeHtml(attr.name)}">${this.escapeHtml(attr.name)}</div>
-            <div class="attr-type">${this.escapeHtml(attr.type)}</div>
+        return `<div class="attribute" data-name="${escapeHtml(attr.name)}" data-value="${escapeHtml(valueStr)}">
+            <div class="attr-name" title="${escapeHtml(attr.name)}">${escapeHtml(attr.name)}</div>
+            <div class="attr-type">${escapeHtml(attr.type)}</div>
             <div class="attr-value">${valueHtml}</div>
         </div>`;
-    }
-
-    /**
-     * Format attribute value for display
-     */
-    private formatAttributeValue(value: unknown, isRepeating: boolean): string {
-        if (value === null || value === undefined) {
-            return 'NULL';
-        }
-        if (isRepeating && Array.isArray(value)) {
-            return value.map(v => v === null ? 'NULL' : String(v)).join(', ');
-        }
-        return String(value);
-    }
-
-    /**
-     * Check if value is an object ID
-     */
-    private isObjectId(value: unknown): boolean {
-        if (typeof value !== 'string') {
-            return false;
-        }
-        return /^[0-9a-f]{16}$/i.test(value);
-    }
-
-    /**
-     * Escape HTML special characters
-     */
-    private escapeHtml(text: string): string {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
     }
 
     public dispose(): void {

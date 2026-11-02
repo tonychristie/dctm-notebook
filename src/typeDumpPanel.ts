@@ -1,10 +1,13 @@
 import * as vscode from 'vscode';
 import { TypeCache, TypeInfo, TypeAttribute } from './typeCache';
-
-/**
- * Attribute grouping categories (same as ObjectDumpPanel)
- */
-type AttributeGroup = 'custom' | 'standard' | 'system' | 'application' | 'internal';
+import { escapeHtml } from './htmlUtils';
+import { buildTypeQuery } from './dqlQueries';
+import {
+    TypeAttributeGroup as AttributeGroup,
+    categorizeTypeAttribute,
+    formatTypeDisplay,
+    groupTypeAttributes
+} from './attributeGroups';
 
 /**
  * WebviewPanel for displaying Documentum type details with grouped attributes
@@ -129,22 +132,6 @@ export class TypeDumpPanel {
     }
 
     /**
-     * Categorize attribute based on prefix (same logic as ObjectDumpPanel)
-     */
-    private categorizeAttribute(name: string): AttributeGroup {
-        if (name.startsWith('r_')) {
-            return 'system';
-        }
-        if (name.startsWith('i_')) {
-            return 'internal';
-        }
-        if (name.startsWith('a_')) {
-            return 'application';
-        }
-        return 'standard';
-    }
-
-    /**
      * Generate a DQL query for the current type
      */
     private async generateDqlQuery(): Promise<void> {
@@ -153,21 +140,8 @@ export class TypeDumpPanel {
             return;
         }
 
-        // Get type-specific attributes (not inherited)
-        const attrs = type.attributes
-            .filter(a => !a.isInherited)
-            .slice(0, 5)
-            .map(a => a.name);
-
-        if (attrs.length === 0) {
-            attrs.push('r_object_id', 'object_name');
-        }
-
-        const dql = `SELECT ${attrs.join(', ')}\nFROM ${type.name}\nWHERE 1=1`;
-
-        // Open in new editor
         const doc = await vscode.workspace.openTextDocument({
-            content: dql,
+            content: buildTypeQuery(type),
             language: 'dql'
         });
         await vscode.window.showTextDocument(doc);
@@ -262,8 +236,8 @@ export class TypeDumpPanel {
         </head>
         <body>
             <div class="error">
-                <div class="error-title">Failed to load type: ${this.escapeHtml(typeName)}</div>
-                <div>${this.escapeHtml(error)}</div>
+                <div class="error-title">Failed to load type: ${escapeHtml(typeName)}</div>
+                <div>${escapeHtml(error)}</div>
                 <button onclick="refresh()">Retry</button>
             </div>
             <script>
@@ -280,31 +254,7 @@ export class TypeDumpPanel {
      * Generate content HTML with type details and grouped attributes
      */
     private getContentHtml(type: TypeInfo): string {
-        // Group attributes by category (like ObjectDumpPanel)
-        const groups: Record<AttributeGroup, TypeAttribute[]> = {
-            custom: [],
-            standard: [],
-            system: [],
-            application: [],
-            internal: []
-        };
-
-        // Separate type-specific (custom) from inherited standard attributes
-        for (const attr of type.attributes) {
-            if (!attr.isInherited) {
-                // Type-specific attributes go to "custom" group
-                groups.custom.push(attr);
-            } else {
-                // Inherited attributes go by prefix
-                const group = this.categorizeAttribute(attr.name);
-                groups[group].push(attr);
-            }
-        }
-
-        // Sort attributes within each group
-        for (const group of Object.values(groups)) {
-            group.sort((a, b) => a.name.localeCompare(b.name));
-        }
+        const groups = groupTypeAttributes(type.attributes);
 
         const groupLabels: Record<AttributeGroup, string> = {
             custom: 'Type-Specific Attributes',
@@ -331,7 +281,7 @@ export class TypeDumpPanel {
             length: a.length,
             isRepeating: a.isRepeating,
             isInherited: a.isInherited,
-            group: a.isInherited ? this.categorizeAttribute(a.name) : 'custom'
+            group: categorizeTypeAttribute(a)
         })));
 
         return `<!DOCTYPE html>
@@ -551,10 +501,10 @@ export class TypeDumpPanel {
             <div class="header">
                 <div class="header-title">
                     <span class="icon">&#128450;</span>
-                    ${this.escapeHtml(type.name)}
+                    ${escapeHtml(type.name)}
                 </div>
                 <div class="header-info">
-                    ${type.superType ? `Super Type: <a onclick="openType('${this.escapeHtml(type.superType)}')">${this.escapeHtml(type.superType)}</a> | ` : ''}
+                    ${type.superType ? `Super Type: <a onclick="openType('${escapeHtml(type.superType)}')">${escapeHtml(type.superType)}</a> | ` : ''}
                     Attributes: ${ownAttrs} own, ${inheritedAttrs} inherited (${totalAttrs} total) |
                     Child Types: ${childTypes.length}
                 </div>
@@ -583,7 +533,7 @@ export class TypeDumpPanel {
                     </div>
                     <div class="group-content" id="group-children">
                         <div class="child-types">
-                            ${childTypes.map(ct => `<span class="child-type" onclick="openType('${this.escapeHtml(ct)}')">${this.escapeHtml(ct)}</span>`).join('')}
+                            ${childTypes.map(ct => `<span class="child-type" onclick="openType('${escapeHtml(ct)}')">${escapeHtml(ct)}</span>`).join('')}
                         </div>
                     </div>
                 </div>
@@ -611,7 +561,7 @@ export class TypeDumpPanel {
             </div>
             <script>
                 const vscode = acquireVsCodeApi();
-                const typeName = '${this.escapeHtml(type.name)}';
+                const typeName = '${escapeHtml(type.name)}';
                 const allAttributes = ${attributeData};
                 let showInherited = true;
                 let currentFilter = '';
@@ -715,27 +665,15 @@ export class TypeDumpPanel {
      * Render a single attribute row
      */
     private renderAttribute(attr: TypeAttribute, isInherited: boolean): string {
-        const typeDisplay = attr.length > 0 ? `${attr.dataType}(${attr.length})` : attr.dataType;
+        const typeDisplay = formatTypeDisplay(attr);
 
-        return `<div class="attribute" data-name="${this.escapeHtml(attr.name)}" data-type="${this.escapeHtml(attr.dataType)}" data-inherited="${isInherited}">
-            <div class="attr-name" title="${this.escapeHtml(attr.name)}" onclick="copyValue('${this.escapeHtml(attr.name)}')">${this.escapeHtml(attr.name)}</div>
-            <div class="attr-type">${this.escapeHtml(typeDisplay)}</div>
+        return `<div class="attribute" data-name="${escapeHtml(attr.name)}" data-type="${escapeHtml(attr.dataType)}" data-inherited="${isInherited}">
+            <div class="attr-name" title="${escapeHtml(attr.name)}" onclick="copyValue('${escapeHtml(attr.name)}')">${escapeHtml(attr.name)}</div>
+            <div class="attr-type">${escapeHtml(typeDisplay)}</div>
             <div class="attr-details">
                 ${attr.isRepeating ? '<span class="attr-badge repeating">repeating</span>' : ''}
             </div>
         </div>`;
-    }
-
-    /**
-     * Escape HTML special characters
-     */
-    private escapeHtml(text: string): string {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
     }
 
     public dispose(): void {

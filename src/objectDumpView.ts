@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
 import { ObjectDumpPanel } from './objectDumpPanel';
+import { isObjectId } from './htmlUtils';
+import { addToRecent } from './navigationHistory';
 
 /**
  * WebviewViewProvider for the Object Dump sidebar panel.
@@ -70,8 +72,7 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        // Validate it looks like an object ID (16 hex chars)
-        if (!/^[0-9a-f]{16}$/i.test(trimmedId)) {
+        if (!isObjectId(trimmedId)) {
             vscode.window.showWarningMessage('Invalid object ID format. Expected 16 hexadecimal characters.');
             return;
         }
@@ -100,17 +101,7 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
      * Add an object ID to the history list
      */
     private addToHistory(objectId: string): void {
-        // Remove if already in history
-        const existingIndex = this.dumpHistory.indexOf(objectId);
-        if (existingIndex !== -1) {
-            this.dumpHistory.splice(existingIndex, 1);
-        }
-        // Add to front
-        this.dumpHistory.unshift(objectId);
-        // Trim to max size
-        if (this.dumpHistory.length > this.maxHistorySize) {
-            this.dumpHistory = this.dumpHistory.slice(0, this.maxHistorySize);
-        }
+        this.dumpHistory = addToRecent(this.dumpHistory, objectId, this.maxHistorySize);
         this.updateHistory();
     }
 

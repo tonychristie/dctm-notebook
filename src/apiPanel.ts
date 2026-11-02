@@ -17,7 +17,7 @@ interface WebviewMessage {
 /**
  * Extract objectId from various argument types (string, ObjectBrowserItem, or node data)
  */
-function extractObjectId(arg: unknown): string | undefined {
+export function extractObjectId(arg: unknown): string | undefined {
     if (typeof arg === 'string') {
         return arg;
     }

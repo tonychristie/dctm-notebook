@@ -1,10 +1,8 @@
 import * as vscode from 'vscode';
 import { GroupCache, GroupInfo, GroupAttribute } from './groupCache';
-
-/**
- * Attribute grouping categories
- */
-type AttributeGroup = 'identity' | 'access' | 'members' | 'system' | 'other';
+import { escapeHtml } from './htmlUtils';
+import { buildGroupQuery } from './dqlQueries';
+import { GroupAttributeGroup as AttributeGroup, describeAttributeValue, groupGroupAttributes } from './attributeGroups';
 
 /**
  * WebviewPanel for displaying Documentum group details with grouped attributes
@@ -138,42 +136,11 @@ export class GroupDumpPanel {
     }
 
     /**
-     * Categorize attribute based on name
-     */
-    private categorizeAttribute(name: string): AttributeGroup {
-        // Identity-related
-        if (['group_name', 'group_address', 'group_source', 'description',
-             'group_class', 'group_admin', 'owner_name', 'group_global_unique_id'].includes(name)) {
-            return 'identity';
-        }
-        // Access-related
-        if (['acl_domain', 'acl_name', 'alias_set_id', 'is_private',
-             'is_protected', 'is_dynamic', 'globally_managed'].includes(name)) {
-            return 'access';
-        }
-        // Members (handled separately but categorized here)
-        if (['users_names', 'groups_names'].includes(name)) {
-            return 'members';
-        }
-        // System attributes (r_, i_)
-        if (name.startsWith('r_') || name.startsWith('i_')) {
-            return 'system';
-        }
-        return 'other';
-    }
-
-    /**
      * Generate a DQL query for the current group
      */
     private async generateDqlQuery(): Promise<void> {
-        const dql = `SELECT group_name, group_address, group_class, owner_name,
-    description, users_names, groups_names, is_private, is_dynamic
-FROM dm_group
-WHERE group_name = '${this.currentGroupName}'`;
-
-        // Open in new editor
         const doc = await vscode.workspace.openTextDocument({
-            content: dql,
+            content: buildGroupQuery(this.currentGroupName),
             language: 'dql'
         });
         await vscode.window.showTextDocument(doc);
@@ -268,8 +235,8 @@ WHERE group_name = '${this.currentGroupName}'`;
         </head>
         <body>
             <div class="error">
-                <div class="error-title">Failed to load group: ${this.escapeHtml(groupName)}</div>
-                <div>${this.escapeHtml(error)}</div>
+                <div class="error-title">Failed to load group: ${escapeHtml(groupName)}</div>
+                <div>${escapeHtml(error)}</div>
                 <button onclick="refresh()">Retry</button>
             </div>
             <script>
@@ -286,26 +253,7 @@ WHERE group_name = '${this.currentGroupName}'`;
      * Generate content HTML with group details and grouped attributes
      */
     private getContentHtml(group: GroupInfo): string {
-        // Group attributes by category (excluding members which are shown separately)
-        const groups: Record<AttributeGroup, GroupAttribute[]> = {
-            identity: [],
-            access: [],
-            members: [],
-            system: [],
-            other: []
-        };
-
-        for (const attr of group.attributes) {
-            const attrGroup = this.categorizeAttribute(attr.name);
-            if (attrGroup !== 'members') {
-                groups[attrGroup].push(attr);
-            }
-        }
-
-        // Sort attributes within each group
-        for (const attrGroup of Object.values(groups)) {
-            attrGroup.sort((a, b) => a.name.localeCompare(b.name));
-        }
+        const groups = groupGroupAttributes(group.attributes);
 
         const groupLabels: Record<AttributeGroup, string> = {
             identity: 'Identity',
@@ -546,7 +494,7 @@ WHERE group_name = '${this.currentGroupName}'`;
             <div class="header">
                 <div class="header-title">
                     <span class="icon">&#128101;</span>
-                    ${this.escapeHtml(group.groupName)}
+                    ${escapeHtml(group.groupName)}
                 </div>
                 <div class="header-badges">
                     ${group.isPrivate ? '<span class="badge private">Private</span>' : ''}
@@ -554,8 +502,8 @@ WHERE group_name = '${this.currentGroupName}'`;
                     <span class="badge">${group.groupClass || 'group'}</span>
                 </div>
                 <div class="header-info">
-                    Owner: ${this.escapeHtml(group.owner || 'N/A')} |
-                    Admin: ${this.escapeHtml(group.groupAdmin || 'N/A')} |
+                    Owner: ${escapeHtml(group.owner || 'N/A')} |
+                    Admin: ${escapeHtml(group.groupAdmin || 'N/A')} |
                     Members: ${group.members.length} users, ${group.groupMembers.length} groups |
                     Parent Groups: ${this.parentGroups.length}
                 </div>
@@ -581,7 +529,7 @@ WHERE group_name = '${this.currentGroupName}'`;
                     </div>
                     <div class="group-content" id="group-parents">
                         <div class="member-tags">
-                            ${this.parentGroups.map(g => `<span class="member-tag group" onclick="openGroup('${this.escapeHtml(g)}')">${this.escapeHtml(g)}</span>`).join('')}
+                            ${this.parentGroups.map(g => `<span class="member-tag group" onclick="openGroup('${escapeHtml(g)}')">${escapeHtml(g)}</span>`).join('')}
                         </div>
                     </div>
                 </div>
@@ -599,13 +547,13 @@ WHERE group_name = '${this.currentGroupName}'`;
                         ${group.members.length > 0 ? `
                             <div class="subsection-label">Users (${group.members.length})</div>
                             <div class="member-tags">
-                                ${group.members.map(u => `<span class="member-tag user" onclick="openUser('${this.escapeHtml(u)}')">${this.escapeHtml(u)}</span>`).join('')}
+                                ${group.members.map(u => `<span class="member-tag user" onclick="openUser('${escapeHtml(u)}')">${escapeHtml(u)}</span>`).join('')}
                             </div>
                         ` : ''}
                         ${group.groupMembers.length > 0 ? `
                             <div class="subsection-label">Groups (${group.groupMembers.length})</div>
                             <div class="member-tags">
-                                ${group.groupMembers.map(g => `<span class="member-tag group" onclick="openGroup('${this.escapeHtml(g)}')">${this.escapeHtml(g)}</span>`).join('')}
+                                ${group.groupMembers.map(g => `<span class="member-tag group" onclick="openGroup('${escapeHtml(g)}')">${escapeHtml(g)}</span>`).join('')}
                             </div>
                         ` : ''}
                     </div>
@@ -632,7 +580,7 @@ WHERE group_name = '${this.currentGroupName}'`;
             </div>
             <script>
                 const vscode = acquireVsCodeApi();
-                const groupName = '${this.escapeHtml(group.groupName)}';
+                const groupName = '${escapeHtml(group.groupName)}';
 
                 function refresh() {
                     vscode.postMessage({ command: 'refresh' });
@@ -719,44 +667,19 @@ WHERE group_name = '${this.currentGroupName}'`;
     }
 
     /**
-     * Check if a value looks like an object ID (16 hex chars)
-     */
-    private isObjectId(value: string): boolean {
-        return /^[0-9a-f]{16}$/i.test(value);
-    }
-
-    /**
      * Render a single attribute row
      */
     private renderAttribute(attr: GroupAttribute): string {
-        const valueStr = attr.value === null || attr.value === undefined
-            ? 'null'
-            : String(attr.value);
-        const isNull = attr.value === null || attr.value === undefined || valueStr === '';
-
-        // Check if this is an object ID field that should be clickable
-        const isObjectIdField = !isNull && this.isObjectId(valueStr);
+        const { text: valueStr, isEmpty: isNull, isObjectId: isObjectIdField } = describeAttributeValue(attr.value);
         const valueClass = isNull ? ' null' : (isObjectIdField ? ' object-id' : '');
         const valueOnClick = isObjectIdField
-            ? `dumpObject('${this.escapeHtml(valueStr)}')`
-            : `copyValue('${this.escapeHtml(valueStr)}')`;
+            ? `dumpObject('${escapeHtml(valueStr)}')`
+            : `copyValue('${escapeHtml(valueStr)}')`;
 
-        return `<div class="attribute" data-name="${this.escapeHtml(attr.name)}" data-value="${this.escapeHtml(valueStr)}">
-            <div class="attr-name" title="${this.escapeHtml(attr.name)}" onclick="copyValue('${this.escapeHtml(attr.name)}')">${this.escapeHtml(attr.name)}</div>
-            <div class="attr-value${valueClass}" onclick="${valueOnClick}">${isNull ? '(empty)' : this.escapeHtml(valueStr)}</div>
+        return `<div class="attribute" data-name="${escapeHtml(attr.name)}" data-value="${escapeHtml(valueStr)}">
+            <div class="attr-name" title="${escapeHtml(attr.name)}" onclick="copyValue('${escapeHtml(attr.name)}')">${escapeHtml(attr.name)}</div>
+            <div class="attr-value${valueClass}" onclick="${valueOnClick}">${isNull ? '(empty)' : escapeHtml(valueStr)}</div>
         </div>`;
-    }
-
-    /**
-     * Escape HTML special characters
-     */
-    private escapeHtml(text: string): string {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
     }
 
     public dispose(): void {

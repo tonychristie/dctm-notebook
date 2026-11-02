@@ -707,7 +707,7 @@
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "package": "npm run check-types && node esbuild.js --production",
     "check-types": "tsc --noEmit && tsc --noEmit -p tsconfig.webviews.json",
-    "compile-tests": "tsc -p . --outDir out-test",
+    "compile-tests": "node -e \"require('fs').rmSync('out-test', { recursive: true, force: true })\" && tsc -p . --outDir out-test",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "vscode-test"

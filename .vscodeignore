@@ -12,7 +12,10 @@ vsc-extension-quickstart.md
 !data/**
 node_modules/**
 .claude/
-out/test/**
+out/**
+!out/extension.js
+!out/notebook/renderer.js
+out-test/**
 esbuild.js
 tsconfig.renderer.json
 .vscode-test.mjs

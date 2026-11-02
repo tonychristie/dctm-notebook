@@ -1,7 +1,7 @@
 import { defineConfig } from '@vscode/test-cli';
 
 export default defineConfig({
-    files: 'out/test/suite/**/*.test.js',
+    files: 'out-test/test/suite/**/*.test.js',
     version: 'stable',
     mocha: {
         ui: 'tdd',

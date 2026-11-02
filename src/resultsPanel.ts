@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { DqlResult } from './dqlExecutor';
 import { escapeHtml } from './htmlUtils';
+import { exportToCsv } from './notebook/exporter';
 import { webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml';
 
 export class ResultsPanel {
@@ -10,12 +11,31 @@ export class ResultsPanel {
     private readonly panel: vscode.WebviewPanel;
     private readonly extensionUri: vscode.Uri;
     private disposables: vscode.Disposable[] = [];
+    private results: DqlResult;
 
-    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
+    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, results: DqlResult) {
         this.panel = panel;
         this.extensionUri = extensionUri;
+        this.results = results;
 
         this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
+
+        this.panel.webview.onDidReceiveMessage(
+            async (message) => {
+                switch (message.command) {
+                    case 'exportCsv':
+                        try {
+                            await exportToCsv(this.results.columns, this.results.rows);
+                        } catch (error) {
+                            const errorMsg = error instanceof Error ? error.message : String(error);
+                            vscode.window.showErrorMessage(`Export failed: ${errorMsg}`);
+                        }
+                        break;
+                }
+            },
+            null,
+            this.disposables
+        );
     }
 
     public static createOrShow(extensionUri: vscode.Uri, results: DqlResult): void {
@@ -38,11 +58,12 @@ export class ResultsPanel {
             }
         );
 
-        ResultsPanel.currentPanel = new ResultsPanel(panel, extensionUri);
+        ResultsPanel.currentPanel = new ResultsPanel(panel, extensionUri, results);
         ResultsPanel.currentPanel.update(results);
     }
 
     private update(results: DqlResult): void {
+        this.results = results;
         this.panel.title = `DQL Results (${results.rowCount} rows)`;
         this.panel.webview.html = this.getHtmlForWebview(results);
     }

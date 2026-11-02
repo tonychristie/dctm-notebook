@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { isDateValue, isDateColumn } from '../../notebook/exporter';
+import { isDateValue, isDateColumn, toCsv } from '../../notebook/exporter';
 
 suite('Exporter Test Suite', () => {
 
@@ -247,6 +247,41 @@ suite('Exporter Test Suite', () => {
                 ];
                 assert.strictEqual(isDateColumn('r_object_id', rows), false);
             });
+        });
+    });
+
+    suite('toCsv', () => {
+        test('writes a header row and one row per result row in column order', () => {
+            const rows = [
+                { object_name: 'a', r_object_id: '0900000000000001' },
+                { object_name: 'b', r_object_id: '0900000000000002' }
+            ];
+            assert.strictEqual(
+                toCsv(['r_object_id', 'object_name'], rows),
+                'r_object_id,object_name\n0900000000000001,a\n0900000000000002,b'
+            );
+        });
+
+        test('writes null and undefined values as empty cells', () => {
+            const rows = [{ a: null, b: undefined, c: 'x' }];
+            assert.strictEqual(toCsv(['a', 'b', 'c'], rows), 'a,b,c\n,,x');
+        });
+
+        test('quotes values with a comma, a double quote or a line break', () => {
+            const rows = [{ a: 'one, two', b: 'Report "draft"', c: 'line1\nline2' }];
+            assert.strictEqual(
+                toCsv(['a', 'b', 'c'], rows),
+                'a,b,c\n"one, two","Report ""draft""","line1\nline2"'
+            );
+        });
+
+        test('quotes a column name with a comma in the header row', () => {
+            assert.strictEqual(toCsv(['name, full', 'id'], []), '"name, full",id');
+        });
+
+        test('writes an empty cell for a column missing from a row', () => {
+            const rows = [{ a: 'x' }];
+            assert.strictEqual(toCsv(['a', 'b'], rows), 'a,b\nx,');
         });
     });
 });

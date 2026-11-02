@@ -37,6 +37,27 @@ export interface DqlQueryResult {
 // Re-export types for consumers
 export type { ObjectInfo, UserInfo, UserDetails, GroupInfo, GroupDetails, TypeSummary, TypeInfo };
 
+export type BridgeClientFactory = (baseUrl: string) => AxiosInstance;
+
+export function createBridgeClient(baseUrl: string): AxiosInstance {
+    const client = axios.create({
+        baseURL: baseUrl,
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        timeout: 30000 // 30 second timeout for DFC operations
+    });
+
+    client.interceptors.response.use(
+        (response) => response,
+        (error: AxiosError) => {
+            throw extractBridgeError(error);
+        }
+    );
+
+    return client;
+}
+
 /**
  * Documentum Bridge client - unified interface to Documentum repositories
  *
@@ -75,7 +96,10 @@ export class DctmBridge {
      */
     private sessionImpls: Map<string, IUnifiedBridge> = new Map();
 
-    constructor(context: vscode.ExtensionContext) {
+    constructor(
+        context: vscode.ExtensionContext,
+        private createClient: BridgeClientFactory = createBridgeClient
+    ) {
         this.context = context;
     }
 
@@ -175,23 +199,7 @@ export class DctmBridge {
             }
         }
 
-        // Create axios client for bridge communication
-        const client = axios.create({
-            baseURL: baseUrl,
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            timeout: 30000 // 30 second timeout for DFC operations
-        });
-
-        // Add response interceptor to transform errors
-        // This extracts meaningful error messages from bridge responses
-        client.interceptors.response.use(
-            (response) => response,
-            (error: AxiosError) => {
-                throw extractBridgeError(error);
-            }
-        );
+        const client = this.createClient(baseUrl);
 
         // Store client in the appropriate slot
         if (connectionType === 'rest') {

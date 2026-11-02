@@ -150,7 +150,7 @@ function showResult(message: ResultMessage): void {
 
         addToHistory(methodName, formatResult(message.result).substring(0, 100), true);
     } else {
-        content.innerHTML = `<span class="error">Error</span>\n\n${message.error}`;
+        content.innerHTML = `<span class="error">Error</span>\n\n${escapeHtml(message.error ?? '')}`;
         timeSpan.textContent = '';
 
         addToHistory(methodName, message.error ?? '', false);
@@ -178,9 +178,9 @@ function renderHistory(): void {
     section.style.display = 'block';
     byId('historyList').innerHTML = executionHistory.map(h =>
         `<div class="history-item">
-            <span class="method ${h.success ? 'success' : 'error'}">${h.method}()</span>
+            <span class="method ${h.success ? 'success' : 'error'}">${escapeHtml(h.method)}()</span>
             <span class="time">${h.timestamp}</span>
-            <div class="info" style="margin-top: 4px;">${h.result}</div>
+            <div class="info" style="margin-top: 4px;">${escapeHtml(h.result)}</div>
         </div>`
     ).join('');
 }

@@ -49,6 +49,13 @@ suite('Webview Logic Test Suite', () => {
             const text = '090000018000123 09000001800012345 x0900000180001234';
             assert.strictEqual(formatResultWithLinks(text), text);
         });
+
+        test('escapes markup around an ID and still wraps the ID', () => {
+            assert.strictEqual(
+                formatResultWithLinks('<b>x</b> 0900000180001234'),
+                '&lt;b&gt;x&lt;/b&gt; <span class="object-id" data-object-id="0900000180001234">0900000180001234</span>'
+            );
+        });
     });
 
     suite('formatResult', () => {

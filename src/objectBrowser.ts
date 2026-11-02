@@ -286,7 +286,7 @@ export function registerObjectBrowser(
             // Handle both ObjectBrowserItem (from context menu) and AnyNodeData (from click command)
             const data = 'data' in item ? item.data : item;
             if ('objectId' in data) {
-                await vscode.commands.executeCommand('dctm.dumpObject', data);
+                await vscode.commands.executeCommand('dctm.dumpObject', data.objectId);
             }
         }
     );

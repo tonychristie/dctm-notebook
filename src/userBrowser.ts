@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { UserCache } from './userCache';
 import { ConnectionManager } from './connectionManager';
 import { UserDumpPanel } from './userDumpPanel';
+import { buildUserQuery } from './dqlQueries';
 
 /**
  * Tree item types for the User Browser
@@ -247,15 +248,8 @@ export function registerUserBrowser(
                 return;
             }
 
-            // Generate a sample DQL query
-            const dql = `SELECT user_name, user_login_name, user_os_name, user_address,
-    default_folder, default_group, description
-FROM dm_user
-WHERE user_name = '${item.userName}'`;
-
-            // Open in new editor
             const doc = await vscode.workspace.openTextDocument({
-                content: dql,
+                content: buildUserQuery(item.userName),
                 language: 'dql'
             });
             await vscode.window.showTextDocument(doc);

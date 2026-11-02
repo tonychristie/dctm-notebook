@@ -55,14 +55,40 @@ async function main() {
     ]
   });
 
+  const webviewsCtx = await esbuild.context({
+    entryPoints: [
+      'src/webviews/apiPanel.ts',
+      'src/webviews/objectDumpPanel.ts',
+      'src/webviews/typeDumpPanel.ts',
+      'src/webviews/userDumpPanel.ts',
+      'src/webviews/groupDumpPanel.ts',
+      'src/webviews/objectDumpView.ts',
+      'src/webviews/resultsPanel.ts'
+    ],
+    bundle: true,
+    format: 'iife',
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: 'browser',
+    outdir: 'out/webviews',
+    logLevel: 'silent',
+    plugins: [
+      esbuildProblemMatcherPlugin
+    ]
+  });
+
   if (watch) {
     await ctx.watch();
     await rendererCtx.watch();
+    await webviewsCtx.watch();
   } else {
     await ctx.rebuild();
     await rendererCtx.rebuild();
+    await webviewsCtx.rebuild();
     await ctx.dispose();
     await rendererCtx.dispose();
+    await webviewsCtx.dispose();
   }
 }
 

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { DctmBridge } from './dctmBridge';
+import { DctmBridge, DfcConnectParams } from './dctmBridge';
 
 export interface DocumentumConnection {
     name: string;
@@ -41,6 +41,27 @@ type NotebookConnectionChangeCallback = (
     username?: string
 ) => void;
 
+function buildConnectParams(
+    connection: DocumentumConnection,
+    username: string,
+    password: string
+): DfcConnectParams {
+    return connection.type === 'rest'
+        ? {
+            endpoint: connection.endpoint,
+            repository: connection.repository,
+            username,
+            password
+        }
+        : {
+            docbroker: connection.docbroker || '',
+            port: connection.port || 1489,
+            repository: connection.repository,
+            username,
+            password
+        };
+}
+
 /**
  * Manages Documentum connections via the DFC Bridge.
  *
@@ -65,9 +86,9 @@ export class ConnectionManager {
      */
     private notebookConnections: Map<string, ActiveConnection> = new Map();
 
-    constructor(context: vscode.ExtensionContext) {
+    constructor(context: vscode.ExtensionContext, dctmBridge: DctmBridge = new DctmBridge(context)) {
         this.context = context;
-        this.dctmBridge = new DctmBridge(context);
+        this.dctmBridge = dctmBridge;
     }
 
     onConnectionChange(callback: ConnectionChangeCallback): void {
@@ -177,22 +198,8 @@ export class ConnectionManager {
                     connection.type
                 );
 
-                // Connect via bridge - route to DFC or REST based on connection type
                 const sessionId = await this.dctmBridge.connect(
-                    connection.type === 'rest'
-                        ? {
-                            endpoint: connection.endpoint,
-                            repository: connection.repository,
-                            username,
-                            password
-                        }
-                        : {
-                            docbroker: connection.docbroker || '',
-                            port: connection.port || 1489,
-                            repository: connection.repository,
-                            username,
-                            password
-                        }
+                    buildConnectParams(connection, username, password)
                 );
 
                 this.activeConnection = {
@@ -398,22 +405,8 @@ export class ConnectionManager {
             connection.type
         );
 
-        // Connect via bridge - route to DFC or REST based on connection type
         const sessionId = await this.dctmBridge.connect(
-            connection.type === 'rest'
-                ? {
-                    endpoint: connection.endpoint,
-                    repository: connection.repository,
-                    username,
-                    password
-                }
-                : {
-                    docbroker: connection.docbroker || '',
-                    port: connection.port || 1489,
-                    repository: connection.repository,
-                    username,
-                    password
-                }
+            buildConnectParams(connection, username, password)
         );
 
         const activeConnection: ActiveConnection = {

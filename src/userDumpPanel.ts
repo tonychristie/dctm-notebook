@@ -1,10 +1,9 @@
 import * as vscode from 'vscode';
 import { UserCache, UserInfo, UserAttribute } from './userCache';
-
-/**
- * Attribute grouping categories
- */
-type AttributeGroup = 'identity' | 'access' | 'preferences' | 'system' | 'other';
+import { escapeHtml } from './htmlUtils';
+import { buildUserQuery } from './dqlQueries';
+import { UserAttributeGroup as AttributeGroup, describeAttributeValue, groupUserAttributes } from './attributeGroups';
+import { WebviewAssets, webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml';
 
 /**
  * WebviewPanel for displaying Documentum user details with grouped attributes
@@ -53,7 +52,7 @@ export class UserDumpPanel {
             {
                 enableScripts: true,
                 retainContextWhenHidden: true,
-                localResourceRoots: [extensionUri]
+                localResourceRoots: webviewResourceRoots(extensionUri)
             }
         );
 
@@ -135,56 +134,30 @@ export class UserDumpPanel {
     }
 
     /**
-     * Categorize attribute based on name
-     */
-    private categorizeAttribute(name: string): AttributeGroup {
-        // Identity-related
-        if (['user_name', 'user_login_name', 'user_os_name', 'user_address', 'user_db_name',
-             'user_source', 'user_ldap_dn', 'user_global_unique_id'].includes(name)) {
-            return 'identity';
-        }
-        // Access-related
-        if (['acl_domain', 'acl_name', 'owner_name', 'owner_permit', 'user_privileges',
-             'user_xprivileges', 'client_capability', 'alias_set_id'].includes(name)) {
-            return 'access';
-        }
-        // Preferences
-        if (['default_folder', 'default_group', 'home_docbase', 'user_web_page',
-             'user_delegation', 'user_email'].includes(name)) {
-            return 'preferences';
-        }
-        // System attributes (r_, i_)
-        if (name.startsWith('r_') || name.startsWith('i_')) {
-            return 'system';
-        }
-        return 'other';
-    }
-
-    /**
      * Generate a DQL query for the current user
      */
     private async generateDqlQuery(): Promise<void> {
-        const dql = `SELECT user_name, user_login_name, user_os_name, user_address,
-    default_folder, default_group, description, user_state
-FROM dm_user
-WHERE user_name = '${this.currentUserName}'`;
-
-        // Open in new editor
         const doc = await vscode.workspace.openTextDocument({
-            content: dql,
+            content: buildUserQuery(this.currentUserName),
             language: 'dql'
         });
         await vscode.window.showTextDocument(doc);
+    }
+
+    private assets(): WebviewAssets {
+        return webviewAssets(this.panel.webview, this.extensionUri, 'userDumpPanel');
     }
 
     /**
      * Generate loading HTML
      */
     private getLoadingHtml(): string {
+        const assets = this.assets();
         return `<!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
+            ${assets.csp}
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {
@@ -220,6 +193,7 @@ WHERE user_name = '${this.currentUserName}'`;
                 <div class="spinner"></div>
                 <div>Loading user...</div>
             </div>
+            ${assets.script}
         </body>
         </html>`;
     }
@@ -228,10 +202,12 @@ WHERE user_name = '${this.currentUserName}'`;
      * Generate error HTML
      */
     private getErrorHtml(userName: string, error: string): string {
+        const assets = this.assets();
         return `<!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
+            ${assets.csp}
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {
@@ -266,16 +242,11 @@ WHERE user_name = '${this.currentUserName}'`;
         </head>
         <body>
             <div class="error">
-                <div class="error-title">Failed to load user: ${this.escapeHtml(userName)}</div>
-                <div>${this.escapeHtml(error)}</div>
-                <button onclick="refresh()">Retry</button>
+                <div class="error-title">Failed to load user: ${escapeHtml(userName)}</div>
+                <div>${escapeHtml(error)}</div>
+                <button data-action="refresh">Retry</button>
             </div>
-            <script>
-                const vscode = acquireVsCodeApi();
-                function refresh() {
-                    vscode.postMessage({ command: 'refresh' });
-                }
-            </script>
+            ${assets.script}
         </body>
         </html>`;
     }
@@ -284,24 +255,7 @@ WHERE user_name = '${this.currentUserName}'`;
      * Generate content HTML with user details and grouped attributes
      */
     private getContentHtml(user: UserInfo): string {
-        // Group attributes by category
-        const groups: Record<AttributeGroup, UserAttribute[]> = {
-            identity: [],
-            access: [],
-            preferences: [],
-            system: [],
-            other: []
-        };
-
-        for (const attr of user.attributes) {
-            const group = this.categorizeAttribute(attr.name);
-            groups[group].push(attr);
-        }
-
-        // Sort attributes within each group
-        for (const group of Object.values(groups)) {
-            group.sort((a, b) => a.name.localeCompare(b.name));
-        }
+        const groups = groupUserAttributes(user.attributes);
 
         const groupLabels: Record<AttributeGroup, string> = {
             identity: 'Identity',
@@ -313,10 +267,12 @@ WHERE user_name = '${this.currentUserName}'`;
 
         const groupOrder: AttributeGroup[] = ['identity', 'access', 'preferences', 'other', 'system'];
 
+        const assets = this.assets();
         return `<!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
+            ${assets.csp}
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {
@@ -502,39 +458,39 @@ WHERE user_name = '${this.currentUserName}'`;
                 }
             </style>
         </head>
-        <body>
+        <body ${webviewData({ userName: user.userName })}>
             <div class="header">
                 <div class="header-title">
                     <span class="icon">&#128100;</span>
-                    ${this.escapeHtml(user.userName)}
+                    ${escapeHtml(user.userName)}
                 </div>
                 <div class="header-info">
-                    Login: ${this.escapeHtml(user.userLoginName || 'N/A')} |
+                    Login: ${escapeHtml(user.userLoginName || 'N/A')} |
                     State: ${user.userState === 0 ? 'Active' : 'Inactive'} |
-                    Source: ${this.escapeHtml(user.userSource || 'N/A')} |
+                    Source: ${escapeHtml(user.userSource || 'N/A')} |
                     Groups: ${this.userGroups.length}
                 </div>
                 <div class="header-actions">
-                    <button onclick="refresh()">Refresh</button>
-                    <button onclick="generateDql()" class="primary">Generate DQL</button>
-                    <button onclick="copyUserName()">Copy User Name</button>
-                    <button onclick="collapseAll()">Collapse All</button>
-                    <button onclick="expandAll()">Expand All</button>
+                    <button data-action="refresh">Refresh</button>
+                    <button data-action="generateDql" class="primary">Generate DQL</button>
+                    <button data-action="copyUserName">Copy User Name</button>
+                    <button data-action="collapseAll">Collapse All</button>
+                    <button data-action="expandAll">Expand All</button>
                 </div>
                 <div class="filter-bar">
-                    <input type="text" id="filter" placeholder="Filter attributes by name or value..." oninput="filterAttributes(this.value)">
+                    <input type="text" id="filter" placeholder="Filter attributes by name or value...">
                 </div>
             </div>
             <div class="content">
                 <div class="groups-section">
-                    <div class="group-header" onclick="toggleGroup('memberof')">
+                    <div class="group-header" data-action="toggleGroup">
                         <span class="toggle" id="toggle-memberof">&#9660;</span>
                         Group Membership
                         <span class="count">${this.userGroups.length}</span>
                     </div>
                     <div class="group-content" id="group-memberof">
                         ${this.userGroups.length > 0
-                            ? `<div class="group-tags">${this.userGroups.map(g => `<span class="group-tag" onclick="openGroup('${this.escapeHtml(g)}')">${this.escapeHtml(g)}</span>`).join('')}</div>`
+                            ? `<div class="group-tags">${this.userGroups.map(g => `<span class="group-tag" data-action="openGroup" data-value="${escapeHtml(g)}">${escapeHtml(g)}</span>`).join('')}</div>`
                             : '<div class="no-groups">User is not a member of any groups</div>'
                         }
                     </div>
@@ -547,7 +503,7 @@ WHERE user_name = '${this.currentUserName}'`;
                     }
                     return `
                         <div class="group" data-group="${groupKey}">
-                            <div class="group-header" onclick="toggleGroup('${groupKey}')">
+                            <div class="group-header" data-action="toggleGroup">
                                 <span class="toggle" id="toggle-${groupKey}">&#9660;</span>
                                 ${groupLabels[groupKey]}
                                 <span class="count" id="count-${groupKey}">${attrs.length}</span>
@@ -559,128 +515,23 @@ WHERE user_name = '${this.currentUserName}'`;
                     `;
                 }).join('')}
             </div>
-            <script>
-                const vscode = acquireVsCodeApi();
-                const userName = '${this.escapeHtml(user.userName)}';
-
-                function refresh() {
-                    vscode.postMessage({ command: 'refresh' });
-                }
-
-                function filterAttributes(value) {
-                    const filter = value.toLowerCase();
-                    document.querySelectorAll('.attribute').forEach(el => {
-                        const name = (el.dataset.name || '').toLowerCase();
-                        const attrValue = (el.dataset.value || '').toLowerCase();
-                        const matches = !filter || name.includes(filter) || attrValue.includes(filter);
-                        el.classList.toggle('hidden', !matches);
-                    });
-
-                    // Update group counts
-                    document.querySelectorAll('.group').forEach(group => {
-                        const groupKey = group.dataset.group;
-                        const visibleAttrs = group.querySelectorAll('.attribute:not(.hidden)');
-                        const countEl = document.getElementById('count-' + groupKey);
-                        if (countEl) {
-                            countEl.textContent = visibleAttrs.length;
-                        }
-                        group.style.display = visibleAttrs.length > 0 ? 'block' : 'none';
-                    });
-                }
-
-                function copyUserName() {
-                    vscode.postMessage({ command: 'copyValue', value: userName });
-                }
-
-                function copyValue(value) {
-                    vscode.postMessage({ command: 'copyValue', value: value });
-                }
-
-                function dumpObject(objectId) {
-                    vscode.postMessage({ command: 'dumpObject', objectId: objectId });
-                }
-
-                function generateDql() {
-                    vscode.postMessage({ command: 'generateDql' });
-                }
-
-                function openGroup(groupName) {
-                    vscode.postMessage({ command: 'openGroup', groupName: groupName });
-                }
-
-                function toggleGroup(groupKey) {
-                    const content = document.getElementById('group-' + groupKey);
-                    const toggle = document.getElementById('toggle-' + groupKey);
-                    if (content.classList.contains('collapsed')) {
-                        content.classList.remove('collapsed');
-                        toggle.innerHTML = '&#9660;';
-                    } else {
-                        content.classList.add('collapsed');
-                        toggle.innerHTML = '&#9654;';
-                    }
-                }
-
-                function collapseAll() {
-                    document.querySelectorAll('.group-content').forEach(el => {
-                        el.classList.add('collapsed');
-                    });
-                    document.querySelectorAll('.group-header .toggle').forEach(el => {
-                        el.innerHTML = '&#9654;';
-                    });
-                }
-
-                function expandAll() {
-                    document.querySelectorAll('.group-content').forEach(el => {
-                        el.classList.remove('collapsed');
-                    });
-                    document.querySelectorAll('.group-header .toggle').forEach(el => {
-                        el.innerHTML = '&#9660;';
-                    });
-                }
-            </script>
+            ${assets.script}
         </body>
         </html>`;
-    }
-
-    /**
-     * Check if a value looks like an object ID (16 hex chars)
-     */
-    private isObjectId(value: string): boolean {
-        return /^[0-9a-f]{16}$/i.test(value);
     }
 
     /**
      * Render a single attribute row
      */
     private renderAttribute(attr: UserAttribute): string {
-        const valueStr = attr.value === null || attr.value === undefined
-            ? 'null'
-            : String(attr.value);
-        const isNull = attr.value === null || attr.value === undefined || valueStr === '';
-
-        // Check if this is an object ID field that should be clickable
-        const isObjectIdField = !isNull && this.isObjectId(valueStr);
+        const { text: valueStr, isEmpty: isNull, isObjectId: isObjectIdField } = describeAttributeValue(attr.value);
         const valueClass = isNull ? ' null' : (isObjectIdField ? ' object-id' : '');
-        const valueOnClick = isObjectIdField
-            ? `dumpObject('${this.escapeHtml(valueStr)}')`
-            : `copyValue('${this.escapeHtml(valueStr)}')`;
+        const valueAction = isObjectIdField ? 'dumpObject' : 'copyValue';
 
-        return `<div class="attribute" data-name="${this.escapeHtml(attr.name)}" data-value="${this.escapeHtml(valueStr)}">
-            <div class="attr-name" title="${this.escapeHtml(attr.name)}" onclick="copyValue('${this.escapeHtml(attr.name)}')">${this.escapeHtml(attr.name)}</div>
-            <div class="attr-value${valueClass}" onclick="${valueOnClick}">${isNull ? '(empty)' : this.escapeHtml(valueStr)}</div>
+        return `<div class="attribute" data-name="${escapeHtml(attr.name)}" data-value="${escapeHtml(valueStr)}">
+            <div class="attr-name" title="${escapeHtml(attr.name)}" data-action="copyValue" data-value="${escapeHtml(attr.name)}">${escapeHtml(attr.name)}</div>
+            <div class="attr-value${valueClass}" data-action="${valueAction}" data-value="${escapeHtml(valueStr)}">${isNull ? '(empty)' : escapeHtml(valueStr)}</div>
         </div>`;
-    }
-
-    /**
-     * Escape HTML special characters
-     */
-    private escapeHtml(text: string): string {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
     }
 
     public dispose(): void {

@@ -1,7 +1,15 @@
 import * as vscode from 'vscode';
 import { ConnectionManager, ActiveConnection } from '../connectionManager';
 import { DqlExecutor, DqlResult } from '../dqlExecutor';
-import { ApiExecutor, ApiMethodRequest, ApiMethodResponse } from '../apiExecutor';
+import { ApiExecutor, ApiMethodResponse } from '../apiExecutor';
+import {
+    OutputFormat,
+    formatValue,
+    getOutputFormat,
+    parseApiCommand,
+    parseDmApiCommand,
+    stripComments
+} from './commandParsing';
 
 /**
  * Notebook controller for executing DQL queries and API commands
@@ -100,8 +108,7 @@ export class DctmNotebookController {
                 return;
             }
 
-            // Get output format preference from cell metadata, default to 'html'
-            const outputFormat = (cell.metadata?.outputFormat as string) || 'html';
+            const outputFormat = getOutputFormat(cell.metadata);
 
             // Execute based on language
             const language = cell.document.languageId;
@@ -134,31 +141,6 @@ export class DctmNotebookController {
     }
 
     /**
-     * Strip comments from code.
-     * @param code The code to strip comments from
-     * @param includeBlockComments Whether to also strip block comments
-     */
-    private stripComments(code: string, includeBlockComments: boolean = false): string {
-        let stripped = code;
-
-        // Remove block comments (/* ... */) if requested - non-greedy match across lines
-        if (includeBlockComments) {
-            stripped = stripped.replace(/\/\*[\s\S]*?\*\//g, '');
-        }
-
-        // Remove line comments (-- to end of line)
-        stripped = stripped.replace(/--.*$/gm, '');
-
-        // Clean up extra whitespace and empty lines
-        return stripped
-            .split('\n')
-            .map(line => line.trim())
-            .filter(line => line.length > 0)
-            .join('\n')
-            .trim();
-    }
-
-    /**
      * Execute a DQL query and render results
      *
      * @param query The DQL query to execute
@@ -169,12 +151,12 @@ export class DctmNotebookController {
     private async executeDql(
         query: string,
         execution: vscode.NotebookCellExecution,
-        outputFormat: string,
+        outputFormat: OutputFormat,
         connection: ActiveConnection
     ): Promise<void> {
         try {
             // Strip comments before execution (DQL supports block comments)
-            const cleanQuery = this.stripComments(query, true);
+            const cleanQuery = stripComments(query, true);
             if (!cleanQuery) {
                 execution.replaceOutput([]);
                 execution.end(true, Date.now());
@@ -202,7 +184,7 @@ export class DctmNotebookController {
     /**
      * Format DQL results as notebook output
      */
-    private formatDqlOutput(result: DqlResult, outputFormat: string): vscode.NotebookCellOutput {
+    private formatDqlOutput(result: DqlResult, outputFormat: OutputFormat): vscode.NotebookCellOutput {
         // Plain text summary
         const text = `${result.rowCount} row(s) returned in ${result.executionTime}ms`;
 
@@ -731,34 +713,30 @@ export class DctmNotebookController {
     private async executeApi(
         command: string,
         execution: vscode.NotebookCellExecution,
-        outputFormat: string,
+        outputFormat: OutputFormat,
         connection: ActiveConnection
     ): Promise<void> {
         try {
-            // Strip comments before execution (dmAPI only supports line comments)
-            const cleanCommand = this.stripComments(command);
+            // dmAPI supports line comments only
+            const cleanCommand = stripComments(command);
             if (!cleanCommand) {
                 execution.replaceOutput([]);
                 execution.end(true, Date.now());
                 return;
             }
 
-            // Check if this is a dmAPI command (dmAPIGet, dmAPIExec, dmAPISet)
-            const dmApiMatch = cleanCommand.match(/^dmAPI(Get|Exec|Set)\s*\(\s*["'](.+?)["']\s*\)$/i);
+            const dmApiCommand = parseDmApiCommand(cleanCommand);
 
             let result: ApiMethodResponse;
 
-            if (dmApiMatch) {
-                // Use the new dmAPI endpoint for server-level API calls
+            if (dmApiCommand) {
                 result = await this.executeDmApiCommand(
-                    dmApiMatch[1].toLowerCase() as 'get' | 'exec' | 'set',
-                    dmApiMatch[2],
+                    dmApiCommand.callType,
+                    dmApiCommand.args,
                     connection
                 );
             } else {
-                // Use the object API endpoint for method invocations
-                const request = this.parseApiCommand(command);
-                result = await this.apiExecutor.execute(request);
+                result = await this.apiExecutor.execute(parseApiCommand(command));
             }
 
             const output = this.formatApiOutput(result, outputFormat);
@@ -814,36 +792,13 @@ export class DctmNotebookController {
     }
 
     /**
-     * Parse an API command string into a request object
-     *
-     * Supports simple format: method arg1 arg2
-     * (dmAPI format is handled separately in executeApi)
-     */
-    private parseApiCommand(command: string): ApiMethodRequest {
-        const trimmed = command.trim();
-
-        // Match simple format: method arg1 arg2
-        const parts = trimmed.split(/\s+/);
-        if (parts.length > 0) {
-            // Args are strings from the command line format
-            const args: unknown[] = parts.slice(1);
-            return {
-                method: parts[0],
-                args
-            };
-        }
-
-        throw new Error(`Invalid API command format: ${command}`);
-    }
-
-    /**
      * Format API response as notebook output
      */
     private formatApiOutput(
         result: ApiMethodResponse,
-        outputFormat: string
+        outputFormat: OutputFormat
     ): vscode.NotebookCellOutput {
-        const formattedResult = this.formatValue(result.result);
+        const formattedResult = formatValue(result.result);
         const text = `${result.resultType}: ${formattedResult}`;
 
         // Emit output based on format preference
@@ -867,19 +822,6 @@ export class DctmNotebookController {
                 vscode.NotebookCellOutputItem.text(text, 'text/plain')
             ]);
         }
-    }
-
-    /**
-     * Format a value for display
-     */
-    private formatValue(value: unknown): string {
-        if (value === null || value === undefined) {
-            return 'null';
-        }
-        if (typeof value === 'object') {
-            return JSON.stringify(value, null, 2);
-        }
-        return String(value);
     }
 
     /**

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ApiExecutor, ApiMethodResponse, COMMON_DFC_METHODS } from './apiExecutor';
 import { ConnectionManager } from './connectionManager';
+import { webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml';
 
 /**
  * Message types from webview to extension
@@ -17,7 +18,7 @@ interface WebviewMessage {
 /**
  * Extract objectId from various argument types (string, ObjectBrowserItem, or node data)
  */
-function extractObjectId(arg: unknown): string | undefined {
+export function extractObjectId(arg: unknown): string | undefined {
     if (typeof arg === 'string') {
         return arg;
     }
@@ -89,7 +90,8 @@ export class ApiPanel {
             column,
             {
                 enableScripts: true,
-                retainContextWhenHidden: true
+                retainContextWhenHidden: true,
+                localResourceRoots: webviewResourceRoots(extensionUri)
             }
         );
 
@@ -217,13 +219,13 @@ export class ApiPanel {
      * Get HTML content for the webview
      */
     private getHtmlForWebview(): string {
-        // Serialize method data for the webview
-        const methodsJson = JSON.stringify(COMMON_DFC_METHODS);
+        const assets = webviewAssets(this.panel.webview, this.extensionUri, 'apiPanel');
 
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    ${assets.csp}
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DFC API Execution</title>
     <style>
@@ -465,7 +467,7 @@ export class ApiPanel {
         }
     </style>
 </head>
-<body>
+<body ${webviewData(COMMON_DFC_METHODS)}>
     <h2>DFC API Execution</h2>
 
     <div class="section">
@@ -480,7 +482,7 @@ export class ApiPanel {
         <h3>Method</h3>
         <div class="input-group">
             <label for="methodSearch">Search Methods</label>
-            <input type="text" id="methodSearch" placeholder="Type to search methods..." oninput="searchMethods(this.value)">
+            <input type="text" id="methodSearch" placeholder="Type to search methods...">
         </div>
 
         <div class="category-tabs" id="categoryTabs"></div>
@@ -494,8 +496,8 @@ export class ApiPanel {
     </div>
 
     <div class="actions">
-        <button id="executeBtn" onclick="executeMethod()" disabled>Execute</button>
-        <button class="secondary" onclick="clearForm()">Clear</button>
+        <button id="executeBtn" data-action="execute" disabled>Execute</button>
+        <button class="secondary" data-action="clearForm">Clear</button>
     </div>
 
     <div class="result-panel" id="resultPanel" style="display: none;">
@@ -511,281 +513,7 @@ export class ApiPanel {
         <div id="historyList"></div>
     </div>
 
-    <script>
-        const vscode = acquireVsCodeApi();
-        const METHODS = ${methodsJson};
-
-        let selectedMethod = null;
-        let selectedCategory = null;
-        let executionHistory = [];
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            renderCategories();
-            renderMethodList(getAllMethods());
-        });
-
-        // Handle messages from extension
-        window.addEventListener('message', event => {
-            const message = event.data;
-            switch (message.type) {
-                case 'setObjectId':
-                    document.getElementById('objectId').value = message.objectId;
-                    break;
-                case 'executing':
-                    showLoading(message.method);
-                    break;
-                case 'result':
-                    showResult(message);
-                    break;
-                case 'methodInfo':
-                    if (message.method) {
-                        selectMethod(message.method);
-                    }
-                    break;
-            }
-        });
-
-        function getAllMethods() {
-            return Object.values(METHODS).flat();
-        }
-
-        function renderCategories() {
-            const container = document.getElementById('categoryTabs');
-            container.innerHTML = Object.keys(METHODS).map(cat =>
-                \`<span class="category-tab\${selectedCategory === cat ? ' active' : ''}"
-                      onclick="filterByCategory('\${cat}')">\${cat}</span>\`
-            ).join('');
-        }
-
-        function filterByCategory(category) {
-            selectedCategory = selectedCategory === category ? null : category;
-            renderCategories();
-
-            if (selectedCategory) {
-                renderMethodList(METHODS[selectedCategory]);
-            } else {
-                renderMethodList(getAllMethods());
-            }
-        }
-
-        function renderMethodList(methods) {
-            const container = document.getElementById('methodList');
-            container.innerHTML = methods.map(m =>
-                \`<div class="method-item\${selectedMethod?.name === m.name ? ' selected' : ''}"
-                      onclick="selectMethodByName('\${m.name}')">
-                    <div>
-                        <span class="method-name">\${m.name}</span>
-                        <span class="method-return">: \${m.returnType}</span>
-                    </div>
-                    <div class="method-desc">\${m.description || ''}</div>
-                </div>\`
-            ).join('');
-        }
-
-        function searchMethods(query) {
-            if (!query) {
-                renderMethodList(selectedCategory ? METHODS[selectedCategory] : getAllMethods());
-                return;
-            }
-
-            const lower = query.toLowerCase();
-            const results = getAllMethods().filter(m =>
-                m.name.toLowerCase().includes(lower) ||
-                (m.description && m.description.toLowerCase().includes(lower))
-            );
-            renderMethodList(results);
-        }
-
-        function selectMethodByName(name) {
-            const method = getAllMethods().find(m => m.name === name);
-            if (method) {
-                selectMethod(method);
-            }
-        }
-
-        function selectMethod(method) {
-            selectedMethod = method;
-            renderMethodList(selectedCategory ? METHODS[selectedCategory] : getAllMethods());
-            renderParameters(method);
-            document.getElementById('executeBtn').disabled = false;
-        }
-
-        function renderParameters(method) {
-            const section = document.getElementById('parametersSection');
-            const container = document.getElementById('parameterInputs');
-
-            if (!method.parameters || method.parameters.length === 0) {
-                section.style.display = 'none';
-                return;
-            }
-
-            section.style.display = 'block';
-            container.innerHTML = method.parameters.map((p, i) =>
-                \`<div class="param-row">
-                    <label for="param\${i}">\${p.name}\${p.required ? ' *' : ''}</label>
-                    <input type="text" id="param\${i}" data-type="\${p.type}" placeholder="\${p.type}">
-                    <span class="param-type">\${p.type}</span>
-                </div>\`
-            ).join('');
-        }
-
-        function getParameterValues() {
-            if (!selectedMethod || !selectedMethod.parameters) {
-                return [];
-            }
-
-            return selectedMethod.parameters.map((p, i) => {
-                const input = document.getElementById(\`param\${i}\`);
-                const value = input.value;
-                const type = p.type;
-
-                // Convert to appropriate type
-                if (type === 'int') return parseInt(value) || 0;
-                if (type === 'double') return parseFloat(value) || 0.0;
-                if (type === 'boolean') return value.toLowerCase() === 'true';
-                return value;
-            });
-        }
-
-        function executeMethod() {
-            if (!selectedMethod) return;
-
-            const objectId = document.getElementById('objectId').value.trim();
-            const args = getParameterValues();
-
-            vscode.postMessage({
-                type: 'execute',
-                objectId: objectId || undefined,
-                method: selectedMethod.name,
-                args: args.length > 0 ? args : undefined
-            });
-        }
-
-        function showLoading(method) {
-            const panel = document.getElementById('resultPanel');
-            const content = document.getElementById('resultContent');
-
-            panel.style.display = 'block';
-            content.innerHTML = \`<div class="loading">
-                <div class="spinner"></div>
-                Executing \${method}...
-            </div>\`;
-        }
-
-        function showResult(message) {
-            const panel = document.getElementById('resultPanel');
-            const content = document.getElementById('resultContent');
-            const timeSpan = document.getElementById('executionTime');
-
-            panel.style.display = 'block';
-
-            if (message.success) {
-                const formattedResult = formatResult(message.result);
-                const resultWithLinks = formatResultWithLinks(formattedResult);
-                content.innerHTML = \`<span class="success">Success</span>\\n\\n\` +
-                    \`Type: \${escapeHtml(message.resultType)}\\n\\n\` +
-                    \`Result:\\n\${resultWithLinks}\`;
-                timeSpan.textContent = \`\${message.executionTimeMs}ms\`;
-
-                addToHistory(selectedMethod.name, message.result, true, message.executionTimeMs);
-            } else {
-                content.innerHTML = \`<span class="error">Error</span>\\n\\n\${message.error}\`;
-                timeSpan.textContent = '';
-
-                addToHistory(selectedMethod.name, message.error, false, 0);
-            }
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        function formatResultWithLinks(text) {
-            // Replace 16-character hex strings with clickable links
-            return text.replace(/\\b([0-9a-f]{16})\\b/gi, (match) => {
-                return \`<span class="object-id" data-object-id="\${escapeHtml(match)}">\${escapeHtml(match)}</span>\`;
-            });
-        }
-
-        function formatResult(result) {
-            if (result === null || result === undefined) {
-                return 'null';
-            }
-            if (typeof result === 'object') {
-                return JSON.stringify(result, null, 2);
-            }
-            return String(result);
-        }
-
-        function addToHistory(method, result, success, time) {
-            executionHistory.unshift({
-                method,
-                result: success ? formatResult(result).substring(0, 100) : result,
-                success,
-                time,
-                timestamp: new Date().toLocaleTimeString()
-            });
-
-            // Keep only last 10
-            if (executionHistory.length > 10) {
-                executionHistory.pop();
-            }
-
-            renderHistory();
-        }
-
-        function renderHistory() {
-            const section = document.getElementById('historySection');
-            const container = document.getElementById('historyList');
-
-            if (executionHistory.length === 0) {
-                section.style.display = 'none';
-                return;
-            }
-
-            section.style.display = 'block';
-            container.innerHTML = executionHistory.map(h =>
-                \`<div class="history-item">
-                    <span class="method \${h.success ? 'success' : 'error'}">\${h.method}()</span>
-                    <span class="time">\${h.timestamp}</span>
-                    <div class="info" style="margin-top: 4px;">\${h.result}</div>
-                </div>\`
-            ).join('');
-        }
-
-        function clearForm() {
-            document.getElementById('objectId').value = '';
-            document.getElementById('methodSearch').value = '';
-            selectedMethod = null;
-            selectedCategory = null;
-            document.getElementById('parametersSection').style.display = 'none';
-            document.getElementById('resultPanel').style.display = 'none';
-            document.getElementById('executeBtn').disabled = true;
-            renderCategories();
-            renderMethodList(getAllMethods());
-        }
-
-        // Initial render
-        renderCategories();
-        renderMethodList(getAllMethods());
-
-        // Event delegation for object ID clicks
-        document.addEventListener('click', (e) => {
-            const target = e.target;
-            if (target.classList && target.classList.contains('object-id')) {
-                const objectId = target.getAttribute('data-object-id');
-                if (objectId) {
-                    vscode.postMessage({
-                        type: 'dumpObject',
-                        objectId: objectId
-                    });
-                }
-            }
-        });
-    </script>
+    ${assets.script}
 </body>
 </html>`;
     }

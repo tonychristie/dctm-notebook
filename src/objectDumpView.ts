@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
 import { ObjectDumpPanel } from './objectDumpPanel';
+import { isObjectId } from './htmlUtils';
+import { addToRecent } from './navigationHistory';
+import { webviewAssets, webviewResourceRoots } from './webviewHtml';
 
 /**
  * WebviewViewProvider for the Object Dump sidebar panel.
@@ -29,10 +32,10 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
 
         webviewView.webview.options = {
             enableScripts: true,
-            localResourceRoots: [this.extensionUri]
+            localResourceRoots: webviewResourceRoots(this.extensionUri)
         };
 
-        webviewView.webview.html = this.getHtmlContent();
+        webviewView.webview.html = this.getHtmlContent(webviewView.webview);
 
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(async (message) => {
@@ -70,8 +73,7 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        // Validate it looks like an object ID (16 hex chars)
-        if (!/^[0-9a-f]{16}$/i.test(trimmedId)) {
+        if (!isObjectId(trimmedId)) {
             vscode.window.showWarningMessage('Invalid object ID format. Expected 16 hexadecimal characters.');
             return;
         }
@@ -100,17 +102,7 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
      * Add an object ID to the history list
      */
     private addToHistory(objectId: string): void {
-        // Remove if already in history
-        const existingIndex = this.dumpHistory.indexOf(objectId);
-        if (existingIndex !== -1) {
-            this.dumpHistory.splice(existingIndex, 1);
-        }
-        // Add to front
-        this.dumpHistory.unshift(objectId);
-        // Trim to max size
-        if (this.dumpHistory.length > this.maxHistorySize) {
-            this.dumpHistory = this.dumpHistory.slice(0, this.maxHistorySize);
-        }
+        this.dumpHistory = addToRecent(this.dumpHistory, objectId, this.maxHistorySize);
         this.updateHistory();
     }
 
@@ -143,14 +135,16 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
     /**
      * Generate HTML content for the webview
      */
-    private getHtmlContent(): string {
+    private getHtmlContent(webview: vscode.Webview): string {
         const connection = this.connectionManager.getActiveConnection();
         const isConnected = !!connection;
+        const assets = webviewAssets(webview, this.extensionUri, 'objectDumpView');
 
         return `<!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
+            ${assets.csp}
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {
@@ -294,75 +288,12 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
             <div id="historySection" class="history-section" style="display: none;">
                 <div class="history-header">
                     <div class="section-title">Recent</div>
-                    <button class="clear-btn" onclick="clearHistory()">Clear</button>
+                    <button class="clear-btn" data-action="clearHistory">Clear</button>
                 </div>
                 <ul id="historyList" class="history-list"></ul>
             </div>
 
-            <script>
-                const vscode = acquireVsCodeApi();
-                const objectIdInput = document.getElementById('objectId');
-                const dumpBtn = document.getElementById('dumpBtn');
-                const statusEl = document.getElementById('status');
-                const historySection = document.getElementById('historySection');
-                const historyList = document.getElementById('historyList');
-
-                // Handle dump button click
-                dumpBtn.addEventListener('click', () => {
-                    const objectId = objectIdInput.value.trim();
-                    if (objectId) {
-                        vscode.postMessage({ command: 'dumpObject', objectId: objectId });
-                    }
-                });
-
-                // Handle Enter key in input
-                objectIdInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        dumpBtn.click();
-                    }
-                });
-
-                // Clear history
-                function clearHistory() {
-                    vscode.postMessage({ command: 'clearHistory' });
-                }
-
-                // Dump a specific object from history
-                function dumpFromHistory(objectId) {
-                    objectIdInput.value = objectId;
-                    vscode.postMessage({ command: 'dumpObject', objectId: objectId });
-                }
-
-                // Update history list display
-                function updateHistoryDisplay(history) {
-                    if (history.length === 0) {
-                        historySection.style.display = 'none';
-                    } else {
-                        historySection.style.display = 'block';
-                        historyList.innerHTML = history.map(id =>
-                            '<li class="history-item" onclick="dumpFromHistory(\\''+id+'\\')">'+id+'</li>'
-                        ).join('');
-                    }
-                }
-
-                // Handle messages from extension
-                window.addEventListener('message', (event) => {
-                    const message = event.data;
-                    switch (message.command) {
-                        case 'updateConnection':
-                            objectIdInput.disabled = !message.connected;
-                            dumpBtn.disabled = !message.connected;
-                            statusEl.className = 'status ' + (message.connected ? 'connected' : 'disconnected');
-                            statusEl.textContent = message.connected
-                                ? 'Connected to ' + message.repositoryName
-                                : 'Not connected';
-                            break;
-                        case 'updateHistory':
-                            updateHistoryDisplay(message.history);
-                            break;
-                    }
-                });
-            </script>
+            ${assets.script}
         </body>
         </html>`;
     }

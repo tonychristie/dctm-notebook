@@ -8,6 +8,7 @@ import { ApiExecutor } from '../apiExecutor';
 import { ApiMethodReference } from '../apiMethodReference';
 import { ObjectDumpPanel } from '../objectDumpPanel';
 import { exportToExcel, exportToJson } from './exporter';
+import { getOutputFormat, nextOutputFormat } from './commandParsing';
 
 export { DctmNotebookSerializer } from './notebookSerializer';
 export { DctmNotebookController } from './notebookController';
@@ -314,9 +315,7 @@ function registerNotebookCommands(
                 return;
             }
 
-            // Get current format from metadata, default to 'html'
-            const currentFormat = targetCell.metadata?.outputFormat as string || 'html';
-            const newFormat = currentFormat === 'html' ? 'json' : 'html';
+            const newFormat = nextOutputFormat(getOutputFormat(targetCell.metadata));
 
             // Update cell metadata
             const edit = new vscode.WorkspaceEdit();

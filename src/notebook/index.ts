@@ -7,6 +7,8 @@ import { DqlExecutor } from '../dqlExecutor';
 import { ApiExecutor } from '../apiExecutor';
 import { ApiMethodReference } from '../apiMethodReference';
 import { ObjectDumpPanel } from '../objectDumpPanel';
+import { extractObjectId } from '../apiPanel';
+import { isObjectId } from '../htmlUtils';
 import { exportToExcel, exportToJson } from './exporter';
 import { getOutputFormat, nextOutputFormat } from './commandParsing';
 
@@ -334,28 +336,10 @@ function registerNotebookCommands(
     );
 
     // Command to dump an object by ID (opens Object Dump panel)
-    // Can be called with:
-    // - A string objectId (from notebook context menu)
-    // - A node data object with objectId property (from tree view via showObjectProperties)
-    // - An ObjectBrowserItem with data.objectId (from tree view context menu directly)
-    // - No argument (prompts for object ID)
     const dumpObject = vscode.commands.registerCommand(
         'dctm.dumpObject',
-        async (arg?: string | { objectId?: string } | { data?: { objectId?: string } }) => {
-            let objectId: string | undefined;
-
-            // Extract objectId from argument
-            if (typeof arg === 'string') {
-                objectId = arg;
-            } else if (arg && typeof arg === 'object') {
-                // Check for ObjectBrowserItem (has data.objectId)
-                if ('data' in arg && arg.data && typeof arg.data === 'object' && 'objectId' in arg.data) {
-                    objectId = arg.data.objectId;
-                } else if ('objectId' in arg) {
-                    // Node data object with objectId directly
-                    objectId = arg.objectId;
-                }
-            }
+        async (arg?: unknown) => {
+            let objectId = extractObjectId(arg);
 
             // If no objectId provided, prompt for one
             if (!objectId) {
@@ -363,7 +347,7 @@ function registerNotebookCommands(
                     prompt: 'Enter Object ID',
                     placeHolder: '0900000000000001',
                     validateInput: (value) => {
-                        if (!/^[0-9a-f]{16}$/i.test(value)) {
+                        if (!isObjectId(value)) {
                             return 'Object ID must be a 16-character hex string';
                         }
                         return null;

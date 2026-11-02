@@ -3,6 +3,7 @@ import { UserCache, UserInfo, UserAttribute } from './userCache';
 import { escapeHtml } from './htmlUtils';
 import { buildUserQuery } from './dqlQueries';
 import { UserAttributeGroup as AttributeGroup, describeAttributeValue, groupUserAttributes } from './attributeGroups';
+import { WebviewAssets, webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml';
 
 /**
  * WebviewPanel for displaying Documentum user details with grouped attributes
@@ -51,7 +52,7 @@ export class UserDumpPanel {
             {
                 enableScripts: true,
                 retainContextWhenHidden: true,
-                localResourceRoots: [extensionUri]
+                localResourceRoots: webviewResourceRoots(extensionUri)
             }
         );
 
@@ -143,14 +144,20 @@ export class UserDumpPanel {
         await vscode.window.showTextDocument(doc);
     }
 
+    private assets(): WebviewAssets {
+        return webviewAssets(this.panel.webview, this.extensionUri, 'userDumpPanel');
+    }
+
     /**
      * Generate loading HTML
      */
     private getLoadingHtml(): string {
+        const assets = this.assets();
         return `<!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
+            ${assets.csp}
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {
@@ -186,6 +193,7 @@ export class UserDumpPanel {
                 <div class="spinner"></div>
                 <div>Loading user...</div>
             </div>
+            ${assets.script}
         </body>
         </html>`;
     }
@@ -194,10 +202,12 @@ export class UserDumpPanel {
      * Generate error HTML
      */
     private getErrorHtml(userName: string, error: string): string {
+        const assets = this.assets();
         return `<!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
+            ${assets.csp}
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {
@@ -234,14 +244,9 @@ export class UserDumpPanel {
             <div class="error">
                 <div class="error-title">Failed to load user: ${escapeHtml(userName)}</div>
                 <div>${escapeHtml(error)}</div>
-                <button onclick="refresh()">Retry</button>
+                <button data-action="refresh">Retry</button>
             </div>
-            <script>
-                const vscode = acquireVsCodeApi();
-                function refresh() {
-                    vscode.postMessage({ command: 'refresh' });
-                }
-            </script>
+            ${assets.script}
         </body>
         </html>`;
     }
@@ -262,10 +267,12 @@ export class UserDumpPanel {
 
         const groupOrder: AttributeGroup[] = ['identity', 'access', 'preferences', 'other', 'system'];
 
+        const assets = this.assets();
         return `<!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
+            ${assets.csp}
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {
@@ -451,7 +458,7 @@ export class UserDumpPanel {
                 }
             </style>
         </head>
-        <body>
+        <body ${webviewData({ userName: user.userName })}>
             <div class="header">
                 <div class="header-title">
                     <span class="icon">&#128100;</span>
@@ -464,26 +471,26 @@ export class UserDumpPanel {
                     Groups: ${this.userGroups.length}
                 </div>
                 <div class="header-actions">
-                    <button onclick="refresh()">Refresh</button>
-                    <button onclick="generateDql()" class="primary">Generate DQL</button>
-                    <button onclick="copyUserName()">Copy User Name</button>
-                    <button onclick="collapseAll()">Collapse All</button>
-                    <button onclick="expandAll()">Expand All</button>
+                    <button data-action="refresh">Refresh</button>
+                    <button data-action="generateDql" class="primary">Generate DQL</button>
+                    <button data-action="copyUserName">Copy User Name</button>
+                    <button data-action="collapseAll">Collapse All</button>
+                    <button data-action="expandAll">Expand All</button>
                 </div>
                 <div class="filter-bar">
-                    <input type="text" id="filter" placeholder="Filter attributes by name or value..." oninput="filterAttributes(this.value)">
+                    <input type="text" id="filter" placeholder="Filter attributes by name or value...">
                 </div>
             </div>
             <div class="content">
                 <div class="groups-section">
-                    <div class="group-header" onclick="toggleGroup('memberof')">
+                    <div class="group-header" data-action="toggleGroup">
                         <span class="toggle" id="toggle-memberof">&#9660;</span>
                         Group Membership
                         <span class="count">${this.userGroups.length}</span>
                     </div>
                     <div class="group-content" id="group-memberof">
                         ${this.userGroups.length > 0
-                            ? `<div class="group-tags">${this.userGroups.map(g => `<span class="group-tag" onclick="openGroup('${escapeHtml(g)}')">${escapeHtml(g)}</span>`).join('')}</div>`
+                            ? `<div class="group-tags">${this.userGroups.map(g => `<span class="group-tag" data-action="openGroup" data-value="${escapeHtml(g)}">${escapeHtml(g)}</span>`).join('')}</div>`
                             : '<div class="no-groups">User is not a member of any groups</div>'
                         }
                     </div>
@@ -496,7 +503,7 @@ export class UserDumpPanel {
                     }
                     return `
                         <div class="group" data-group="${groupKey}">
-                            <div class="group-header" onclick="toggleGroup('${groupKey}')">
+                            <div class="group-header" data-action="toggleGroup">
                                 <span class="toggle" id="toggle-${groupKey}">&#9660;</span>
                                 ${groupLabels[groupKey]}
                                 <span class="count" id="count-${groupKey}">${attrs.length}</span>
@@ -508,85 +515,7 @@ export class UserDumpPanel {
                     `;
                 }).join('')}
             </div>
-            <script>
-                const vscode = acquireVsCodeApi();
-                const userName = '${escapeHtml(user.userName)}';
-
-                function refresh() {
-                    vscode.postMessage({ command: 'refresh' });
-                }
-
-                function filterAttributes(value) {
-                    const filter = value.toLowerCase();
-                    document.querySelectorAll('.attribute').forEach(el => {
-                        const name = (el.dataset.name || '').toLowerCase();
-                        const attrValue = (el.dataset.value || '').toLowerCase();
-                        const matches = !filter || name.includes(filter) || attrValue.includes(filter);
-                        el.classList.toggle('hidden', !matches);
-                    });
-
-                    // Update group counts
-                    document.querySelectorAll('.group').forEach(group => {
-                        const groupKey = group.dataset.group;
-                        const visibleAttrs = group.querySelectorAll('.attribute:not(.hidden)');
-                        const countEl = document.getElementById('count-' + groupKey);
-                        if (countEl) {
-                            countEl.textContent = visibleAttrs.length;
-                        }
-                        group.style.display = visibleAttrs.length > 0 ? 'block' : 'none';
-                    });
-                }
-
-                function copyUserName() {
-                    vscode.postMessage({ command: 'copyValue', value: userName });
-                }
-
-                function copyValue(value) {
-                    vscode.postMessage({ command: 'copyValue', value: value });
-                }
-
-                function dumpObject(objectId) {
-                    vscode.postMessage({ command: 'dumpObject', objectId: objectId });
-                }
-
-                function generateDql() {
-                    vscode.postMessage({ command: 'generateDql' });
-                }
-
-                function openGroup(groupName) {
-                    vscode.postMessage({ command: 'openGroup', groupName: groupName });
-                }
-
-                function toggleGroup(groupKey) {
-                    const content = document.getElementById('group-' + groupKey);
-                    const toggle = document.getElementById('toggle-' + groupKey);
-                    if (content.classList.contains('collapsed')) {
-                        content.classList.remove('collapsed');
-                        toggle.innerHTML = '&#9660;';
-                    } else {
-                        content.classList.add('collapsed');
-                        toggle.innerHTML = '&#9654;';
-                    }
-                }
-
-                function collapseAll() {
-                    document.querySelectorAll('.group-content').forEach(el => {
-                        el.classList.add('collapsed');
-                    });
-                    document.querySelectorAll('.group-header .toggle').forEach(el => {
-                        el.innerHTML = '&#9654;';
-                    });
-                }
-
-                function expandAll() {
-                    document.querySelectorAll('.group-content').forEach(el => {
-                        el.classList.remove('collapsed');
-                    });
-                    document.querySelectorAll('.group-header .toggle').forEach(el => {
-                        el.innerHTML = '&#9660;';
-                    });
-                }
-            </script>
+            ${assets.script}
         </body>
         </html>`;
     }
@@ -597,13 +526,11 @@ export class UserDumpPanel {
     private renderAttribute(attr: UserAttribute): string {
         const { text: valueStr, isEmpty: isNull, isObjectId: isObjectIdField } = describeAttributeValue(attr.value);
         const valueClass = isNull ? ' null' : (isObjectIdField ? ' object-id' : '');
-        const valueOnClick = isObjectIdField
-            ? `dumpObject('${escapeHtml(valueStr)}')`
-            : `copyValue('${escapeHtml(valueStr)}')`;
+        const valueAction = isObjectIdField ? 'dumpObject' : 'copyValue';
 
         return `<div class="attribute" data-name="${escapeHtml(attr.name)}" data-value="${escapeHtml(valueStr)}">
-            <div class="attr-name" title="${escapeHtml(attr.name)}" onclick="copyValue('${escapeHtml(attr.name)}')">${escapeHtml(attr.name)}</div>
-            <div class="attr-value${valueClass}" onclick="${valueOnClick}">${isNull ? '(empty)' : escapeHtml(valueStr)}</div>
+            <div class="attr-name" title="${escapeHtml(attr.name)}" data-action="copyValue" data-value="${escapeHtml(attr.name)}">${escapeHtml(attr.name)}</div>
+            <div class="attr-value${valueClass}" data-action="${valueAction}" data-value="${escapeHtml(valueStr)}">${isNull ? '(empty)' : escapeHtml(valueStr)}</div>
         </div>`;
     }
 

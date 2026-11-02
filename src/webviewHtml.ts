@@ -1,0 +1,38 @@
+import * as vscode from 'vscode';
+import { randomBytes } from 'crypto';
+import { escapeHtml } from './htmlUtils';
+
+export type WebviewEntry =
+    | 'apiPanel'
+    | 'objectDumpPanel'
+    | 'typeDumpPanel'
+    | 'userDumpPanel'
+    | 'groupDumpPanel'
+    | 'objectDumpView'
+    | 'resultsPanel';
+
+export interface WebviewAssets {
+    csp: string;
+    script: string;
+}
+
+function webviewsRoot(extensionUri: vscode.Uri): vscode.Uri {
+    return vscode.Uri.joinPath(extensionUri, 'out', 'webviews');
+}
+
+export function webviewResourceRoots(extensionUri: vscode.Uri): vscode.Uri[] {
+    return [webviewsRoot(extensionUri)];
+}
+
+export function webviewAssets(webview: vscode.Webview, extensionUri: vscode.Uri, entry: WebviewEntry): WebviewAssets {
+    const nonce = randomBytes(16).toString('base64');
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewsRoot(extensionUri), `${entry}.js`));
+    return {
+        csp: `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">`,
+        script: `<script nonce="${nonce}" src="${scriptUri}"></script>`
+    };
+}
+
+export function webviewData(data: unknown): string {
+    return `data-webview="${escapeHtml(JSON.stringify(data))}"`;
+}

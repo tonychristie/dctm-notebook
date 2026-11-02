@@ -3,6 +3,7 @@ import { ConnectionManager } from './connectionManager';
 import { BridgeAttributeValue } from './bridgeTypes';
 import { escapeHtml, isObjectId } from './htmlUtils';
 import { NavigationHistory } from './navigationHistory';
+import { WebviewAssets, webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml';
 import {
     ObjectAttributeGroup as AttributeGroup,
     categorizeObjectAttribute,
@@ -87,7 +88,7 @@ export class ObjectDumpPanel {
             {
                 enableScripts: true,
                 retainContextWhenHidden: true,
-                localResourceRoots: [extensionUri]
+                localResourceRoots: webviewResourceRoots(extensionUri)
             }
         );
 
@@ -410,14 +411,20 @@ export class ObjectDumpPanel {
         return attributes;
     }
 
+    private assets(): WebviewAssets {
+        return webviewAssets(this.panel.webview, this.extensionUri, 'objectDumpPanel');
+    }
+
     /**
      * Generate loading HTML
      */
     private getLoadingHtml(): string {
+        const assets = this.assets();
         return `<!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
+            ${assets.csp}
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {
@@ -453,6 +460,7 @@ export class ObjectDumpPanel {
                 <div class="spinner"></div>
                 <div>Loading object...</div>
             </div>
+            ${assets.script}
         </body>
         </html>`;
     }
@@ -461,10 +469,12 @@ export class ObjectDumpPanel {
      * Generate error HTML
      */
     private getErrorHtml(objectId: string, error: string): string {
+        const assets = this.assets();
         return `<!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
+            ${assets.csp}
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {
@@ -497,18 +507,13 @@ export class ObjectDumpPanel {
                 }
             </style>
         </head>
-        <body>
+        <body ${webviewData({ objectId })}>
             <div class="error">
                 <div class="error-title">Failed to load object: ${escapeHtml(objectId)}</div>
                 <div>${escapeHtml(error)}</div>
-                <button onclick="refresh()">Retry</button>
+                <button data-action="refresh">Retry</button>
             </div>
-            <script>
-                const vscode = acquireVsCodeApi();
-                function refresh() {
-                    vscode.postMessage({ command: 'refresh', objectId: '${objectId}' });
-                }
-            </script>
+            ${assets.script}
         </body>
         </html>`;
     }
@@ -529,10 +534,12 @@ export class ObjectDumpPanel {
 
         const groupOrder: AttributeGroup[] = ['custom', 'standard', 'application', 'system', 'internal'];
 
+        const assets = this.assets();
         return `<!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
+            ${assets.csp}
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {
@@ -626,6 +633,9 @@ export class ObjectDumpPanel {
                 }
                 .group-content {
                     display: block;
+                }
+                .attribute.hidden {
+                    display: none;
                 }
                 .group-content.collapsed {
                     display: none;
@@ -721,7 +731,7 @@ export class ObjectDumpPanel {
                 }
             </style>
         </head>
-        <body>
+        <body ${webviewData({ objectId: dump.objectId })}>
             <div class="header">
                 <div class="header-title">${escapeHtml(dump.objectName)}</div>
                 <div class="header-info">
@@ -732,16 +742,16 @@ export class ObjectDumpPanel {
                 </div>
                 <div class="header-actions">
                     <span class="nav-buttons">
-                        <button onclick="goBack()" ${this.history.canGoBack() ? '' : 'disabled'} title="Go back">&#9664;</button>
-                        <button onclick="goForward()" ${this.history.canGoForward() ? '' : 'disabled'} title="Go forward">&#9654;</button>
+                        <button data-action="goBack" ${this.history.canGoBack() ? '' : 'disabled'} title="Go back">&#9664;</button>
+                        <button data-action="goForward" ${this.history.canGoForward() ? '' : 'disabled'} title="Go forward">&#9654;</button>
                     </span>
-                    <button onclick="refresh()">Refresh</button>
-                    <button onclick="copyObjectId()">Copy Object ID</button>
-                    <button onclick="collapseAll()">Collapse All</button>
-                    <button onclick="expandAll()">Expand All</button>
+                    <button data-action="refresh">Refresh</button>
+                    <button data-action="copyObjectId">Copy Object ID</button>
+                    <button data-action="collapseAll">Collapse All</button>
+                    <button data-action="expandAll">Expand All</button>
                 </div>
                 <div class="filter-bar">
-                    <input type="text" id="filter" placeholder="Filter attributes..." oninput="filterAttributes(this.value)">
+                    <input type="text" id="filter" placeholder="Filter attributes...">
                 </div>
             </div>
             <div class="content">
@@ -752,7 +762,7 @@ export class ObjectDumpPanel {
                     }
                     return `
                         <div class="group" data-group="${groupKey}">
-                            <div class="group-header" onclick="toggleGroup('${groupKey}')">
+                            <div class="group-header" data-action="toggleGroup">
                                 <span class="toggle">&#9660;</span>
                                 ${groupLabels[groupKey]}
                                 <span class="count">${attrs.length}</span>
@@ -765,84 +775,7 @@ export class ObjectDumpPanel {
                 }).join('')}
             </div>
             <div id="notification" class="copy-notification"></div>
-            <script>
-                const vscode = acquireVsCodeApi();
-                const objectId = '${dump.objectId}';
-
-                function refresh() {
-                    vscode.postMessage({ command: 'refresh', objectId: objectId });
-                }
-
-                function copyObjectId() {
-                    vscode.postMessage({ command: 'copyValue', value: objectId });
-                }
-
-                function goBack() {
-                    vscode.postMessage({ command: 'goBack' });
-                }
-
-                function goForward() {
-                    vscode.postMessage({ command: 'goForward' });
-                }
-
-                function copyValue(value) {
-                    vscode.postMessage({ command: 'copyValue', value: value });
-                    showNotification('Copied to clipboard');
-                }
-
-                function dumpObject(objId) {
-                    vscode.postMessage({ command: 'dumpObject', objectId: objId });
-                }
-
-                function toggleGroup(groupKey) {
-                    const content = document.getElementById('group-' + groupKey);
-                    const header = content.previousElementSibling;
-                    const toggle = header.querySelector('.toggle');
-                    if (content.classList.contains('collapsed')) {
-                        content.classList.remove('collapsed');
-                        toggle.innerHTML = '&#9660;';
-                    } else {
-                        content.classList.add('collapsed');
-                        toggle.innerHTML = '&#9654;';
-                    }
-                }
-
-                function collapseAll() {
-                    document.querySelectorAll('.group-content').forEach(el => {
-                        el.classList.add('collapsed');
-                        el.previousElementSibling.querySelector('.toggle').innerHTML = '&#9654;';
-                    });
-                }
-
-                function expandAll() {
-                    document.querySelectorAll('.group-content').forEach(el => {
-                        el.classList.remove('collapsed');
-                        el.previousElementSibling.querySelector('.toggle').innerHTML = '&#9660;';
-                    });
-                }
-
-                function filterAttributes(query) {
-                    const lower = query.toLowerCase();
-                    document.querySelectorAll('.attribute').forEach(el => {
-                        const name = el.dataset.name || '';
-                        const value = el.dataset.value || '';
-                        const matches = name.toLowerCase().includes(lower) || value.toLowerCase().includes(lower);
-                        el.style.display = matches ? 'flex' : 'none';
-                    });
-                    // Show groups that have visible attributes
-                    document.querySelectorAll('.group').forEach(group => {
-                        const visibleAttrs = group.querySelectorAll('.attribute[style="display: flex;"], .attribute:not([style])');
-                        group.style.display = visibleAttrs.length > 0 || !query ? 'block' : 'none';
-                    });
-                }
-
-                function showNotification(msg) {
-                    const notif = document.getElementById('notification');
-                    notif.textContent = msg;
-                    notif.classList.add('show');
-                    setTimeout(() => notif.classList.remove('show'), 2000);
-                }
-            </script>
+            ${assets.script}
         </body>
         </html>`;
     }
@@ -861,20 +794,16 @@ export class ObjectDumpPanel {
                 ${(attr.value as unknown[]).map((v, i) => {
                     const itemIsObjId = isObjectId(v);
                     const itemClass = v === null ? 'null' : (itemIsObjId ? 'object-id' : '');
-                    const onclick = itemIsObjId
-                        ? `dumpObject('${escapeHtml(String(v))}')`
-                        : `copyValue('${escapeHtml(String(v ?? ''))}')`;
+                    const action = itemIsObjId ? 'dumpObject' : 'copyValue';
                     return `<div class="repeating-value">
                         <span class="repeating-index">[${i}]</span>
-                        <span class="${itemClass}" onclick="${onclick}">${escapeHtml(String(v ?? 'NULL'))}</span>
+                        <span class="${itemClass}" data-action="${action}" data-value="${escapeHtml(String(v ?? ''))}">${escapeHtml(String(v ?? 'NULL'))}</span>
                     </div>`;
                 }).join('')}
             </div>`;
         } else {
-            const onclick = valueIsObjId
-                ? `dumpObject('${escapeHtml(String(attr.value))}')`
-                : `copyValue('${escapeHtml(String(attr.value ?? ''))}')`;
-            valueHtml = `<span class="${valueClass}" onclick="${onclick}">${escapeHtml(valueStr)}</span>`;
+            const action = valueIsObjId ? 'dumpObject' : 'copyValue';
+            valueHtml = `<span class="${valueClass}" data-action="${action}" data-value="${escapeHtml(String(attr.value ?? ''))}">${escapeHtml(valueStr)}</span>`;
         }
 
         return `<div class="attribute" data-name="${escapeHtml(attr.name)}" data-value="${escapeHtml(valueStr)}">

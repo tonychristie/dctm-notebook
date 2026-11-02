@@ -3,6 +3,7 @@ import { GroupCache, GroupInfo, GroupAttribute } from './groupCache';
 import { escapeHtml } from './htmlUtils';
 import { buildGroupQuery } from './dqlQueries';
 import { GroupAttributeGroup as AttributeGroup, describeAttributeValue, groupGroupAttributes } from './attributeGroups';
+import { WebviewAssets, webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml';
 
 /**
  * WebviewPanel for displaying Documentum group details with grouped attributes
@@ -51,7 +52,7 @@ export class GroupDumpPanel {
             {
                 enableScripts: true,
                 retainContextWhenHidden: true,
-                localResourceRoots: [extensionUri]
+                localResourceRoots: webviewResourceRoots(extensionUri)
             }
         );
 
@@ -146,14 +147,20 @@ export class GroupDumpPanel {
         await vscode.window.showTextDocument(doc);
     }
 
+    private assets(): WebviewAssets {
+        return webviewAssets(this.panel.webview, this.extensionUri, 'groupDumpPanel');
+    }
+
     /**
      * Generate loading HTML
      */
     private getLoadingHtml(): string {
+        const assets = this.assets();
         return `<!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
+            ${assets.csp}
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {
@@ -189,6 +196,7 @@ export class GroupDumpPanel {
                 <div class="spinner"></div>
                 <div>Loading group...</div>
             </div>
+            ${assets.script}
         </body>
         </html>`;
     }
@@ -197,10 +205,12 @@ export class GroupDumpPanel {
      * Generate error HTML
      */
     private getErrorHtml(groupName: string, error: string): string {
+        const assets = this.assets();
         return `<!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
+            ${assets.csp}
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {
@@ -237,14 +247,9 @@ export class GroupDumpPanel {
             <div class="error">
                 <div class="error-title">Failed to load group: ${escapeHtml(groupName)}</div>
                 <div>${escapeHtml(error)}</div>
-                <button onclick="refresh()">Retry</button>
+                <button data-action="refresh">Retry</button>
             </div>
-            <script>
-                const vscode = acquireVsCodeApi();
-                function refresh() {
-                    vscode.postMessage({ command: 'refresh' });
-                }
-            </script>
+            ${assets.script}
         </body>
         </html>`;
     }
@@ -267,10 +272,12 @@ export class GroupDumpPanel {
 
         const totalMembers = group.members.length + group.groupMembers.length;
 
+        const assets = this.assets();
         return `<!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
+            ${assets.csp}
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {
@@ -490,7 +497,7 @@ export class GroupDumpPanel {
                 }
             </style>
         </head>
-        <body>
+        <body ${webviewData({ groupName: group.groupName })}>
             <div class="header">
                 <div class="header-title">
                     <span class="icon">&#128101;</span>
@@ -508,28 +515,28 @@ export class GroupDumpPanel {
                     Parent Groups: ${this.parentGroups.length}
                 </div>
                 <div class="header-actions">
-                    <button onclick="refresh()">Refresh</button>
-                    <button onclick="generateDql()" class="primary">Generate DQL</button>
-                    <button onclick="copyGroupName()">Copy Group Name</button>
-                    <button onclick="collapseAll()">Collapse All</button>
-                    <button onclick="expandAll()">Expand All</button>
+                    <button data-action="refresh">Refresh</button>
+                    <button data-action="generateDql" class="primary">Generate DQL</button>
+                    <button data-action="copyGroupName">Copy Group Name</button>
+                    <button data-action="collapseAll">Collapse All</button>
+                    <button data-action="expandAll">Expand All</button>
                 </div>
                 <div class="filter-bar">
-                    <input type="text" id="filter" placeholder="Filter attributes by name or value..." oninput="filterAttributes(this.value)">
+                    <input type="text" id="filter" placeholder="Filter attributes by name or value...">
                 </div>
             </div>
             <div class="content">
                 <!-- Parent Groups Section -->
                 ${this.parentGroups.length > 0 ? `
                 <div class="members-section">
-                    <div class="group-header" onclick="toggleGroup('parents')">
+                    <div class="group-header" data-action="toggleGroup">
                         <span class="toggle" id="toggle-parents">&#9660;</span>
                         Parent Groups (Member Of)
                         <span class="count">${this.parentGroups.length}</span>
                     </div>
                     <div class="group-content" id="group-parents">
                         <div class="member-tags">
-                            ${this.parentGroups.map(g => `<span class="member-tag group" onclick="openGroup('${escapeHtml(g)}')">${escapeHtml(g)}</span>`).join('')}
+                            ${this.parentGroups.map(g => `<span class="member-tag group" data-action="openGroup" data-value="${escapeHtml(g)}">${escapeHtml(g)}</span>`).join('')}
                         </div>
                     </div>
                 </div>
@@ -537,7 +544,7 @@ export class GroupDumpPanel {
 
                 <!-- Members Section -->
                 <div class="members-section">
-                    <div class="group-header" onclick="toggleGroup('members')">
+                    <div class="group-header" data-action="toggleGroup">
                         <span class="toggle" id="toggle-members">&#9660;</span>
                         Members
                         <span class="count">${totalMembers}</span>
@@ -547,13 +554,13 @@ export class GroupDumpPanel {
                         ${group.members.length > 0 ? `
                             <div class="subsection-label">Users (${group.members.length})</div>
                             <div class="member-tags">
-                                ${group.members.map(u => `<span class="member-tag user" onclick="openUser('${escapeHtml(u)}')">${escapeHtml(u)}</span>`).join('')}
+                                ${group.members.map(u => `<span class="member-tag user" data-action="openUser" data-value="${escapeHtml(u)}">${escapeHtml(u)}</span>`).join('')}
                             </div>
                         ` : ''}
                         ${group.groupMembers.length > 0 ? `
                             <div class="subsection-label">Groups (${group.groupMembers.length})</div>
                             <div class="member-tags">
-                                ${group.groupMembers.map(g => `<span class="member-tag group" onclick="openGroup('${escapeHtml(g)}')">${escapeHtml(g)}</span>`).join('')}
+                                ${group.groupMembers.map(g => `<span class="member-tag group" data-action="openGroup" data-value="${escapeHtml(g)}">${escapeHtml(g)}</span>`).join('')}
                             </div>
                         ` : ''}
                     </div>
@@ -566,7 +573,7 @@ export class GroupDumpPanel {
                     }
                     return `
                         <div class="group" data-group="${groupKey}">
-                            <div class="group-header" onclick="toggleGroup('${groupKey}')">
+                            <div class="group-header" data-action="toggleGroup">
                                 <span class="toggle" id="toggle-${groupKey}">&#9660;</span>
                                 ${groupLabels[groupKey]}
                                 <span class="count" id="count-${groupKey}">${attrs.length}</span>
@@ -578,90 +585,7 @@ export class GroupDumpPanel {
                     `;
                 }).join('')}
             </div>
-            <script>
-                const vscode = acquireVsCodeApi();
-                const groupName = '${escapeHtml(group.groupName)}';
-
-                function refresh() {
-                    vscode.postMessage({ command: 'refresh' });
-                }
-
-                function filterAttributes(value) {
-                    const filter = value.toLowerCase();
-                    document.querySelectorAll('.attribute').forEach(el => {
-                        const name = (el.dataset.name || '').toLowerCase();
-                        const attrValue = (el.dataset.value || '').toLowerCase();
-                        const matches = !filter || name.includes(filter) || attrValue.includes(filter);
-                        el.classList.toggle('hidden', !matches);
-                    });
-
-                    // Update group counts
-                    document.querySelectorAll('.group').forEach(group => {
-                        const groupKey = group.dataset.group;
-                        if (!groupKey) return;
-                        const visibleAttrs = group.querySelectorAll('.attribute:not(.hidden)');
-                        const countEl = document.getElementById('count-' + groupKey);
-                        if (countEl) {
-                            countEl.textContent = visibleAttrs.length;
-                        }
-                        group.style.display = visibleAttrs.length > 0 ? 'block' : 'none';
-                    });
-                }
-
-                function copyGroupName() {
-                    vscode.postMessage({ command: 'copyValue', value: groupName });
-                }
-
-                function copyValue(value) {
-                    vscode.postMessage({ command: 'copyValue', value: value });
-                }
-
-                function dumpObject(objectId) {
-                    vscode.postMessage({ command: 'dumpObject', objectId: objectId });
-                }
-
-                function generateDql() {
-                    vscode.postMessage({ command: 'generateDql' });
-                }
-
-                function openGroup(name) {
-                    vscode.postMessage({ command: 'openGroup', groupName: name });
-                }
-
-                function openUser(name) {
-                    vscode.postMessage({ command: 'openUser', userName: name });
-                }
-
-                function toggleGroup(groupKey) {
-                    const content = document.getElementById('group-' + groupKey);
-                    const toggle = document.getElementById('toggle-' + groupKey);
-                    if (content.classList.contains('collapsed')) {
-                        content.classList.remove('collapsed');
-                        toggle.innerHTML = '&#9660;';
-                    } else {
-                        content.classList.add('collapsed');
-                        toggle.innerHTML = '&#9654;';
-                    }
-                }
-
-                function collapseAll() {
-                    document.querySelectorAll('.group-content').forEach(el => {
-                        el.classList.add('collapsed');
-                    });
-                    document.querySelectorAll('.group-header .toggle').forEach(el => {
-                        el.innerHTML = '&#9654;';
-                    });
-                }
-
-                function expandAll() {
-                    document.querySelectorAll('.group-content').forEach(el => {
-                        el.classList.remove('collapsed');
-                    });
-                    document.querySelectorAll('.group-header .toggle').forEach(el => {
-                        el.innerHTML = '&#9660;';
-                    });
-                }
-            </script>
+            ${assets.script}
         </body>
         </html>`;
     }
@@ -672,13 +596,11 @@ export class GroupDumpPanel {
     private renderAttribute(attr: GroupAttribute): string {
         const { text: valueStr, isEmpty: isNull, isObjectId: isObjectIdField } = describeAttributeValue(attr.value);
         const valueClass = isNull ? ' null' : (isObjectIdField ? ' object-id' : '');
-        const valueOnClick = isObjectIdField
-            ? `dumpObject('${escapeHtml(valueStr)}')`
-            : `copyValue('${escapeHtml(valueStr)}')`;
+        const valueAction = isObjectIdField ? 'dumpObject' : 'copyValue';
 
         return `<div class="attribute" data-name="${escapeHtml(attr.name)}" data-value="${escapeHtml(valueStr)}">
-            <div class="attr-name" title="${escapeHtml(attr.name)}" onclick="copyValue('${escapeHtml(attr.name)}')">${escapeHtml(attr.name)}</div>
-            <div class="attr-value${valueClass}" onclick="${valueOnClick}">${isNull ? '(empty)' : escapeHtml(valueStr)}</div>
+            <div class="attr-name" title="${escapeHtml(attr.name)}" data-action="copyValue" data-value="${escapeHtml(attr.name)}">${escapeHtml(attr.name)}</div>
+            <div class="attr-value${valueClass}" data-action="${valueAction}" data-value="${escapeHtml(valueStr)}">${isNull ? '(empty)' : escapeHtml(valueStr)}</div>
         </div>`;
     }
 

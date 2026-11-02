@@ -15,6 +15,7 @@ node_modules/**
 out/**
 !out/extension.js
 !out/notebook/renderer.js
+!out/webviews/*.js
 out-test/**
 esbuild.js
 tsconfig.renderer.json

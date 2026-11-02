@@ -16,6 +16,7 @@
   "exclude": [
     "node_modules",
     ".vscode-test",
-    "src/notebook/renderer.ts"
+    "src/notebook/renderer.ts",
+    "src/webviews"
   ]
 }

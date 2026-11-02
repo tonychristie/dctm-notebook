@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import { DqlResult } from './dqlExecutor';
+import { escapeHtml } from './htmlUtils';
+import { webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml';
 
 export class ResultsPanel {
     public static currentPanel: ResultsPanel | undefined;
@@ -31,7 +33,8 @@ export class ResultsPanel {
             column,
             {
                 enableScripts: true,
-                retainContextWhenHidden: true
+                retainContextWhenHidden: true,
+                localResourceRoots: webviewResourceRoots(extensionUri)
             }
         );
 
@@ -50,20 +53,23 @@ export class ResultsPanel {
                 const value = row[col];
                 const displayValue = value === null || value === undefined
                     ? '<span class="null">NULL</span>'
-                    : this.escapeHtml(String(value));
+                    : escapeHtml(String(value));
                 return `<td>${displayValue}</td>`;
             }).join('');
             return `<tr>${cells}</tr>`;
         }).join('');
 
         const headerCells = results.columns.map(col =>
-            `<th>${this.escapeHtml(col)}</th>`
+            `<th>${escapeHtml(col)}</th>`
         ).join('');
+
+        const assets = webviewAssets(this.panel.webview, this.extensionUri, 'resultsPanel');
 
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    ${assets.csp}
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DQL Results</title>
     <style>
@@ -139,13 +145,13 @@ export class ResultsPanel {
         }
     </style>
 </head>
-<body>
+<body ${webviewData({ columns: results.columns, rows: results.rows })}>
     <div class="info">
         <span><strong>Rows:</strong> ${results.rowCount}</span>
         <span><strong>Time:</strong> ${results.executionTime}ms</span>
         <span><strong>Columns:</strong> ${results.columns.length}</span>
     </div>
-    <div class="query">${this.escapeHtml(results.query)}</div>
+    <div class="query">${escapeHtml(results.query)}</div>
     <div class="table-container">
         <table>
             <thead>
@@ -157,50 +163,12 @@ export class ResultsPanel {
         </table>
     </div>
     <div class="actions">
-        <button onclick="exportCsv()">Export CSV</button>
-        <button onclick="copyToClipboard()">Copy All</button>
+        <button data-action="exportCsv">Export CSV</button>
+        <button data-action="copyAll">Copy All</button>
     </div>
-    <script>
-        const vscode = acquireVsCodeApi();
-        const results = ${JSON.stringify(results)};
-
-        function exportCsv() {
-            const header = results.columns.join(',');
-            const rows = results.rows.map(row =>
-                results.columns.map(col => {
-                    const val = row[col];
-                    if (val === null || val === undefined) return '';
-                    const str = String(val);
-                    if (str.includes(',') || str.includes('"') || str.includes('\\n')) {
-                        return '"' + str.replace(/"/g, '""') + '"';
-                    }
-                    return str;
-                }).join(',')
-            );
-            const csv = [header, ...rows].join('\\n');
-            vscode.postMessage({ type: 'export', format: 'csv', data: csv });
-        }
-
-        function copyToClipboard() {
-            const header = results.columns.join('\\t');
-            const rows = results.rows.map(row =>
-                results.columns.map(col => row[col] ?? '').join('\\t')
-            );
-            const text = [header, ...rows].join('\\n');
-            navigator.clipboard.writeText(text);
-        }
-    </script>
+    ${assets.script}
 </body>
 </html>`;
-    }
-
-    private escapeHtml(text: string): string {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
     }
 
     public dispose(): void {

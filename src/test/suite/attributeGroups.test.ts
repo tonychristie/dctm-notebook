@@ -30,10 +30,32 @@ suite('Attribute Groups Test Suite', () => {
         test('sorts attributes by name in every group', () => {
             const groups = groupObjectAttributes([
                 { name: 'title' }, { name: 'r_object_type' }, { name: 'object_name' }, { name: 'r_creation_date' }
-            ]);
+            ], undefined);
 
             assert.deepStrictEqual(names(groups.standard), ['object_name', 'title']);
             assert.deepStrictEqual(names(groups.system), ['r_creation_date', 'r_object_type']);
+            assert.deepStrictEqual(groups.custom, []);
+        });
+
+        test('sends attributes without a prefix that the standard type lacks to the custom group', () => {
+            const groups = groupObjectAttributes(
+                [{ name: 'title' }, { name: 'odms_revision' }, { name: 'object_name' }, { name: 'odms_asset' }],
+                new Set(['object_name', 'title'])
+            );
+
+            assert.deepStrictEqual(names(groups.standard), ['object_name', 'title']);
+            assert.deepStrictEqual(names(groups.custom), ['odms_asset', 'odms_revision']);
+        });
+
+        test('keeps prefixed attributes in their prefix groups when the standard type lacks them', () => {
+            const groups = groupObjectAttributes(
+                [{ name: 'r_folder_path' }, { name: 'a_custom' }, { name: 'i_ancestor_id' }],
+                new Set(['object_name'])
+            );
+
+            assert.deepStrictEqual(names(groups.system), ['r_folder_path']);
+            assert.deepStrictEqual(names(groups.application), ['a_custom']);
+            assert.deepStrictEqual(names(groups.internal), ['i_ancestor_id']);
             assert.deepStrictEqual(groups.custom, []);
         });
     });

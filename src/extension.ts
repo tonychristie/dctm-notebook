@@ -128,10 +128,10 @@ export function activate(context: vscode.ExtensionContext) {
     const apiReference = registerApiMethodReference(context);
 
     // Register notebook support for .dctmbook files
-    registerNotebook(context, connectionManager, dqlExecutor, apiExecutor, apiReference);
+    registerNotebook(context, connectionManager, typeCache, dqlExecutor, apiExecutor, apiReference);
 
     // Register Object Dump sidebar view
-    registerObjectDumpView(context, connectionManager);
+    registerObjectDumpView(context, connectionManager, typeCache);
 
     // Auto-refresh caches on connection
     connectionManager.onConnectionChange(async (connected) => {

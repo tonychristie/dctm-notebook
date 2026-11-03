@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
 import { ObjectDumpPanel } from './objectDumpPanel';
+import { TypeCache } from './typeCache';
 import { escapeHtml, isObjectId } from './htmlUtils';
 import { addToRecent } from './navigationHistory';
 import { webviewAssets, webviewResourceRoots } from './webviewHtml';
@@ -15,12 +16,14 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
     private view?: vscode.WebviewView;
     private readonly extensionUri: vscode.Uri;
     private readonly connectionManager: ConnectionManager;
+    private readonly typeCache: TypeCache;
     private dumpHistory: string[] = [];
     private readonly maxHistorySize = 20;
 
-    constructor(extensionUri: vscode.Uri, connectionManager: ConnectionManager) {
+    constructor(extensionUri: vscode.Uri, connectionManager: ConnectionManager, typeCache: TypeCache) {
         this.extensionUri = extensionUri;
         this.connectionManager = connectionManager;
+        this.typeCache = typeCache;
     }
 
     public resolveWebviewView(
@@ -88,6 +91,7 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
             await ObjectDumpPanel.createOrShow(
                 this.extensionUri,
                 this.connectionManager,
+                this.typeCache,
                 trimmedId
             );
             // Add to history (move to top if already exists)
@@ -304,9 +308,10 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
  */
 export function registerObjectDumpView(
     context: vscode.ExtensionContext,
-    connectionManager: ConnectionManager
+    connectionManager: ConnectionManager,
+    typeCache: TypeCache
 ): ObjectDumpViewProvider {
-    const provider = new ObjectDumpViewProvider(context.extensionUri, connectionManager);
+    const provider = new ObjectDumpViewProvider(context.extensionUri, connectionManager, typeCache);
 
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(

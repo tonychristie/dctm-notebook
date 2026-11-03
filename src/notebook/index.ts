@@ -7,6 +7,7 @@ import { DqlExecutor } from '../dqlExecutor';
 import { ApiExecutor } from '../apiExecutor';
 import { ApiMethodReference } from '../apiMethodReference';
 import { ObjectDumpPanel } from '../objectDumpPanel';
+import { TypeCache } from '../typeCache';
 import { extractObjectId } from '../apiPanel';
 import { isObjectId } from '../htmlUtils';
 import { exportToExcel, exportToJson } from './exporter';
@@ -27,6 +28,7 @@ export { NotebookApiCompletionProvider, registerNotebookCompletions } from './no
 export function registerNotebook(
     context: vscode.ExtensionContext,
     connectionManager: ConnectionManager,
+    typeCache: TypeCache,
     dqlExecutor: DqlExecutor,
     apiExecutor: ApiExecutor,
     apiReference?: ApiMethodReference
@@ -73,7 +75,7 @@ export function registerNotebook(
                 return;
             }
             try {
-                await ObjectDumpPanel.createOrShow(context.extensionUri, connectionManager, message.objectId);
+                await ObjectDumpPanel.createOrShow(context.extensionUri, connectionManager, typeCache, message.objectId);
             } catch (error) {
                 const errorMsg = error instanceof Error ? error.message : String(error);
                 vscode.window.showErrorMessage(`Failed to dump object: ${errorMsg}`);
@@ -94,7 +96,7 @@ export function registerNotebook(
     context.subscriptions.push(messageDisposable);
 
     // Register notebook-specific commands
-    registerNotebookCommands(context, connectionManager);
+    registerNotebookCommands(context, connectionManager, typeCache);
 
     // Register notebook connection status bar
     registerNotebookStatusBar(context, connectionManager);
@@ -218,7 +220,8 @@ function registerNotebookStatusBar(
  */
 function registerNotebookCommands(
     context: vscode.ExtensionContext,
-    connectionManager: ConnectionManager
+    connectionManager: ConnectionManager,
+    typeCache: TypeCache
 ): void {
     // Command to insert a new DQL cell
     const insertDqlCell = vscode.commands.registerCommand(
@@ -367,7 +370,7 @@ function registerNotebookCommands(
             }
 
             try {
-                await ObjectDumpPanel.createOrShow(context.extensionUri, connectionManager, objectId);
+                await ObjectDumpPanel.createOrShow(context.extensionUri, connectionManager, typeCache, objectId);
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 vscode.window.showErrorMessage(`Failed to dump object: ${message}`);

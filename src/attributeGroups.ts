@@ -57,11 +57,19 @@ export function categorizeObjectAttribute(name: string): ObjectAttributeGroup {
     return 'standard';
 }
 
-export function groupObjectAttributes<T extends NamedAttribute>(attributes: T[]): Record<ObjectAttributeGroup, T[]> {
+export function groupObjectAttributes<T extends NamedAttribute>(
+    attributes: T[],
+    standardAttributeNames: ReadonlySet<string> | undefined
+): Record<ObjectAttributeGroup, T[]> {
     return groupAttributes(
         attributes,
         ['custom', 'standard', 'system', 'application', 'internal'],
-        attr => categorizeObjectAttribute(attr.name)
+        attr => {
+            const group = categorizeObjectAttribute(attr.name);
+            return group === 'standard' && standardAttributeNames && !standardAttributeNames.has(attr.name)
+                ? 'custom'
+                : group;
+        }
     );
 }
 

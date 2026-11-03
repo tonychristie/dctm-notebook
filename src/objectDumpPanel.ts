@@ -1,24 +1,15 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
-import { BridgeAttributeValue } from './bridgeTypes';
 import { escapeHtml, isObjectId } from './htmlUtils';
 import { NavigationHistory } from './navigationHistory';
 import { WebviewAssets, webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml';
 import {
+    ObjectAttributeEntry,
     ObjectAttributeGroup as AttributeGroup,
     formatAttributeValue,
-    groupObjectAttributes
+    groupObjectAttributes,
+    toObjectAttributeEntry
 } from './attributeGroups';
-
-/**
- * Attribute information with value
- */
-export interface AttributeInfo {
-    name: string;
-    type: string;
-    value: unknown;
-    isRepeating: boolean;
-}
 
 /**
  * Object dump data
@@ -27,7 +18,7 @@ export interface ObjectDump {
     objectId: string;
     typeName: string;
     objectName: string;
-    attributes: AttributeInfo[];
+    attributes: ObjectAttributeEntry[];
     fetchTime: number;
 }
 
@@ -198,7 +189,6 @@ export class ObjectDumpPanel {
 
     /**
      * Fetch object dump via the bridge /objects endpoint.
-     * Both DFC and REST bridges now return structured JSON with type metadata.
      */
     private async fetchObjectDump(objectId: string): Promise<ObjectDump> {
         const connection = this.connectionManager.getActiveConnection();
@@ -212,7 +202,7 @@ export class ObjectDumpPanel {
 
     /**
      * Fetch object via bridge /objects endpoint.
-     * Both DFC and REST bridges return structured JSON with type metadata.
+     * An attribute arrives as { type, value, repeating } or, from dfc-bridge 1.2.0, as a plain value.
      */
     private async fetchObjectFromBridge(
         bridge: ReturnType<ConnectionManager['getDctmBridge']>,
@@ -223,19 +213,8 @@ export class ObjectDumpPanel {
         const objectInfo = await bridge.getObject(sessionId, objectId);
         const fetchTime = Date.now() - startTime;
 
-        // Bridge returns attributes with type metadata: { type, value, repeating }
-        const attributes: AttributeInfo[] = [];
-
-        for (const [name, attrData] of Object.entries(objectInfo.attributes)) {
-            const bridgeAttr = attrData as BridgeAttributeValue;
-
-            attributes.push({
-                name,
-                type: bridgeAttr.type,
-                value: bridgeAttr.value,
-                isRepeating: bridgeAttr.repeating
-            });
-        }
+        const attributes = Object.entries(objectInfo.attributes)
+            .map(([name, entry]) => toObjectAttributeEntry(name, entry));
 
         return {
             objectId: objectInfo.objectId,
@@ -618,7 +597,7 @@ export class ObjectDumpPanel {
     /**
      * Render a single attribute row
      */
-    private renderAttribute(attr: AttributeInfo): string {
+    private renderAttribute(attr: ObjectAttributeEntry): string {
         const valueStr = formatAttributeValue(attr.value, attr.isRepeating);
         const valueIsObjId = isObjectId(attr.value);
         const valueClass = attr.value === null ? 'null' : (valueIsObjId ? 'object-id' : '');

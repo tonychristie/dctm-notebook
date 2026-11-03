@@ -1,3 +1,4 @@
+import { BridgeAttributeValue } from './bridgeTypes';
 import { isObjectId } from './htmlUtils';
 
 export type TypeAttributeGroup = 'custom' | 'standard' | 'system' | 'application' | 'internal';
@@ -128,6 +129,25 @@ export function groupGroupAttributes<T extends NamedAttribute>(attributes: T[]):
             return group === 'members' ? null : group;
         }
     );
+}
+
+export interface ObjectAttributeEntry {
+    name: string;
+    type: string;
+    value: unknown;
+    isRepeating: boolean;
+}
+
+function isTypedEntry(entry: unknown): entry is BridgeAttributeValue {
+    return typeof entry === 'object' && entry !== null && !Array.isArray(entry)
+        && typeof (entry as { type?: unknown }).type === 'string';
+}
+
+export function toObjectAttributeEntry(name: string, entry: unknown): ObjectAttributeEntry {
+    if (isTypedEntry(entry)) {
+        return { name, type: entry.type, value: entry.value, isRepeating: entry.repeating };
+    }
+    return { name, type: '', value: entry, isRepeating: Array.isArray(entry) };
 }
 
 export function formatAttributeValue(value: unknown, isRepeating: boolean): string {

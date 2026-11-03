@@ -23,7 +23,7 @@ FROM dm_document d
 WHERE object_name = 'test.doc'
 
 -- Query with repeating attributes
-SELECT r_object_id, object_name, keywords[*]
+SELECT r_object_id, object_name, keywords
 FROM dm_document
 WHERE ANY keywords = 'confidential'
 

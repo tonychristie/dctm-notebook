@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { DctmNotebookSerializer } from './notebookSerializer';
 import { DctmNotebookController } from './notebookController';
 import { registerNotebookCompletions } from './notebookCompletionProvider';
-import { ConnectionManager } from '../connectionManager';
+import { ConnectionManager, describeConnection } from '../connectionManager';
 import { DqlExecutor } from '../dqlExecutor';
 import { ApiExecutor } from '../apiExecutor';
 import { ApiMethodReference } from '../apiMethodReference';
@@ -390,8 +390,8 @@ function registerNotebookCommands(
             const currentBinding = editor.notebook.metadata?.connection as string | undefined;
             const items = connections.map(c => ({
                 label: c.name === currentBinding ? `$(check) ${c.name}` : c.name,
-                description: c.repository,
-                detail: c.docbroker ? `${c.docbroker}:${c.port || 1489}` : 'Bridge connection',
+                description: describeConnection(c),
+                detail: c.repository,
                 connectionName: c.name
             }));
 

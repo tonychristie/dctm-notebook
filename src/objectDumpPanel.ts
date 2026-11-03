@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
 import { escapeHtml, isObjectId } from './htmlUtils';
 import { NavigationHistory } from './navigationHistory';
+import { TypeCache } from './typeCache';
 import { WebviewAssets, webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml';
 import {
     ObjectAttributeEntry,
@@ -19,6 +20,7 @@ export interface ObjectDump {
     typeName: string;
     objectName: string;
     attributes: ObjectAttributeEntry[];
+    standardAttributeNames: ReadonlySet<string> | undefined;
     fetchTime: number;
 }
 
@@ -43,6 +45,7 @@ export class ObjectDumpPanel {
 
     private readonly panel: vscode.WebviewPanel;
     private readonly connectionManager: ConnectionManager;
+    private readonly typeCache: TypeCache;
     private disposables: vscode.Disposable[] = [];
 
     private history = new NavigationHistory<NavigationEntry>();
@@ -50,6 +53,7 @@ export class ObjectDumpPanel {
     public static async createOrShow(
         extensionUri: vscode.Uri,
         connectionManager: ConnectionManager,
+        typeCache: TypeCache,
         objectId: string
     ): Promise<void> {
         const column = vscode.window.activeTextEditor
@@ -81,7 +85,7 @@ export class ObjectDumpPanel {
             }
         );
 
-        const dumpPanel = new ObjectDumpPanel(panel, connectionManager, extensionUri);
+        const dumpPanel = new ObjectDumpPanel(panel, connectionManager, typeCache, extensionUri);
         ObjectDumpPanel.allPanels.add(dumpPanel);
 
         // Only track as currentPanel when reuseWindow is true
@@ -95,10 +99,12 @@ export class ObjectDumpPanel {
     private constructor(
         panel: vscode.WebviewPanel,
         connectionManager: ConnectionManager,
+        typeCache: TypeCache,
         private readonly extensionUri: vscode.Uri
     ) {
         this.panel = panel;
         this.connectionManager = connectionManager;
+        this.typeCache = typeCache;
 
         // Set initial loading content
         this.panel.webview.html = this.getLoadingHtml();
@@ -197,7 +203,22 @@ export class ObjectDumpPanel {
         }
 
         const bridge = this.connectionManager.getDctmBridge();
-        return this.fetchObjectFromBridge(bridge, connection.sessionId, objectId, Date.now());
+        const dump = await this.fetchObjectFromBridge(bridge, connection.sessionId, objectId, Date.now());
+        dump.standardAttributeNames = await this.fetchStandardAttributeNames(dump.typeName);
+        return dump;
+    }
+
+    private async fetchStandardAttributeNames(typeName: string): Promise<ReadonlySet<string> | undefined> {
+        const standardTypeName = this.typeCache.getNearestStandardType(typeName);
+        if (!standardTypeName) {
+            return undefined;
+        }
+        const type = await this.typeCache.fetchTypeDetails(standardTypeName);
+        // fetchTypeDetails returns the type with no attributes when the request fails.
+        if (!type || type.attributes.length === 0) {
+            return undefined;
+        }
+        return new Set(type.attributes.map(attr => attr.name));
     }
 
     /**
@@ -221,6 +242,7 @@ export class ObjectDumpPanel {
             typeName: objectInfo.type || 'unknown',
             objectName: objectInfo.name || objectId,
             attributes,
+            standardAttributeNames: undefined,
             fetchTime
         };
     }
@@ -336,7 +358,7 @@ export class ObjectDumpPanel {
      * Generate content HTML with grouped attributes
      */
     private getContentHtml(dump: ObjectDump): string {
-        const groups = groupObjectAttributes(dump.attributes);
+        const groups = groupObjectAttributes(dump.attributes, dump.standardAttributeNames);
 
         const groupLabels: Record<AttributeGroup, string> = {
             custom: 'Custom Attributes',

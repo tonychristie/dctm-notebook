@@ -66,6 +66,15 @@ export class TypeCache {
         return this.typeMap.get(typeName.toLowerCase());
     }
 
+    // Documentum reserves the dm prefixes (dm_, dmi_, dmr_, dmc_) for its own types.
+    getNearestStandardType(typeName: string): string | undefined {
+        let type = this.getType(typeName);
+        while (type && !type.name.toLowerCase().startsWith('dm')) {
+            type = type.superType ? this.getType(type.superType) : undefined;
+        }
+        return type?.name;
+    }
+
     /**
      * Get child types of a given type (case-insensitive)
      */

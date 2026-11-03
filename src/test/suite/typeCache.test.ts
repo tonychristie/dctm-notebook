@@ -277,6 +277,32 @@ suite('TypeCache with Mock Data', () => {
         });
     });
 
+    suite('getNearestStandardType', () => {
+        test('returns the standard super type of a custom type', () => {
+            assert.strictEqual(typeCache.getNearestStandardType('my_document'), 'dm_document');
+        });
+
+        test('returns the standard type two levels above a custom type', () => {
+            typeCache.addMockType('my_document_v2', {
+                name: 'my_document_v2',
+                superType: 'my_document',
+                isInternal: false,
+                attributes: [],
+                children: []
+            });
+
+            assert.strictEqual(typeCache.getNearestStandardType('my_document_v2'), 'dm_document');
+        });
+
+        test('returns a standard type itself', () => {
+            assert.strictEqual(typeCache.getNearestStandardType('dm_folder'), 'dm_folder');
+        });
+
+        test('returns undefined for a type that is not in the cache', () => {
+            assert.strictEqual(typeCache.getNearestStandardType('unknown_type'), undefined);
+        });
+    });
+
     suite('getAttributes', () => {
         test('returns all attributes when includeInherited is true', () => {
             const attrs = typeCache.getAttributes('dm_document', true);

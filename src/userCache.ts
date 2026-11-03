@@ -165,17 +165,17 @@ export class UserCache {
      * Fetch detailed user info including all attributes.
      * The bridge handles REST vs DQL routing internally.
      */
-    async fetchUserDetails(userName: string): Promise<UserInfo | undefined> {
+    async fetchUserDetails(userName: string, refresh = false): Promise<UserInfo | undefined> {
         const connection = this.connectionManager.getActiveConnection();
         if (!connection || !connection.sessionId) {
             return undefined;
         }
 
         const userKey = userName.toLowerCase();
-        let user = this.userMap.get(userKey);
+        const user = this.userMap.get(userKey);
 
         // If we already have detailed attributes, return cached
-        if (user && user.attributes.length > 0) {
+        if (!refresh && user && user.attributes.length > 0) {
             return user;
         }
 
@@ -192,31 +192,26 @@ export class UserCache {
                 dataType: attr.dataType
             }));
 
-            // Create or update user info
-            if (!user) {
-                user = {
-                    userName: bridgeUser.userName,
-                    userLoginName: '',
-                    userOsName: bridgeUser.userOsName || '',
-                    userAddress: bridgeUser.userAddress || '',
-                    userState: parseInt(bridgeUser.userState, 10) || 0,
-                    userSource: '',
-                    defaultFolder: bridgeUser.defaultFolder || '',
-                    defaultGroup: bridgeUser.userGroupName || '',
-                    description: '',
-                    email: '',
-                    homeDocbase: '',
-                    clientCapability: 0,
-                    aliasSetId: '',
-                    acl: '',
-                    attributes: attributes
-                };
-                this.userMap.set(userKey, user);
-            } else {
-                user.attributes = attributes;
-            }
+            const fetched: UserInfo = {
+                userName: bridgeUser.userName,
+                userLoginName: bridgeUser.userLoginName || '',
+                userOsName: bridgeUser.userOsName || '',
+                userAddress: bridgeUser.userAddress || '',
+                userState: parseInt(bridgeUser.userState, 10) || 0,
+                userSource: bridgeUser.userSource || '',
+                defaultFolder: bridgeUser.defaultFolder || '',
+                defaultGroup: bridgeUser.userGroupName || '',
+                description: bridgeUser.description || '',
+                email: '',
+                homeDocbase: '',
+                clientCapability: 0,
+                aliasSetId: '',
+                acl: '',
+                attributes: attributes
+            };
+            this.userMap.set(userKey, fetched);
 
-            return user;
+            return fetched;
         } catch {
             // Return basic user without attributes on error
             return user;

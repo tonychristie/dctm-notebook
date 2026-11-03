@@ -86,7 +86,7 @@ export class TypeDumpPanel {
             async (message) => {
                 switch (message.command) {
                     case 'refresh':
-                        await this.loadType(this.currentTypeName);
+                        await this.loadType(this.currentTypeName, true);
                         break;
                     case 'openType':
                         await this.loadType(message.typeName);
@@ -108,13 +108,13 @@ export class TypeDumpPanel {
     /**
      * Load and display a type's details
      */
-    public async loadType(typeName: string): Promise<void> {
+    public async loadType(typeName: string, refresh = false): Promise<void> {
         this.currentTypeName = typeName;
         this.panel.title = `Type: ${typeName}`;
         this.panel.webview.html = this.getLoadingHtml();
 
         try {
-            const type = await this.typeCache.fetchTypeDetails(typeName);
+            const type = await this.typeCache.fetchTypeDetails(typeName, refresh);
             if (!type) {
                 this.panel.webview.html = this.getErrorHtml(typeName, 'Type not found');
                 return;

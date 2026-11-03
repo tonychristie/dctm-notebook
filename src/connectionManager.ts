@@ -62,6 +62,14 @@ function buildConnectParams(
         };
 }
 
+export function describeConnection(connection: DocumentumConnection): string {
+    return connection.type === 'rest'
+        ? connection.endpoint || 'REST'
+        : connection.docbroker
+            ? `${connection.docbroker}:${connection.port || 1489}`
+            : 'DFC';
+}
+
 /**
  * Manages Documentum connections via the DFC Bridge.
  *
@@ -129,11 +137,7 @@ export class ConnectionManager {
         // Let user pick a connection
         const items = connections.map(c => ({
             label: c.name,
-            description: c.type === 'rest'
-                ? c.endpoint || 'REST'
-                : c.docbroker
-                    ? `${c.docbroker}:${c.port || 1489}`
-                    : 'DFC',
+            description: describeConnection(c),
             detail: c.repository,
             connection: c
         }));
@@ -243,11 +247,7 @@ export class ConnectionManager {
 
         const items: vscode.QuickPickItem[] = connections.map(c => ({
             label: c.name === currentName ? `$(check) ${c.name}` : c.name,
-            description: c.type === 'rest'
-                ? c.endpoint || 'REST'
-                : c.docbroker
-                    ? `${c.docbroker}:${c.port || 1489}`
-                    : 'DFC',
+            description: describeConnection(c),
             detail: c.repository
         }));
 

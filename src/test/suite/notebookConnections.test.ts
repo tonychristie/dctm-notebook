@@ -4,7 +4,8 @@ import {
     ActiveConnection,
     ConnectionManager,
     DfcProfile,
-    DocumentumConnection
+    DocumentumConnection,
+    describeConnection
 } from '../../connectionManager';
 import { DctmBridge, DfcConnectParams } from '../../dctmBridge';
 
@@ -209,6 +210,28 @@ suite('Notebook Connections Test Suite', () => {
         test('returns the global connection otherwise', () => {
             assert.strictEqual(manager.getEffectiveConnection('nb1'), globalConnection);
             assert.strictEqual(manager.getEffectiveConnection(), globalConnection);
+        });
+    });
+
+    suite('describeConnection', () => {
+        test('returns the endpoint for a REST connection', () => {
+            assert.strictEqual(describeConnection(restConnection), 'http://dctm:8080/dctm-rest');
+        });
+
+        test('returns REST for a REST connection without an endpoint', () => {
+            assert.strictEqual(describeConnection({ ...restConnection, endpoint: undefined }), 'REST');
+        });
+
+        test('returns docbroker:port for a DFC connection', () => {
+            assert.strictEqual(describeConnection(dfcConnection), 'broker:1500');
+        });
+
+        test('defaults the port to 1489 for a DFC connection without a port', () => {
+            assert.strictEqual(describeConnection({ ...dfcConnection, port: undefined }), 'broker:1489');
+        });
+
+        test('returns DFC for a DFC connection without a docbroker', () => {
+            assert.strictEqual(describeConnection(defaultsConnection), 'DFC');
         });
     });
 });

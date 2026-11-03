@@ -1,4 +1,5 @@
 const esbuild = require('esbuild');
+const fs = require('fs');
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
@@ -83,6 +84,7 @@ async function main() {
     await rendererCtx.watch();
     await webviewsCtx.watch();
   } else {
+    fs.rmSync('out', { recursive: true, force: true });
     await ctx.rebuild();
     await rendererCtx.rebuild();
     await webviewsCtx.rebuild();

@@ -81,7 +81,11 @@ export class RestBridgeImpl implements IUnifiedBridge {
             { name: 'description', value: restGroup.description, dataType: 'string' },
             { name: 'group_class', value: restGroup.groupClass, dataType: 'string' },
             { name: 'group_admin', value: restGroup.groupAdmin, dataType: 'string' },
-            { name: 'is_private', value: restGroup.isPrivate, dataType: 'boolean' }
+            { name: 'is_private', value: restGroup.isPrivate, dataType: 'boolean' },
+            { name: 'owner_name', value: restGroup.ownerName, dataType: 'string' },
+            { name: 'group_address', value: restGroup.groupAddress, dataType: 'string' },
+            { name: 'group_source', value: restGroup.groupSource, dataType: 'string' },
+            { name: 'is_dynamic', value: restGroup.isDynamic, dataType: 'boolean' }
         ].sort((a, b) => a.name.localeCompare(b.name));
 
         return { ...restGroup, attributes };

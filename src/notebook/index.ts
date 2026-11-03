@@ -69,17 +69,7 @@ export function registerNotebook(
         };
 
         if (message.command === 'dumpObject' && message.objectId) {
-            const connection = connectionManager.getActiveConnection();
-            if (!connection) {
-                vscode.window.showErrorMessage('Not connected to Documentum. Use "Documentum: Connect" first.');
-                return;
-            }
-            try {
-                await ObjectDumpPanel.createOrShow(context.extensionUri, connectionManager, typeCache, message.objectId);
-            } catch (error) {
-                const errorMsg = error instanceof Error ? error.message : String(error);
-                vscode.window.showErrorMessage(`Failed to dump object: ${errorMsg}`);
-            }
+            await vscode.commands.executeCommand('dctm.dumpObject', message.objectId);
         } else if (message.command === 'exportData' && message.data) {
             try {
                 if (message.data.format === 'excel') {

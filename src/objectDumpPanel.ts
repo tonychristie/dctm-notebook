@@ -4,21 +4,12 @@ import { escapeHtml, isObjectId } from './htmlUtils';
 import { NavigationHistory } from './navigationHistory';
 import { WebviewAssets, webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml';
 import {
+    ObjectAttributeEntry,
     ObjectAttributeGroup as AttributeGroup,
     formatAttributeValue,
     groupObjectAttributes,
     toObjectAttributeEntry
 } from './attributeGroups';
-
-/**
- * Attribute information with value
- */
-export interface AttributeInfo {
-    name: string;
-    type: string;
-    value: unknown;
-    isRepeating: boolean;
-}
 
 /**
  * Object dump data
@@ -27,7 +18,7 @@ export interface ObjectDump {
     objectId: string;
     typeName: string;
     objectName: string;
-    attributes: AttributeInfo[];
+    attributes: ObjectAttributeEntry[];
     fetchTime: number;
 }
 
@@ -222,7 +213,7 @@ export class ObjectDumpPanel {
         const objectInfo = await bridge.getObject(sessionId, objectId);
         const fetchTime = Date.now() - startTime;
 
-        const attributes: AttributeInfo[] = Object.entries(objectInfo.attributes)
+        const attributes = Object.entries(objectInfo.attributes)
             .map(([name, entry]) => toObjectAttributeEntry(name, entry));
 
         return {
@@ -606,7 +597,7 @@ export class ObjectDumpPanel {
     /**
      * Render a single attribute row
      */
-    private renderAttribute(attr: AttributeInfo): string {
+    private renderAttribute(attr: ObjectAttributeEntry): string {
         const valueStr = formatAttributeValue(attr.value, attr.isRepeating);
         const valueIsObjId = isObjectId(attr.value);
         const valueClass = attr.value === null ? 'null' : (valueIsObjId ? 'object-id' : '');

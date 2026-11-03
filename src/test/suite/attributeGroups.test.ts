@@ -10,7 +10,8 @@ import {
     groupGroupAttributes,
     groupObjectAttributes,
     groupTypeAttributes,
-    groupUserAttributes
+    groupUserAttributes,
+    toObjectAttributeEntry
 } from '../../attributeGroups';
 
 function names(attrs: { name: string }[]): string[] {
@@ -102,6 +103,36 @@ suite('Attribute Groups Test Suite', () => {
 
             assert.deepStrictEqual(groups.members, []);
             assert.deepStrictEqual(names(groups.identity), ['description', 'group_name']);
+        });
+    });
+
+    suite('toObjectAttributeEntry', () => {
+        test('reads type, value and repeating flag from a typed entry', () => {
+            assert.deepStrictEqual(
+                toObjectAttributeEntry('keywords', { type: 'string', value: ['a', 'b'], repeating: true }),
+                { name: 'keywords', type: 'string', value: ['a', 'b'], isRepeating: true }
+            );
+        });
+
+        test('treats a plain string as an untyped single value', () => {
+            assert.deepStrictEqual(
+                toObjectAttributeEntry('object_name', 'report'),
+                { name: 'object_name', type: '', value: 'report', isRepeating: false }
+            );
+        });
+
+        test('treats a plain array as an untyped repeating value', () => {
+            assert.deepStrictEqual(
+                toObjectAttributeEntry('r_version_label', ['1.0', 'CURRENT']),
+                { name: 'r_version_label', type: '', value: ['1.0', 'CURRENT'], isRepeating: true }
+            );
+        });
+
+        test('treats a plain null as an untyped single value', () => {
+            assert.deepStrictEqual(
+                toObjectAttributeEntry('title', null),
+                { name: 'title', type: '', value: null, isRepeating: false }
+            );
         });
     });
 

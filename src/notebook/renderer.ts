@@ -603,13 +603,27 @@ function renderDqlResult(
             contextMenu.appendChild(dumpObj);
         }
 
-        contextMenu.style.left = e.pageX + 'px';
-        contextMenu.style.top = e.pageY + 'px';
+        container.style.minHeight = '';
         contextMenu.style.display = 'block';
+        const menuHeight = contextMenu.offsetHeight;
+        const menuWidth = contextMenu.offsetWidth;
+
+        // Anything below the output is drawn under the next cell's editor, so grow the
+        // output to fit the menu; VS Code moves the following cells down.
+        if (container.offsetHeight < menuHeight) {
+            container.style.minHeight = menuHeight + 'px';
+        }
+
+        const rect = container.getBoundingClientRect();
+        const top = Math.max(rect.top, Math.min(e.clientY, rect.bottom - menuHeight));
+        const left = Math.max(rect.left, Math.min(e.clientX, rect.right - menuWidth));
+        contextMenu.style.top = top + 'px';
+        contextMenu.style.left = left + 'px';
     }
 
     function hideContextMenu(): void {
         contextMenu.style.display = 'none';
+        container.style.minHeight = '';
     }
 
     // Global event handlers

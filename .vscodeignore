@@ -21,3 +21,4 @@ esbuild.js
 tsconfig.renderer.json
 tsconfig.webviews.json
 .vscode-test.mjs
+*.tsbuildinfo

@@ -54,6 +54,29 @@ suite('DfcBridgeImpl Test Suite', () => {
             }]);
         });
 
+        test('maps a row to user details', async () => {
+            const { impl } = createImpl([{
+                r_object_id: '1100000180000101',
+                user_name: 'jsmith',
+                user_login_name: 'jsmith_login',
+                user_os_name: 'jsmith',
+                user_address: 'jsmith@example.com',
+                user_state: 1,
+                user_source: 'LDAP',
+                default_folder: '/jsmith',
+                user_group_name: 'docu',
+                description: 'Test user',
+                r_is_superuser: false
+            }]);
+
+            const user = await impl.getUser('s1', 'jsmith');
+
+            assert.strictEqual(user.userLoginName, 'jsmith_login');
+            assert.strictEqual(user.userSource, 'LDAP');
+            assert.strictEqual(user.description, 'Test user');
+            assert.strictEqual(user.userState, '1');
+        });
+
         test('maps rows to groups', async () => {
             const { impl } = createImpl([{ r_object_id: '1200000180000101', group_name: 'admins' }]);
 

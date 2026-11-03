@@ -86,7 +86,7 @@ export class GroupDumpPanel {
             async (message) => {
                 switch (message.command) {
                     case 'refresh':
-                        await this.loadGroup(this.currentGroupName);
+                        await this.loadGroup(this.currentGroupName, true);
                         break;
                     case 'copyValue':
                         await vscode.env.clipboard.writeText(message.value);
@@ -114,13 +114,13 @@ export class GroupDumpPanel {
     /**
      * Load and display a group's details
      */
-    public async loadGroup(groupName: string): Promise<void> {
+    public async loadGroup(groupName: string, refresh = false): Promise<void> {
         this.currentGroupName = groupName;
         this.panel.title = `Group: ${groupName}`;
         this.panel.webview.html = this.getLoadingHtml();
 
         try {
-            const group = await this.groupCache.fetchGroupDetails(groupName);
+            const group = await this.groupCache.fetchGroupDetails(groupName, refresh);
             if (!group) {
                 this.panel.webview.html = this.getErrorHtml(groupName, 'Group not found');
                 return;

@@ -348,3 +348,44 @@ suite('TypeCache with Mock Data', () => {
         });
     });
 });
+
+suite('TypeCache fetchTypeDetails', () => {
+    const bridgeAttributes = [
+        { name: 'r_object_id', dataType: 'ID', length: 16, isRepeating: false, isInherited: true },
+        { name: 'custom_field', dataType: 'STRING', length: 100, isRepeating: false, isInherited: false },
+        { name: 'qa_refresh_note', dataType: 'STRING', length: 32, isRepeating: false, isInherited: false }
+    ];
+
+    test('refresh fetches a cached type from the bridge and replaces its attributes', async () => {
+        let bridgeCalls = 0;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const connectionManager: any = {
+            getActiveConnection: () => ({ sessionId: 'session-1' }),
+            getDctmBridge: () => ({
+                getTypeDetails: async () => {
+                    bridgeCalls++;
+                    return { name: 'my_document', superType: 'dm_document', isInternal: false, attributes: bridgeAttributes };
+                }
+            }),
+            onConnectionChange: () => {}
+        };
+        const typeCache = new TypeCache(connectionManager);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (typeCache as any).typeMap.set('my_document', {
+            name: 'my_document',
+            superType: 'dm_document',
+            isInternal: false,
+            attributes: [
+                { name: 'r_object_id', dataType: 'ID', length: 16, isRepeating: false, isInherited: true },
+                { name: 'custom_field', dataType: 'STRING', length: 100, isRepeating: false, isInherited: false }
+            ],
+            children: []
+        });
+
+        const type = await typeCache.fetchTypeDetails('my_document', true);
+
+        assert.strictEqual(bridgeCalls, 1);
+        assert.ok(type);
+        assert.deepStrictEqual(type.attributes, bridgeAttributes);
+    });
+});

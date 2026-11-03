@@ -270,3 +270,81 @@ suite('UserCache with Mock Data', () => {
         });
     });
 });
+
+suite('UserCache fetchUserDetails', () => {
+    const bridgeUser = {
+        objectId: '1100000180000101',
+        userName: 'testuser',
+        userOsName: 'testuser_os',
+        userAddress: 'testuser@example.com',
+        userState: '1',
+        defaultFolder: '/testuser',
+        userGroupName: 'docu',
+        superUser: false,
+        userLoginName: 'tuser',
+        userSource: 'LDAP',
+        description: 'Test User (updated)',
+        attributes: [{ name: 'user_state', value: 1, dataType: 'integer' }]
+    };
+
+    let bridgeCalls: number;
+    let userCache: UserCache;
+
+    setup(() => {
+        bridgeCalls = 0;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const connectionManager: any = {
+            getActiveConnection: () => ({ sessionId: 'session-1' }),
+            getDctmBridge: () => ({
+                getUser: async () => {
+                    bridgeCalls++;
+                    return bridgeUser;
+                }
+            }),
+            onConnectionChange: () => {}
+        };
+        userCache = new UserCache(connectionManager);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (userCache as any).userMap.set('testuser', {
+            userName: 'testuser',
+            userLoginName: 'testuser',
+            userOsName: 'testuser',
+            userAddress: '',
+            userState: 0,
+            userSource: '',
+            defaultFolder: '/testuser',
+            defaultGroup: 'docu',
+            description: 'Test User',
+            email: '',
+            homeDocbase: '',
+            clientCapability: 0,
+            aliasSetId: '',
+            acl: '',
+            attributes: [{ name: 'user_state', value: 0, dataType: 'integer' }]
+        });
+    });
+
+    test('refresh fetches a cached user from the bridge and rebuilds it', async () => {
+        const user = await userCache.fetchUserDetails('testuser', true);
+
+        assert.strictEqual(bridgeCalls, 1);
+        assert.ok(user);
+        assert.strictEqual(user.userState, 1);
+        assert.strictEqual(user.userLoginName, 'tuser');
+        assert.strictEqual(user.userSource, 'LDAP');
+        assert.strictEqual(user.userOsName, 'testuser_os');
+        assert.strictEqual(user.userAddress, 'testuser@example.com');
+        assert.strictEqual(user.description, 'Test User (updated)');
+        assert.deepStrictEqual(user.attributes, bridgeUser.attributes);
+        assert.strictEqual(userCache.getUser('testuser'), user);
+    });
+
+    test('without refresh a cached user is returned without calling the bridge', async () => {
+        const user = await userCache.fetchUserDetails('testuser');
+
+        assert.strictEqual(bridgeCalls, 0);
+        assert.ok(user);
+        assert.strictEqual(user.userState, 0);
+    });
+});

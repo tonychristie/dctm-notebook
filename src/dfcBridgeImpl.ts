@@ -149,6 +149,9 @@ export class DfcBridgeImpl implements IUnifiedBridge {
             defaultFolder: row.default_folder as string || '',
             userGroupName: row.user_group_name as string || '',
             superUser: row.r_is_superuser as boolean || false,
+            userLoginName: row.user_login_name as string || '',
+            userSource: row.user_source as string || '',
+            description: row.description as string || '',
             attributes
         };
     }

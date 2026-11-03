@@ -164,17 +164,17 @@ export class GroupCache {
      * Fetch detailed group info including all attributes and members.
      * The bridge handles REST vs DQL routing internally.
      */
-    async fetchGroupDetails(groupName: string): Promise<GroupInfo | undefined> {
+    async fetchGroupDetails(groupName: string, refresh = false): Promise<GroupInfo | undefined> {
         const connection = this.connectionManager.getActiveConnection();
         if (!connection || !connection.sessionId) {
             return undefined;
         }
 
         const groupKey = groupName.toLowerCase();
-        let group = this.groupMap.get(groupKey);
+        const group = this.groupMap.get(groupKey);
 
         // If we already have detailed attributes, return cached
-        if (group && group.attributes.length > 0) {
+        if (!refresh && group && group.attributes.length > 0) {
             return group;
         }
 
@@ -191,35 +191,25 @@ export class GroupCache {
                 dataType: attr.dataType
             }));
 
-            const members = (bridgeGroup.usersNames || []).sort();
-            const groupMembers = (bridgeGroup.groupsNames || []).sort();
+            const fetched: GroupInfo = {
+                groupName: bridgeGroup.groupName,
+                groupAddress: bridgeGroup.groupAddress || '',
+                groupSource: bridgeGroup.groupSource || '',
+                description: bridgeGroup.description || '',
+                groupClass: bridgeGroup.groupClass || '',
+                groupAdmin: bridgeGroup.groupAdmin || '',
+                owner: bridgeGroup.ownerName || '',
+                isPrivate: bridgeGroup.isPrivate || false,
+                isDynamic: bridgeGroup.isDynamic || false,
+                aliasSetId: '',
+                acl: '',
+                members: (bridgeGroup.usersNames || []).sort(),
+                groupMembers: (bridgeGroup.groupsNames || []).sort(),
+                attributes: attributes
+            };
+            this.groupMap.set(groupKey, fetched);
 
-            // Create or update group info
-            if (!group) {
-                group = {
-                    groupName: bridgeGroup.groupName,
-                    groupAddress: '',
-                    groupSource: '',
-                    description: bridgeGroup.description || '',
-                    groupClass: bridgeGroup.groupClass || '',
-                    groupAdmin: bridgeGroup.groupAdmin || '',
-                    owner: '',
-                    isPrivate: bridgeGroup.isPrivate || false,
-                    isDynamic: false,
-                    aliasSetId: '',
-                    acl: '',
-                    members: members,
-                    groupMembers: groupMembers,
-                    attributes: attributes
-                };
-                this.groupMap.set(groupKey, group);
-            } else {
-                group.members = members;
-                group.groupMembers = groupMembers;
-                group.attributes = attributes;
-            }
-
-            return group;
+            return fetched;
         } catch {
             // Return basic group without attributes on error
             return group;

@@ -199,7 +199,7 @@ export class TypeCache {
      * Fetch detailed type info including attributes.
      * The bridge handles backend type (DFC or REST) internally.
      */
-    async fetchTypeDetails(typeName: string): Promise<TypeInfo | undefined> {
+    async fetchTypeDetails(typeName: string, refresh = false): Promise<TypeInfo | undefined> {
         const connection = this.connectionManager.getActiveConnection();
         if (!connection || !connection.sessionId) {
             return undefined;
@@ -211,7 +211,7 @@ export class TypeCache {
         }
 
         // If we already have attributes, return cached
-        if (type.attributes.length > 0) {
+        if (!refresh && type.attributes.length > 0) {
             return type;
         }
 

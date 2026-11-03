@@ -317,3 +317,102 @@ suite('GroupCache with Mock Data', () => {
         });
     });
 });
+
+suite('GroupCache fetchGroupDetails', () => {
+    const bridgeGroup = {
+        objectId: '1200000180000101',
+        groupName: 'docu',
+        description: 'Documentum Users (updated)',
+        groupClass: 'qa_refresh',
+        groupAdmin: 'dmadmin',
+        isPrivate: true,
+        usersNames: ['zuser', 'auser'],
+        groupsNames: ['power_users'],
+        groupAddress: 'docu@example.com',
+        groupSource: 'LDAP',
+        ownerName: 'dmadmin',
+        isDynamic: true,
+        attributes: [{ name: 'group_class', value: 'qa_refresh', dataType: 'string' }]
+    };
+
+    let bridgeCalls: number;
+    let groupCache: GroupCache;
+
+    setup(() => {
+        bridgeCalls = 0;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const connectionManager: any = {
+            getActiveConnection: () => ({ sessionId: 'session-1' }),
+            getDctmBridge: () => ({
+                getGroup: async () => {
+                    bridgeCalls++;
+                    return bridgeGroup;
+                }
+            }),
+            onConnectionChange: () => {}
+        };
+        groupCache = new GroupCache(connectionManager);
+    });
+
+    function cacheGroupWithAttributes(): void {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (groupCache as any).groupMap.set('docu', {
+            groupName: 'docu',
+            groupAddress: '',
+            groupSource: '',
+            description: 'Documentum Users',
+            groupClass: 'group',
+            groupAdmin: 'dm_dbo',
+            owner: 'dm_dbo',
+            isPrivate: false,
+            isDynamic: false,
+            aliasSetId: '',
+            acl: '',
+            members: ['dmadmin'],
+            groupMembers: [],
+            attributes: [{ name: 'group_class', value: 'group', dataType: 'string' }]
+        });
+    }
+
+    test('refresh fetches a cached group from the bridge and rebuilds it', async () => {
+        cacheGroupWithAttributes();
+
+        const group = await groupCache.fetchGroupDetails('docu', true);
+
+        assert.strictEqual(bridgeCalls, 1);
+        assert.ok(group);
+        assert.strictEqual(group.groupClass, 'qa_refresh');
+        assert.strictEqual(group.description, 'Documentum Users (updated)');
+        assert.strictEqual(group.groupAdmin, 'dmadmin');
+        assert.strictEqual(group.owner, 'dmadmin');
+        assert.strictEqual(group.isPrivate, true);
+        assert.strictEqual(group.isDynamic, true);
+        assert.strictEqual(group.groupAddress, 'docu@example.com');
+        assert.strictEqual(group.groupSource, 'LDAP');
+        assert.deepStrictEqual(group.members, ['auser', 'zuser']);
+        assert.deepStrictEqual(group.groupMembers, ['power_users']);
+        assert.deepStrictEqual(group.attributes, bridgeGroup.attributes);
+        assert.strictEqual(groupCache.getGroup('docu'), group);
+    });
+
+    test('without refresh a cached group is returned without calling the bridge', async () => {
+        cacheGroupWithAttributes();
+
+        const group = await groupCache.fetchGroupDetails('docu');
+
+        assert.strictEqual(bridgeCalls, 0);
+        assert.ok(group);
+        assert.strictEqual(group.groupClass, 'group');
+    });
+
+    test('a group not in the cache is built from the bridge response', async () => {
+        const group = await groupCache.fetchGroupDetails('docu');
+
+        assert.strictEqual(bridgeCalls, 1);
+        assert.ok(group);
+        assert.strictEqual(group.isDynamic, true);
+        assert.strictEqual(group.owner, 'dmadmin');
+        assert.strictEqual(group.groupAddress, 'docu@example.com');
+        assert.strictEqual(group.groupSource, 'LDAP');
+    });
+});

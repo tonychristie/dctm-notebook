@@ -86,7 +86,7 @@ export class UserDumpPanel {
             async (message) => {
                 switch (message.command) {
                     case 'refresh':
-                        await this.loadUser(this.currentUserName);
+                        await this.loadUser(this.currentUserName, true);
                         break;
                     case 'copyValue':
                         await vscode.env.clipboard.writeText(message.value);
@@ -111,13 +111,13 @@ export class UserDumpPanel {
     /**
      * Load and display a user's details
      */
-    public async loadUser(userName: string): Promise<void> {
+    public async loadUser(userName: string, refresh = false): Promise<void> {
         this.currentUserName = userName;
         this.panel.title = `User: ${userName}`;
         this.panel.webview.html = this.getLoadingHtml();
 
         try {
-            const user = await this.userCache.fetchUserDetails(userName);
+            const user = await this.userCache.fetchUserDetails(userName, refresh);
             if (!user) {
                 this.panel.webview.html = this.getErrorHtml(userName, 'User not found');
                 return;

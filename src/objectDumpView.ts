@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
 import { ObjectDumpPanel } from './objectDumpPanel';
-import { TypeCache } from './typeCache';
 import { escapeHtml, isObjectId } from './htmlUtils';
 import { addToRecent } from './navigationHistory';
 import { webviewAssets, webviewResourceRoots } from './webviewHtml';
@@ -10,20 +9,24 @@ import { webviewAssets, webviewResourceRoots } from './webviewHtml';
  * WebviewViewProvider for the Object Dump sidebar panel.
  * Provides a simple interface to enter an object ID and view its dump.
  */
-export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
+export class ObjectDumpViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
     public static readonly viewType = 'documentumObjectDump';
 
     private view?: vscode.WebviewView;
     private readonly extensionUri: vscode.Uri;
     private readonly connectionManager: ConnectionManager;
-    private readonly typeCache: TypeCache;
+    private readonly selectionSubscription: vscode.Disposable;
     private dumpHistory: string[] = [];
     private readonly maxHistorySize = 20;
 
-    constructor(extensionUri: vscode.Uri, connectionManager: ConnectionManager, typeCache: TypeCache) {
+    constructor(extensionUri: vscode.Uri, connectionManager: ConnectionManager) {
         this.extensionUri = extensionUri;
         this.connectionManager = connectionManager;
-        this.typeCache = typeCache;
+        this.selectionSubscription = connectionManager.onDidChangeSelection(() => this.updateConnectionStatus());
+    }
+
+    dispose(): void {
+        this.selectionSubscription.dispose();
     }
 
     public resolveWebviewView(
@@ -43,6 +46,10 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
+                case 'ready':
+                    this.updateConnectionStatus();
+                    this.updateHistory();
+                    break;
                 case 'dumpObject':
                     await this.dumpObject(message.objectId);
                     break;
@@ -51,18 +58,6 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
                     this.updateHistory();
                     break;
             }
-        });
-
-        // Update connection status when view becomes visible
-        webviewView.onDidChangeVisibility(() => {
-            if (webviewView.visible) {
-                this.updateConnectionStatus();
-            }
-        });
-
-        // Listen for connection changes
-        this.connectionManager.onConnectionChange(() => {
-            this.updateConnectionStatus();
         });
     }
 
@@ -81,7 +76,7 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        const connection = this.connectionManager.getActiveConnection();
+        const connection = this.connectionManager.getSelectedConnection();
         if (!connection) {
             vscode.window.showErrorMessage('Not connected to Documentum');
             return;
@@ -91,7 +86,7 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
             await ObjectDumpPanel.createOrShow(
                 this.extensionUri,
                 this.connectionManager,
-                this.typeCache,
+                connection.name,
                 trimmedId
             );
             // Add to history (move to top if already exists)
@@ -127,7 +122,7 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
      */
     private updateConnectionStatus(): void {
         if (this.view) {
-            const connection = this.connectionManager.getActiveConnection();
+            const connection = this.connectionManager.getSelectedConnection();
             this.view.webview.postMessage({
                 command: 'updateConnection',
                 connected: !!connection,
@@ -140,7 +135,7 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
      * Generate HTML content for the webview
      */
     private getHtmlContent(webview: vscode.Webview): string {
-        const connection = this.connectionManager.getActiveConnection();
+        const connection = this.connectionManager.getSelectedConnection();
         const isConnected = !!connection;
         const assets = webviewAssets(webview, this.extensionUri, 'objectDumpView');
 
@@ -308,12 +303,12 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider {
  */
 export function registerObjectDumpView(
     context: vscode.ExtensionContext,
-    connectionManager: ConnectionManager,
-    typeCache: TypeCache
+    connectionManager: ConnectionManager
 ): ObjectDumpViewProvider {
-    const provider = new ObjectDumpViewProvider(context.extensionUri, connectionManager, typeCache);
+    const provider = new ObjectDumpViewProvider(context.extensionUri, connectionManager);
 
     context.subscriptions.push(
+        provider,
         vscode.window.registerWebviewViewProvider(
             ObjectDumpViewProvider.viewType,
             provider

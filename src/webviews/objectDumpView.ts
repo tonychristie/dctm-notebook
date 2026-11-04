@@ -60,3 +60,5 @@ window.addEventListener('message', event => {
             break;
     }
 });
+
+vscode.postMessage({ command: 'ready' });

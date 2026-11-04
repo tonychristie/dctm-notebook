@@ -1,4 +1,4 @@
-import { ConnectionManager } from './connectionManager';
+import { RepositoryConnection } from './repositoryConnection';
 
 /**
  * Request to execute a DFC API method
@@ -482,29 +482,8 @@ export const COMMON_DFC_METHODS: Record<string, MethodInfo[]> = {
  * Executor for DFC API method calls
  */
 export class ApiExecutor {
-    private connectionManager: ConnectionManager;
-
-    constructor(connectionManager: ConnectionManager) {
-        this.connectionManager = connectionManager;
-    }
-
-    /**
-     * Execute a DFC API method via the bridge.
-     * The bridge handles backend type (DFC or REST) internally.
-     */
-    async execute(request: ApiMethodRequest): Promise<ApiMethodResponse> {
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection) {
-            throw new Error('No active connection');
-        }
-
-        if (!connection.sessionId) {
-            throw new Error('No active session');
-        }
-
-        const bridge = this.connectionManager.getDctmBridge();
-
-        const response = await bridge.executeApi(
+    async execute(request: ApiMethodRequest, connection: RepositoryConnection): Promise<ApiMethodResponse> {
+        const response = await connection.bridge.executeApi(
             connection.sessionId,
             request.typeName || '',
             request.method,

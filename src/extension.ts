@@ -5,11 +5,8 @@ import { ResultsPanel } from './resultsPanel';
 import { registerObjectBrowser } from './objectBrowser';
 import { ApiExecutor } from './apiExecutor';
 import { registerApiPanel } from './apiPanel';
-import { TypeCache } from './typeCache';
 import { registerTypeBrowser } from './typeBrowser';
-import { UserCache } from './userCache';
 import { registerUserBrowser } from './userBrowser';
-import { GroupCache } from './groupCache';
 import { registerGroupBrowser } from './groupBrowser';
 import { registerDqlSemanticTokens } from './dqlSemanticTokens';
 import { registerApiMethodReference } from './apiMethodReference';
@@ -19,20 +16,13 @@ import { registerObjectDumpView } from './objectDumpView';
 let connectionManager: ConnectionManager;
 let dqlExecutor: DqlExecutor;
 let apiExecutor: ApiExecutor;
-let typeCache: TypeCache;
-let userCache: UserCache;
-let groupCache: GroupCache;
 
 export function activate(context: vscode.ExtensionContext) {
-    // Initialize managers
     connectionManager = new ConnectionManager(context);
-    dqlExecutor = new DqlExecutor(connectionManager);
-    apiExecutor = new ApiExecutor(connectionManager);
-    typeCache = new TypeCache(connectionManager);
-    userCache = new UserCache(connectionManager);
-    groupCache = new GroupCache(connectionManager);
+    dqlExecutor = new DqlExecutor();
+    apiExecutor = new ApiExecutor();
+    context.subscriptions.push(connectionManager);
 
-    // Register commands
     const connectCommand = vscode.commands.registerCommand('dctm.connect', async () => {
         await connectionManager.connect();
     });
@@ -63,8 +53,14 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
+        const connection = connectionManager.getSelectedConnection();
+        if (!connection) {
+            vscode.window.showErrorMessage('DQL Error: Not connected to Documentum. Use "Documentum: Connect" first.');
+            return;
+        }
+
         try {
-            const results = await dqlExecutor.execute(query);
+            const results = await dqlExecutor.execute(query, connection);
             ResultsPanel.createOrShow(context.extensionUri, results);
         } catch (error) {
             if (error instanceof Error) {
@@ -85,7 +81,6 @@ export function activate(context: vscode.ExtensionContext) {
         showConnectionsCommand
     );
 
-    // Status bar item for connection status
     const statusBarItem = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Right,
         100
@@ -96,65 +91,31 @@ export function activate(context: vscode.ExtensionContext) {
     statusBarItem.show();
     context.subscriptions.push(statusBarItem);
 
-    // Update status bar when connection changes
-    connectionManager.onConnectionChange((connected, name, username) => {
-        if (connected) {
-            const displayText = username ? `${name} (${username})` : name;
-            statusBarItem.text = `$(database) Documentum: ${displayText}`;
+    context.subscriptions.push(connectionManager.onDidChangeSelection(connection => {
+        if (connection) {
+            statusBarItem.text = `$(database) Documentum: ${connection.name} (${connection.username})`;
             statusBarItem.backgroundColor = undefined;
         } else {
             statusBarItem.text = '$(database) Documentum: Disconnected';
             statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
         }
-    });
+    }));
 
-    // Register Object Browser tree view
     registerObjectBrowser(context, connectionManager);
-
-    // Register API Panel and related commands
     registerApiPanel(context, apiExecutor, connectionManager);
+    registerTypeBrowser(context, connectionManager);
+    registerDqlSemanticTokens(context, connectionManager);
+    registerUserBrowser(context, connectionManager);
+    registerGroupBrowser(context, connectionManager);
 
-    // Register Type Browser and semantic tokens
-    registerTypeBrowser(context, typeCache, connectionManager);
-    registerDqlSemanticTokens(context, typeCache);
-
-    // Register User Browser
-    registerUserBrowser(context, userCache, connectionManager);
-
-    // Register Group Browser
-    registerGroupBrowser(context, groupCache, connectionManager);
-
-    // Register API method reference (autocomplete and hover for dmAPI methods)
     const apiReference = registerApiMethodReference(context);
 
-    // Register notebook support for .dctmbook files
-    registerNotebook(context, connectionManager, typeCache, dqlExecutor, apiExecutor, apiReference);
-
-    // Register Object Dump sidebar view
-    registerObjectDumpView(context, connectionManager, typeCache);
-
-    // Auto-refresh caches on connection
-    connectionManager.onConnectionChange(async (connected) => {
-        if (connected) {
-            // Refresh all caches in parallel
-            await Promise.allSettled([
-                typeCache.refresh(),
-                userCache.refresh(),
-                groupCache.refresh()
-            ]);
-        } else {
-            typeCache.clear();
-            userCache.clear();
-            groupCache.clear();
-        }
-    });
+    registerNotebook(context, connectionManager, dqlExecutor, apiExecutor, apiReference);
+    registerObjectDumpView(context, connectionManager);
 }
 
 export async function deactivate() {
     if (connectionManager) {
-        // Disconnect all notebook sessions first
-        await connectionManager.disconnectAllNotebooks();
-        // Then disconnect the global connection
-        await connectionManager.disconnect();
+        await connectionManager.disconnectAll();
     }
 }

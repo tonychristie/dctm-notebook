@@ -1,4 +1,5 @@
-import { ConnectionManager } from './connectionManager';
+import * as vscode from 'vscode';
+import { DctmBridge } from './dctmBridge';
 import { TypeAttribute, TypeInfo as BridgeTypeInfo } from './bridgeTypes';
 
 // Re-export for consumers that import from typeCache
@@ -17,25 +18,22 @@ export interface TypeInfo extends BridgeTypeInfo {
  * Fetches from DFC Bridge and caches locally for performance
  */
 export class TypeCache {
-    private connectionManager: ConnectionManager;
     private typeMap: Map<string, TypeInfo> = new Map();
     private typeNames: Set<string> = new Set();
     private rootTypes: string[] = [];
     private lastRefresh: Date | null = null;
     private refreshPromise: Promise<void> | null = null;
 
-    // Event callbacks
-    private onRefreshCallbacks: Array<() => void> = [];
+    private readonly refreshEmitter = new vscode.EventEmitter<void>();
+    readonly onRefresh: vscode.Event<void> = this.refreshEmitter.event;
 
-    constructor(connectionManager: ConnectionManager) {
-        this.connectionManager = connectionManager;
-    }
+    constructor(
+        private readonly bridge: DctmBridge,
+        private readonly sessionId: string
+    ) {}
 
-    /**
-     * Register callback for when cache is refreshed
-     */
-    onRefresh(callback: () => void): void {
-        this.onRefreshCallbacks.push(callback);
+    dispose(): void {
+        this.refreshEmitter.dispose();
     }
 
     /**
@@ -127,13 +125,8 @@ export class TypeCache {
             return this.refreshPromise;
         }
 
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection || !connection.sessionId) {
-            throw new Error('No active connection');
-        }
-
         // Create and store the refresh promise
-        this.refreshPromise = this.doRefresh(connection.sessionId);
+        this.refreshPromise = this.doRefresh();
 
         try {
             await this.refreshPromise;
@@ -145,11 +138,9 @@ export class TypeCache {
     /**
      * Internal refresh implementation.
      */
-    private async doRefresh(sessionId: string): Promise<void> {
-        const bridge = this.connectionManager.getDctmBridge();
-
+    private async doRefresh(): Promise<void> {
         // Fetch type list from bridge (returns TypeSummary[])
-        const types = await bridge.getTypes(sessionId);
+        const types = await this.bridge.getTypes(this.sessionId);
 
         // Clear existing cache
         this.typeMap.clear();
@@ -198,10 +189,7 @@ export class TypeCache {
 
         this.lastRefresh = new Date();
 
-        // Notify listeners
-        for (const callback of this.onRefreshCallbacks) {
-            callback();
-        }
+        this.refreshEmitter.fire();
     }
 
     /**
@@ -209,11 +197,6 @@ export class TypeCache {
      * The bridge handles backend type (DFC or REST) internally.
      */
     async fetchTypeDetails(typeName: string, refresh = false): Promise<TypeInfo | undefined> {
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection || !connection.sessionId) {
-            return undefined;
-        }
-
         const type = this.typeMap.get(typeName.toLowerCase());
         if (!type) {
             return undefined;
@@ -225,8 +208,7 @@ export class TypeCache {
         }
 
         try {
-            const bridge = this.connectionManager.getDctmBridge();
-            const details = await bridge.getTypeDetails(connection.sessionId!, typeName);
+            const details = await this.bridge.getTypeDetails(this.sessionId, typeName);
 
             // Update cached type with attributes (details is now strongly typed as TypeInfo)
             type.attributes = details.attributes;

@@ -1,14 +1,7 @@
 import * as assert from 'assert';
 import { DqlSemanticTokensProvider } from '../../dqlSemanticTokens';
 import { TypeCache } from '../../typeCache';
-
-// Mock ConnectionManager for testing
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockConnectionManager: any = {
-    getActiveConnection: () => null,
-    getDctmBridge: () => null,
-    onConnectionChange: () => {}
-};
+import { DctmBridge } from '../../dctmBridge';
 
 // Testable subclass that exposes private methods
 class TestableDqlSemanticTokensProvider extends DqlSemanticTokensProvider {
@@ -23,7 +16,7 @@ class MockTypeCache extends TypeCache {
     private mockTypes: Set<string> = new Set();
 
     constructor() {
-        super(mockConnectionManager);
+        super({} as DctmBridge, 'session-1');
     }
 
     addMockType(typeName: string): void {
@@ -49,7 +42,7 @@ suite('DqlSemanticTokensProvider Test Suite', () => {
         mockTypeCache.addMockType('dm_folder');
         mockTypeCache.addMockType('dm_sysobject');
         mockTypeCache.addMockType('my_custom_type');
-        provider = new TestableDqlSemanticTokensProvider(mockTypeCache);
+        provider = new TestableDqlSemanticTokensProvider(() => mockTypeCache);
     });
 
     suite('isTypeContext - Should highlight (return true)', () => {

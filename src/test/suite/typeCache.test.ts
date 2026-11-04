@@ -1,19 +1,14 @@
 import * as assert from 'assert';
 import { TypeCache, TypeInfo } from '../../typeCache';
+import { DctmBridge } from '../../dctmBridge';
 
-// Mock ConnectionManager for testing
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockConnectionManager: any = {
-    getActiveConnection: () => null,
-    getDctmBridge: () => null,
-    onConnectionChange: () => {}
-};
+const unusedBridge = {} as DctmBridge;
 
 suite('TypeCache Test Suite', () => {
     let typeCache: TypeCache;
 
     setup(() => {
-        typeCache = new TypeCache(mockConnectionManager);
+        typeCache = new TypeCache(unusedBridge, 'session-1');
     });
 
     suite('Initial State', () => {
@@ -98,25 +93,6 @@ suite('TypeCache Test Suite', () => {
             assert.strictEqual(count, 0);
         });
     });
-
-    suite('refresh error handling', () => {
-        test('refresh throws error without connection', async () => {
-            try {
-                await typeCache.refresh();
-                assert.fail('Should have thrown error');
-            } catch (error) {
-                assert.ok(error instanceof Error);
-                assert.ok((error as Error).message.includes('No active connection'));
-            }
-        });
-    });
-
-    suite('fetchTypeDetails error handling', () => {
-        test('fetchTypeDetails returns undefined without connection', async () => {
-            const result = await typeCache.fetchTypeDetails('dm_document');
-            assert.strictEqual(result, undefined);
-        });
-    });
 });
 
 // Test suite with mocked data
@@ -147,7 +123,7 @@ suite('TypeCache with Mock Data', () => {
     let typeCache: TestableTypeCache;
 
     setup(() => {
-        typeCache = new TestableTypeCache(mockConnectionManager);
+        typeCache = new TestableTypeCache(unusedBridge, 'session-1');
 
         // Add mock types
         typeCache.addMockType('dm_sysobject', {
@@ -383,19 +359,14 @@ suite('TypeCache fetchTypeDetails', () => {
     ];
 
     test('refresh fetches a cached type from the bridge and replaces its attributes', async () => {
-        let bridgeCalls = 0;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const connectionManager: any = {
-            getActiveConnection: () => ({ sessionId: 'session-1' }),
-            getDctmBridge: () => ({
-                getTypeDetails: async () => {
-                    bridgeCalls++;
-                    return { name: 'my_document', superType: 'dm_document', isInternal: false, attributes: bridgeAttributes };
-                }
-            }),
-            onConnectionChange: () => {}
+        const sessionIds: string[] = [];
+        const bridge = {
+            getTypeDetails: async (sessionId: string) => {
+                sessionIds.push(sessionId);
+                return { name: 'my_document', superType: 'dm_document', isInternal: false, attributes: bridgeAttributes };
+            }
         };
-        const typeCache = new TypeCache(connectionManager);
+        const typeCache = new TypeCache(bridge as unknown as DctmBridge, 'session-1');
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (typeCache as any).typeMap.set('my_document', {
             name: 'my_document',
@@ -410,7 +381,7 @@ suite('TypeCache fetchTypeDetails', () => {
 
         const type = await typeCache.fetchTypeDetails('my_document', true);
 
-        assert.strictEqual(bridgeCalls, 1);
+        assert.deepStrictEqual(sessionIds, ['session-1']);
         assert.ok(type);
         assert.deepStrictEqual(type.attributes, bridgeAttributes);
     });

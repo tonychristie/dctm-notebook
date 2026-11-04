@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { TypeCache, TypeInfo, TypeAttribute } from './typeCache';
+import { ConnectionManager } from './connectionManager';
 import { escapeHtml } from './htmlUtils';
 import { buildTypeQuery } from './dqlQueries';
 import { TypeAttributeGroup as AttributeGroup, formatTypeDisplay, groupTypeAttributes } from './attributeGroups';
@@ -16,7 +17,8 @@ export class TypeDumpPanel {
     private static readonly viewType = 'dctmTypeDump';
 
     private readonly panel: vscode.WebviewPanel;
-    private readonly typeCache: TypeCache;
+    private readonly connectionManager: ConnectionManager;
+    private connectionName: string;
     private disposables: vscode.Disposable[] = [];
 
     // Current state
@@ -24,7 +26,8 @@ export class TypeDumpPanel {
 
     public static async createOrShow(
         extensionUri: vscode.Uri,
-        typeCache: TypeCache,
+        connectionManager: ConnectionManager,
+        connectionName: string,
         typeName: string
     ): Promise<void> {
         const column = vscode.window.activeTextEditor
@@ -38,6 +41,7 @@ export class TypeDumpPanel {
         // If reuseWindow is true and we already have a panel, show it and update content
         if (reuseWindow && TypeDumpPanel.currentPanel) {
             TypeDumpPanel.currentPanel.panel.reveal(column);
+            TypeDumpPanel.currentPanel.connectionName = connectionName;
             await TypeDumpPanel.currentPanel.loadType(typeName);
             return;
         }
@@ -56,7 +60,7 @@ export class TypeDumpPanel {
             }
         );
 
-        const typePanel = new TypeDumpPanel(panel, typeCache, extensionUri);
+        const typePanel = new TypeDumpPanel(panel, connectionManager, connectionName, extensionUri);
         TypeDumpPanel.allPanels.add(typePanel);
 
         // Only track as currentPanel when reuseWindow is true
@@ -69,11 +73,13 @@ export class TypeDumpPanel {
 
     private constructor(
         panel: vscode.WebviewPanel,
-        typeCache: TypeCache,
+        connectionManager: ConnectionManager,
+        connectionName: string,
         private readonly extensionUri: vscode.Uri
     ) {
         this.panel = panel;
-        this.typeCache = typeCache;
+        this.connectionManager = connectionManager;
+        this.connectionName = connectionName;
 
         // Set initial loading content
         this.panel.webview.html = this.getLoadingHtml();
@@ -114,13 +120,18 @@ export class TypeDumpPanel {
         this.panel.webview.html = this.getLoadingHtml();
 
         try {
-            const type = await this.typeCache.fetchTypeDetails(typeName, refresh);
+            const connection = this.connectionManager.getOpenConnection(this.connectionName);
+            if (!connection) {
+                throw new Error(`Not connected to ${this.connectionName}`);
+            }
+
+            const type = await connection.typeCache.fetchTypeDetails(typeName, refresh);
             if (!type) {
                 this.panel.webview.html = this.getErrorHtml(typeName, 'Type not found');
                 return;
             }
 
-            this.panel.webview.html = this.getContentHtml(type);
+            this.panel.webview.html = this.getContentHtml(type, connection.typeCache);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.panel.webview.html = this.getErrorHtml(typeName, errorMessage);
@@ -131,7 +142,8 @@ export class TypeDumpPanel {
      * Generate a DQL query for the current type
      */
     private async generateDqlQuery(): Promise<void> {
-        const type = await this.typeCache.fetchTypeDetails(this.currentTypeName);
+        const connection = this.connectionManager.getOpenConnection(this.connectionName);
+        const type = await connection?.typeCache.fetchTypeDetails(this.currentTypeName);
         if (!type) {
             return;
         }
@@ -253,7 +265,7 @@ export class TypeDumpPanel {
     /**
      * Generate content HTML with type details and grouped attributes
      */
-    private getContentHtml(type: TypeInfo): string {
+    private getContentHtml(type: TypeInfo, typeCache: TypeCache): string {
         const groups = groupTypeAttributes(type.attributes);
 
         const groupLabels: Record<AttributeGroup, string> = {
@@ -267,7 +279,7 @@ export class TypeDumpPanel {
         const groupOrder: AttributeGroup[] = ['custom', 'standard', 'application', 'system', 'internal'];
 
         // Get child types
-        const childTypes = this.typeCache.getChildTypes(type.name);
+        const childTypes = typeCache.getChildTypes(type.name);
 
         // Count attributes
         const totalAttrs = type.attributes.length;

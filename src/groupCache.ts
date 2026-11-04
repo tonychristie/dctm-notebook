@@ -1,4 +1,5 @@
-import { ConnectionManager } from './connectionManager';
+import * as vscode from 'vscode';
+import { DctmBridge } from './dctmBridge';
 
 /**
  * Group attribute information
@@ -36,24 +37,21 @@ export interface GroupInfo {
  * Fetches from DFC Bridge and caches locally for performance
  */
 export class GroupCache {
-    private connectionManager: ConnectionManager;
     private groupMap: Map<string, GroupInfo> = new Map();
     private groupNames: string[] = [];
     private lastRefresh: Date | null = null;
     private refreshPromise: Promise<void> | null = null;
 
-    // Event callbacks
-    private onRefreshCallbacks: Array<() => void> = [];
+    private readonly refreshEmitter = new vscode.EventEmitter<void>();
+    readonly onRefresh: vscode.Event<void> = this.refreshEmitter.event;
 
-    constructor(connectionManager: ConnectionManager) {
-        this.connectionManager = connectionManager;
-    }
+    constructor(
+        private readonly bridge: DctmBridge,
+        private readonly sessionId: string
+    ) {}
 
-    /**
-     * Register callback for when cache is refreshed
-     */
-    onRefresh(callback: () => void): void {
-        this.onRefreshCallbacks.push(callback);
+    dispose(): void {
+        this.refreshEmitter.dispose();
     }
 
     /**
@@ -98,13 +96,8 @@ export class GroupCache {
             return this.refreshPromise;
         }
 
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection || !connection.sessionId) {
-            throw new Error('No active connection');
-        }
-
         // Create and store the refresh promise
-        this.refreshPromise = this.doRefresh(connection.sessionId);
+        this.refreshPromise = this.doRefresh();
 
         try {
             await this.refreshPromise;
@@ -116,15 +109,13 @@ export class GroupCache {
     /**
      * Internal refresh implementation.
      */
-    private async doRefresh(sessionId: string): Promise<void> {
-        const bridge = this.connectionManager.getDctmBridge();
-
+    private async doRefresh(): Promise<void> {
         // Clear existing cache
         this.groupMap.clear();
         this.groupNames = [];
 
         // Bridge handles REST vs DQL routing internally
-        const groups = await bridge.getGroups(sessionId);
+        const groups = await this.bridge.getGroups(this.sessionId);
 
         for (const group of groups) {
             const groupName = group.groupName;
@@ -154,10 +145,7 @@ export class GroupCache {
 
         this.lastRefresh = new Date();
 
-        // Notify listeners
-        for (const callback of this.onRefreshCallbacks) {
-            callback();
-        }
+        this.refreshEmitter.fire();
     }
 
     /**
@@ -165,11 +153,6 @@ export class GroupCache {
      * The bridge handles REST vs DQL routing internally.
      */
     async fetchGroupDetails(groupName: string, refresh = false): Promise<GroupInfo | undefined> {
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection || !connection.sessionId) {
-            return undefined;
-        }
-
         const groupKey = groupName.toLowerCase();
         const group = this.groupMap.get(groupKey);
 
@@ -179,10 +162,8 @@ export class GroupCache {
         }
 
         try {
-            const bridge = this.connectionManager.getDctmBridge();
-
             // Bridge handles REST vs DQL routing internally and returns attributes
-            const bridgeGroup = await bridge.getGroup(connection.sessionId, groupName);
+            const bridgeGroup = await this.bridge.getGroup(this.sessionId, groupName);
 
             // Convert bridge attributes to GroupAttribute format
             const attributes: GroupAttribute[] = bridgeGroup.attributes.map(attr => ({
@@ -221,14 +202,8 @@ export class GroupCache {
      * The bridge handles REST vs DQL routing internally.
      */
     async getParentGroups(groupName: string): Promise<string[]> {
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection || !connection.sessionId) {
-            return [];
-        }
-
         try {
-            const bridge = this.connectionManager.getDctmBridge();
-            const groups = await bridge.getParentGroups(connection.sessionId, groupName);
+            const groups = await this.bridge.getParentGroups(this.sessionId, groupName);
             return groups.map(g => g.groupName).sort();
         } catch {
             return [];

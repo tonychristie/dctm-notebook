@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { UserCache, UserInfo, UserAttribute } from './userCache';
+import { ConnectionManager } from './connectionManager';
 import { escapeHtml } from './htmlUtils';
 import { buildUserQuery } from './dqlQueries';
 import { UserAttributeGroup as AttributeGroup, describeAttributeValue, groupUserAttributes } from './attributeGroups';
@@ -15,7 +16,8 @@ export class UserDumpPanel {
     private static readonly viewType = 'dctmUserDump';
 
     private readonly panel: vscode.WebviewPanel;
-    private readonly userCache: UserCache;
+    private readonly connectionManager: ConnectionManager;
+    private connectionName: string;
     private disposables: vscode.Disposable[] = [];
 
     // Current state
@@ -24,7 +26,8 @@ export class UserDumpPanel {
 
     public static async createOrShow(
         extensionUri: vscode.Uri,
-        userCache: UserCache,
+        connectionManager: ConnectionManager,
+        connectionName: string,
         userName: string
     ): Promise<void> {
         const column = vscode.window.activeTextEditor
@@ -38,6 +41,7 @@ export class UserDumpPanel {
         // If reuseWindow is true and we already have a panel, show it and update content
         if (reuseWindow && UserDumpPanel.currentPanel) {
             UserDumpPanel.currentPanel.panel.reveal(column);
+            UserDumpPanel.currentPanel.connectionName = connectionName;
             await UserDumpPanel.currentPanel.loadUser(userName);
             return;
         }
@@ -56,7 +60,7 @@ export class UserDumpPanel {
             }
         );
 
-        const userPanel = new UserDumpPanel(panel, userCache, extensionUri);
+        const userPanel = new UserDumpPanel(panel, connectionManager, connectionName, extensionUri);
         UserDumpPanel.allPanels.add(userPanel);
 
         // Only track as currentPanel when reuseWindow is true
@@ -69,11 +73,13 @@ export class UserDumpPanel {
 
     private constructor(
         panel: vscode.WebviewPanel,
-        userCache: UserCache,
+        connectionManager: ConnectionManager,
+        connectionName: string,
         private readonly extensionUri: vscode.Uri
     ) {
         this.panel = panel;
-        this.userCache = userCache;
+        this.connectionManager = connectionManager;
+        this.connectionName = connectionName;
 
         // Set initial loading content
         this.panel.webview.html = this.getLoadingHtml();
@@ -96,10 +102,10 @@ export class UserDumpPanel {
                         await this.generateDqlQuery();
                         break;
                     case 'openGroup':
-                        await vscode.commands.executeCommand('dctm.openGroupByName', message.groupName);
+                        await vscode.commands.executeCommand('dctm.openGroupByName', message.groupName, this.connectionName);
                         break;
                     case 'dumpObject':
-                        await vscode.commands.executeCommand('dctm.dumpObject', message.objectId);
+                        await vscode.commands.executeCommand('dctm.dumpObject', message.objectId, this.connectionName);
                         break;
                 }
             },
@@ -117,20 +123,28 @@ export class UserDumpPanel {
         this.panel.webview.html = this.getLoadingHtml();
 
         try {
-            const user = await this.userCache.fetchUserDetails(userName, refresh);
+            const userCache = this.userCache();
+            const user = await userCache.fetchUserDetails(userName, refresh);
             if (!user) {
                 this.panel.webview.html = this.getErrorHtml(userName, 'User not found');
                 return;
             }
 
-            // Fetch user's groups
-            this.userGroups = await this.userCache.getUserGroups(userName);
+            this.userGroups = await userCache.getUserGroups(userName);
 
             this.panel.webview.html = this.getContentHtml(user);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.panel.webview.html = this.getErrorHtml(userName, errorMessage);
         }
+    }
+
+    private userCache(): UserCache {
+        const connection = this.connectionManager.getOpenConnection(this.connectionName);
+        if (!connection) {
+            throw new Error(`Not connected to ${this.connectionName}`);
+        }
+        return connection.userCache;
     }
 
     /**

@@ -4,19 +4,31 @@ import {
     COMMON_DFC_METHODS,
     MethodInfo
 } from '../../apiExecutor';
-
-// Mock ConnectionManager for testing
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockConnectionManager: any = {
-    getActiveConnection: () => null,
-    getDctmBridge: () => null
-};
+import { RepositoryConnection } from '../../repositoryConnection';
 
 suite('ApiExecutor Test Suite', () => {
     let apiExecutor: ApiExecutor;
 
     setup(() => {
-        apiExecutor = new ApiExecutor(mockConnectionManager);
+        apiExecutor = new ApiExecutor();
+    });
+
+    suite('execute', () => {
+        test('calls the bridge with the session of the connection it is given', async () => {
+            const sessionIds: string[] = [];
+            const bridge = {
+                executeApi: async (sessionId: string) => {
+                    sessionIds.push(sessionId);
+                    return { result: 'ok', resultType: 'string', executionTimeMs: 3 };
+                }
+            };
+            const connection = { sessionId: 'session-7', bridge } as unknown as RepositoryConnection;
+
+            const response = await apiExecutor.execute({ objectId: '0900000180000101', method: 'save' }, connection);
+
+            assert.deepStrictEqual(sessionIds, ['session-7']);
+            assert.strictEqual(response.result, 'ok');
+        });
     });
 
     suite('getCategories', () => {

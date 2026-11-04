@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { TypeCache } from './typeCache';
+import { ConnectionManager, followSelectedCache } from './connectionManager';
 
 /**
  * Semantic token types for DQL
@@ -96,19 +97,15 @@ const DQL_KEYWORDS = new Set([
  * Highlights repository-specific type names dynamically
  */
 export class DqlSemanticTokensProvider implements vscode.DocumentSemanticTokensProvider {
-    private typeCache: TypeCache;
-
-    constructor(typeCache: TypeCache) {
-        this.typeCache = typeCache;
-    }
+    constructor(private readonly getTypeCache: () => TypeCache | undefined) {}
 
     provideDocumentSemanticTokens(
         document: vscode.TextDocument
     ): vscode.SemanticTokens {
         const builder = new vscode.SemanticTokensBuilder(legend);
 
-        // Only provide tokens if we have cached type data
-        if (!this.typeCache.hasData()) {
+        const typeCache = this.getTypeCache();
+        if (!typeCache?.hasData()) {
             return builder.build();
         }
 
@@ -117,7 +114,7 @@ export class DqlSemanticTokensProvider implements vscode.DocumentSemanticTokensP
 
         for (let lineNum = 0; lineNum < lines.length; lineNum++) {
             const line = lines[lineNum];
-            this.tokenizeLine(line, lineNum, builder);
+            this.tokenizeLine(line, lineNum, builder, typeCache);
         }
 
         return builder.build();
@@ -126,7 +123,8 @@ export class DqlSemanticTokensProvider implements vscode.DocumentSemanticTokensP
     private tokenizeLine(
         line: string,
         lineNum: number,
-        builder: vscode.SemanticTokensBuilder
+        builder: vscode.SemanticTokensBuilder,
+        typeCache: TypeCache
     ): void {
         // Find potential identifiers (words that could be type names)
         // Matches: word characters, including underscores
@@ -143,7 +141,7 @@ export class DqlSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             }
 
             // Check if this is a known type name
-            if (this.typeCache.isTypeName(wordLower)) {
+            if (typeCache.isTypeName(wordLower)) {
                 // Check context - is this likely a type reference?
                 if (this.isTypeContext(line, match.index)) {
                     builder.push(
@@ -247,9 +245,11 @@ export class DqlSemanticTokensProvider implements vscode.DocumentSemanticTokensP
  */
 export function registerDqlSemanticTokens(
     context: vscode.ExtensionContext,
-    typeCache: TypeCache
+    connectionManager: ConnectionManager
 ): void {
-    const provider = new DqlSemanticTokensProvider(typeCache);
+    const provider = new DqlSemanticTokensProvider(
+        () => connectionManager.getSelectedConnection()?.typeCache
+    );
 
     // Register for DQL files
     const selector: vscode.DocumentSelector = { language: 'dql' };
@@ -262,8 +262,7 @@ export function registerDqlSemanticTokens(
 
     context.subscriptions.push(disposable);
 
-    // Refresh tokens when type cache is updated
-    typeCache.onRefresh(() => {
+    context.subscriptions.push(followSelectedCache(connectionManager, connection => connection.typeCache, () => {
         // Trigger re-tokenization of open DQL documents
         for (const editor of vscode.window.visibleTextEditors) {
             if (editor.document.languageId === 'dql') {
@@ -272,5 +271,5 @@ export function registerDqlSemanticTokens(
                 // when the provider returns different tokens
             }
         }
-    });
+    }));
 }

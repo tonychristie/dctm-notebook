@@ -360,7 +360,7 @@ function registerNotebookCommands(
             }
 
             // Show picker with available connections
-            const currentBinding = editor.notebook.metadata?.connection as string | undefined;
+            const currentBinding = boundConnectionName(editor.notebook.metadata);
             const items = connections.map(c => ({
                 label: c.name === currentBinding ? `$(check) ${c.name}` : c.name,
                 description: describeConnection(c),
@@ -404,16 +404,15 @@ function registerNotebookCommands(
                 return;
             }
 
-            const currentBinding = editor.notebook.metadata?.connection as string | undefined;
+            const currentBinding = boundConnectionName(editor.notebook.metadata);
             if (!currentBinding) {
                 vscode.window.showInformationMessage('Notebook is not bound to any connection');
                 return;
             }
 
-            // Remove the connection binding from metadata
             const edit = new vscode.WorkspaceEdit();
-            const newMetadata = { ...editor.notebook.metadata };
-            delete newMetadata.connection;
+            // The extension host merges metadata updates, so a deleted key keeps its old value.
+            const newMetadata = { ...editor.notebook.metadata, connection: null };
             edit.set(editor.notebook.uri, [
                 vscode.NotebookEdit.updateNotebookMetadata(newMetadata)
             ]);

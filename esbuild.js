@@ -64,10 +64,12 @@ async function main() {
       'src/webviews/userDumpPanel.ts',
       'src/webviews/groupDumpPanel.ts',
       'src/webviews/objectDumpView.ts',
-      'src/webviews/resultsPanel.ts'
+      'src/webviews/resultsPanel.ts',
+      'src/webviews/dumpPanel.css'
     ],
     bundle: true,
     format: 'iife',
+    loader: { '.ttf': 'file' },
     minify: production,
     sourcemap: !production,
     sourcesContent: false,

@@ -4,7 +4,7 @@ import { escapeHtml, isObjectId } from './htmlUtils';
 import { NavigationHistory } from './navigationHistory';
 import { DctmBridge } from './dctmBridge';
 import { RepositoryConnection } from './repositoryConnection';
-import { WebviewAssets, webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml';
+import { DumpPanelBase, DumpPanelConfig, DumpPanelMessage } from './dumpPanelBase';
 import {
     ObjectAttributeEntry,
     ObjectAttributeGroup as AttributeGroup,
@@ -13,9 +13,6 @@ import {
     toObjectAttributeEntry
 } from './attributeGroups';
 
-/**
- * Object dump data
- */
 export interface ObjectDump {
     objectId: string;
     typeName: string;
@@ -25,9 +22,6 @@ export interface ObjectDump {
     fetchTime: number;
 }
 
-/**
- * Navigation history entry
- */
 export interface NavigationEntry {
     connectionName: string;
     objectId: string;
@@ -35,21 +29,14 @@ export interface NavigationEntry {
     typeName: string;
 }
 
-/**
- * WebviewPanel for displaying Documentum object dumps with grouped attributes
- * Similar to Repoint's PropertiesView with attribute categorization
- */
-export class ObjectDumpPanel {
-    public static currentPanel: ObjectDumpPanel | undefined;
-    private static allPanels: Set<ObjectDumpPanel> = new Set();
-    private static panelCounter: number = 0;
-    private static readonly viewType = 'dctmObjectDump';
+const config: DumpPanelConfig = {
+    viewType: 'dctmObjectDump',
+    entry: 'objectDumpPanel',
+    title: 'Object',
+    noun: 'object'
+};
 
-    private readonly panel: vscode.WebviewPanel;
-    private readonly connectionManager: ConnectionManager;
-    private connectionName: string;
-    private disposables: vscode.Disposable[] = [];
-
+export class ObjectDumpPanel extends DumpPanelBase<string, ObjectDump> {
     private history = new NavigationHistory<NavigationEntry>();
 
     public static async createOrShow(
@@ -58,149 +45,60 @@ export class ObjectDumpPanel {
         connectionName: string,
         objectId: string
     ): Promise<void> {
-        const column = vscode.window.activeTextEditor
-            ? vscode.window.activeTextEditor.viewColumn
-            : undefined;
-
-        // Check the reuseWindow setting
-        const config = vscode.workspace.getConfiguration('documentum.panels');
-        const reuseWindow = config.get<boolean>('reuseWindow', false);
-
-        // If reuseWindow is true and we already have a panel, show it and update content
-        if (reuseWindow && ObjectDumpPanel.currentPanel) {
-            ObjectDumpPanel.currentPanel.panel.reveal(column);
-            await ObjectDumpPanel.currentPanel.loadObject(objectId, connectionName);
-            return;
-        }
-
-        // Create a new panel
-        ObjectDumpPanel.panelCounter++;
-        const panelTitle = reuseWindow ? 'Object Dump' : `Object Dump #${ObjectDumpPanel.panelCounter}`;
-        const panel = vscode.window.createWebviewPanel(
-            ObjectDumpPanel.viewType,
-            panelTitle,
-            column || vscode.ViewColumn.One,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true,
-                localResourceRoots: webviewResourceRoots(extensionUri)
-            }
-        );
-
-        const dumpPanel = new ObjectDumpPanel(panel, connectionManager, connectionName, extensionUri);
-        ObjectDumpPanel.allPanels.add(dumpPanel);
-
-        // Only track as currentPanel when reuseWindow is true
-        if (reuseWindow) {
-            ObjectDumpPanel.currentPanel = dumpPanel;
-        }
-
-        await dumpPanel.loadObject(objectId, connectionName);
+        await DumpPanelBase.show(config, extensionUri, connectionName, objectId,
+            panel => new ObjectDumpPanel(panel, connectionManager, connectionName, objectId, extensionUri));
     }
 
-    private constructor(
+    public constructor(
         panel: vscode.WebviewPanel,
         connectionManager: ConnectionManager,
         connectionName: string,
-        private readonly extensionUri: vscode.Uri
+        objectId: string,
+        extensionUri: vscode.Uri
     ) {
-        this.panel = panel;
-        this.connectionManager = connectionManager;
-        this.connectionName = connectionName;
-
-        // Set initial loading content
-        this.panel.webview.html = this.getLoadingHtml();
-
-        // Handle panel disposal
-        this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
-
-        // Handle messages from the webview
-        this.panel.webview.onDidReceiveMessage(
-            async (message) => {
-                switch (message.command) {
-                    case 'refresh':
-                        await this.loadObject(message.objectId, this.connectionName, false);
-                        break;
-                    case 'copyValue':
-                        await vscode.env.clipboard.writeText(message.value);
-                        vscode.window.showInformationMessage('Value copied to clipboard');
-                        break;
-                    case 'dumpObject':
-                        await this.loadObject(message.objectId, this.connectionName);
-                        break;
-                    case 'goBack':
-                        await this.goBack();
-                        break;
-                    case 'goForward':
-                        await this.goForward();
-                        break;
-                }
-            },
-            null,
-            this.disposables
-        );
+        super(config, panel, connectionManager, connectionName, objectId, extensionUri);
     }
 
-    public async loadObject(objectId: string, connectionName: string, addToHistory: boolean = true): Promise<void> {
-        this.connectionName = connectionName;
-        this.panel.title = `Object: ${objectId}`;
-        this.panel.webview.html = this.getLoadingHtml();
-
-        try {
-            const dump = await this.fetchObjectDump(objectId);
-            // Format: {r_object_id} {object_name} {r_object_type}
-            const titleParts = [dump.objectId];
-            if (dump.objectName) {
-                titleParts.push(dump.objectName);
-            }
-            titleParts.push(dump.typeName);
-            this.panel.title = titleParts.join(' ');
-
-            if (addToHistory) {
-                this.history.add({
-                    connectionName,
-                    objectId: dump.objectId,
-                    objectName: dump.objectName,
-                    typeName: dump.typeName
-                });
-            }
-
-            this.panel.webview.html = this.getContentHtml(dump);
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            this.panel.webview.html = this.getErrorHtml(objectId, errorMessage);
+    protected async handleMessage(message: DumpPanelMessage): Promise<void> {
+        switch (message.command) {
+            case 'dumpObject':
+                await this.load(message.objectId, this.connectionName);
+                break;
+            case 'goBack':
+                await this.showHistoryEntry(this.history.back());
+                break;
+            case 'goForward':
+                await this.showHistoryEntry(this.history.forward());
+                break;
         }
     }
 
-    /**
-     * Navigate back in history
-     */
-    private async goBack(): Promise<void> {
-        const entry = this.history.back();
+    // Loads as a refresh, so the entry the history already holds is not added again.
+    private async showHistoryEntry(entry: NavigationEntry | undefined): Promise<void> {
         if (entry) {
-            await this.loadObject(entry.objectId, entry.connectionName, false);
+            await this.load(entry.objectId, entry.connectionName, true);
         }
     }
 
-    /**
-     * Navigate forward in history
-     */
-    private async goForward(): Promise<void> {
-        const entry = this.history.forward();
-        if (entry) {
-            await this.loadObject(entry.objectId, entry.connectionName, false);
+    protected onLatestResponse(dump: ObjectDump, refresh: boolean): void {
+        const titleParts = [dump.objectId];
+        if (dump.objectName) {
+            titleParts.push(dump.objectName);
+        }
+        titleParts.push(dump.typeName);
+        this.panel.title = titleParts.join(' ');
+
+        if (!refresh) {
+            this.history.add({
+                connectionName: this.connectionName,
+                objectId: dump.objectId,
+                objectName: dump.objectName,
+                typeName: dump.typeName
+            });
         }
     }
 
-    /**
-     * Fetch object dump via the bridge /objects endpoint.
-     */
-    private async fetchObjectDump(objectId: string): Promise<ObjectDump> {
-        const connection = this.connectionManager.getOpenConnection(this.connectionName);
-        if (!connection) {
-            throw new Error(`Not connected to ${this.connectionName}`);
-        }
-
+    protected async fetch(connection: RepositoryConnection, objectId: string): Promise<ObjectDump> {
         const dump = await this.fetchObjectFromBridge(connection.bridge, connection.sessionId, objectId, Date.now());
         dump.standardAttributeNames = await this.fetchStandardAttributeNames(connection, dump.typeName);
         return dump;
@@ -227,10 +125,7 @@ export class ObjectDumpPanel {
         return new Set(type.attributes.map(attr => attr.name));
     }
 
-    /**
-     * Fetch object via bridge /objects endpoint.
-     * An attribute arrives as { type, value, repeating } or, from dfc-bridge 1.2.0, as a plain value.
-     */
+    // An attribute arrives as { type, value, repeating } or, from dfc-bridge 1.2.0, as a plain value.
     private async fetchObjectFromBridge(
         bridge: DctmBridge,
         sessionId: string,
@@ -253,117 +148,11 @@ export class ObjectDumpPanel {
         };
     }
 
-    private assets(): WebviewAssets {
-        return webviewAssets(this.panel.webview, this.extensionUri, 'objectDumpPanel');
+    protected pageData(dump: ObjectDump): unknown {
+        return { objectId: dump.objectId };
     }
 
-    /**
-     * Generate loading HTML
-     */
-    private getLoadingHtml(): string {
-        const assets = this.assets();
-        return `<!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            ${assets.csp}
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                body {
-                    font-family: var(--vscode-font-family);
-                    padding: 20px;
-                    color: var(--vscode-foreground);
-                    background: var(--vscode-editor-background);
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    height: 100vh;
-                    margin: 0;
-                }
-                .loader {
-                    text-align: center;
-                }
-                .spinner {
-                    width: 40px;
-                    height: 40px;
-                    border: 3px solid var(--vscode-editor-foreground);
-                    border-top-color: transparent;
-                    border-radius: 50%;
-                    animation: spin 1s linear infinite;
-                    margin: 0 auto 16px;
-                }
-                @keyframes spin {
-                    to { transform: rotate(360deg); }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="loader">
-                <div class="spinner"></div>
-                <div>Loading object...</div>
-            </div>
-            ${assets.script}
-        </body>
-        </html>`;
-    }
-
-    /**
-     * Generate error HTML
-     */
-    private getErrorHtml(objectId: string, error: string): string {
-        const assets = this.assets();
-        return `<!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            ${assets.csp}
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                body {
-                    font-family: var(--vscode-font-family);
-                    padding: 20px;
-                    color: var(--vscode-foreground);
-                    background: var(--vscode-editor-background);
-                }
-                .error {
-                    background: var(--vscode-inputValidation-errorBackground);
-                    border: 1px solid var(--vscode-inputValidation-errorBorder);
-                    padding: 16px;
-                    border-radius: 4px;
-                }
-                .error-title {
-                    font-weight: bold;
-                    margin-bottom: 8px;
-                }
-                button {
-                    background: var(--vscode-button-background);
-                    color: var(--vscode-button-foreground);
-                    border: none;
-                    padding: 8px 16px;
-                    border-radius: 2px;
-                    cursor: pointer;
-                    margin-top: 16px;
-                }
-                button:hover {
-                    background: var(--vscode-button-hoverBackground);
-                }
-            </style>
-        </head>
-        <body ${webviewData({ objectId })}>
-            <div class="error">
-                <div class="error-title">Failed to load object: ${escapeHtml(objectId)}</div>
-                <div>${escapeHtml(error)}</div>
-                <button data-action="refresh">Retry</button>
-            </div>
-            ${assets.script}
-        </body>
-        </html>`;
-    }
-
-    /**
-     * Generate content HTML with grouped attributes
-     */
-    private getContentHtml(dump: ObjectDump): string {
+    protected renderContent(dump: ObjectDump): string {
         const groups = groupObjectAttributes(dump.attributes, dump.standardAttributeNames);
 
         const groupLabels: Record<AttributeGroup, string> = {
@@ -376,209 +165,11 @@ export class ObjectDumpPanel {
 
         const groupOrder: AttributeGroup[] = ['custom', 'standard', 'application', 'system', 'internal'];
 
-        const assets = this.assets();
-        return `<!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            ${assets.csp}
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                body {
-                    font-family: var(--vscode-font-family);
-                    font-size: 13px;
-                    padding: 0;
-                    margin: 0;
-                    color: var(--vscode-foreground);
-                    background: var(--vscode-editor-background);
-                }
-                .header {
-                    background: var(--vscode-sideBar-background);
-                    padding: 12px 16px;
-                    border-bottom: 1px solid var(--vscode-panel-border);
-                    position: sticky;
-                    top: 0;
-                    z-index: 100;
-                }
-                .header-title {
-                    font-size: 14px;
-                    font-weight: 600;
-                    margin-bottom: 4px;
-                }
-                .header-info {
-                    color: var(--vscode-descriptionForeground);
-                    font-size: 12px;
-                }
-                .header-actions {
-                    margin-top: 8px;
-                }
-                .header-actions button {
-                    background: var(--vscode-button-secondaryBackground);
-                    color: var(--vscode-button-secondaryForeground);
-                    border: none;
-                    padding: 4px 10px;
-                    border-radius: 2px;
-                    cursor: pointer;
-                    font-size: 11px;
-                    margin-right: 8px;
-                }
-                .header-actions button:hover:not(:disabled) {
-                    background: var(--vscode-button-secondaryHoverBackground);
-                }
-                .header-actions button:disabled {
-                    opacity: 0.4;
-                    cursor: not-allowed;
-                }
-                .nav-buttons {
-                    display: inline-flex;
-                    gap: 4px;
-                    margin-right: 12px;
-                    padding-right: 12px;
-                    border-right: 1px solid var(--vscode-panel-border);
-                }
-                .nav-buttons button {
-                    padding: 4px 8px;
-                    min-width: 28px;
-                }
-                .content {
-                    padding: 16px;
-                }
-                .group {
-                    margin-bottom: 24px;
-                }
-                .group-header {
-                    font-weight: 600;
-                    font-size: 12px;
-                    text-transform: uppercase;
-                    color: var(--vscode-descriptionForeground);
-                    padding: 8px 0;
-                    border-bottom: 1px solid var(--vscode-panel-border);
-                    margin-bottom: 8px;
-                    display: flex;
-                    align-items: center;
-                    cursor: pointer;
-                    user-select: none;
-                }
-                .group-header:hover {
-                    color: var(--vscode-foreground);
-                }
-                .group-header .count {
-                    background: var(--vscode-badge-background);
-                    color: var(--vscode-badge-foreground);
-                    padding: 2px 6px;
-                    border-radius: 10px;
-                    font-size: 10px;
-                    margin-left: 8px;
-                }
-                .group-header .toggle {
-                    margin-right: 8px;
-                }
-                .group-content {
-                    display: block;
-                }
-                .attribute.hidden {
-                    display: none;
-                }
-                .group-content.collapsed {
-                    display: none;
-                }
-                .attribute {
-                    display: flex;
-                    padding: 4px 0;
-                    border-bottom: 1px solid var(--vscode-panel-border);
-                }
-                .attribute:hover {
-                    background: var(--vscode-list-hoverBackground);
-                }
-                .attr-name {
-                    width: 200px;
-                    flex-shrink: 0;
-                    font-weight: 500;
-                    color: var(--vscode-symbolIcon-propertyForeground);
-                    padding-right: 12px;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    white-space: nowrap;
-                }
-                .attr-type {
-                    width: 80px;
-                    flex-shrink: 0;
-                    color: var(--vscode-descriptionForeground);
-                    font-size: 11px;
-                    padding-right: 12px;
-                }
-                .attr-value {
-                    flex-grow: 1;
-                    word-break: break-all;
-                    cursor: pointer;
-                }
-                .attr-value:hover {
-                    text-decoration: underline;
-                }
-                .attr-value.null {
-                    color: var(--vscode-descriptionForeground);
-                    font-style: italic;
-                }
-                .attr-value.object-id {
-                    color: var(--vscode-textLink-foreground);
-                    cursor: pointer;
-                }
-                .attr-value.object-id:hover {
-                    text-decoration: underline;
-                }
-                .repeating-values {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 2px;
-                }
-                .repeating-value {
-                    display: flex;
-                    gap: 8px;
-                }
-                .repeating-index {
-                    color: var(--vscode-descriptionForeground);
-                    font-size: 10px;
-                    min-width: 24px;
-                }
-                .copy-notification {
-                    position: fixed;
-                    bottom: 20px;
-                    right: 20px;
-                    background: var(--vscode-notifications-background);
-                    color: var(--vscode-notifications-foreground);
-                    padding: 8px 16px;
-                    border-radius: 4px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-                    z-index: 1000;
-                    opacity: 0;
-                    transition: opacity 0.2s;
-                }
-                .copy-notification.show {
-                    opacity: 1;
-                }
-                .filter-bar {
-                    margin: 8px 0;
-                }
-                .filter-bar input {
-                    width: 100%;
-                    padding: 6px 10px;
-                    background: var(--vscode-input-background);
-                    color: var(--vscode-input-foreground);
-                    border: 1px solid var(--vscode-input-border);
-                    border-radius: 2px;
-                    font-size: 12px;
-                }
-                .filter-bar input:focus {
-                    outline: 1px solid var(--vscode-focusBorder);
-                }
-            </style>
-        </head>
-        <body ${webviewData({ objectId: dump.objectId })}>
-            <div class="header">
+        return `<div class="header">
                 <div class="header-title">${escapeHtml(dump.objectName)}</div>
                 <div class="header-info">
                     Type: ${escapeHtml(dump.typeName)} |
-                    ID: <span class="object-id" style="color: var(--vscode-textLink-foreground);">${dump.objectId}</span> |
+                    ID: <span class="object-id">${escapeHtml(dump.objectId)}</span> |
                     ${dump.attributes.length} attributes |
                     Loaded in ${dump.fetchTime}ms
                 </div>
@@ -616,15 +207,9 @@ export class ObjectDumpPanel {
                     `;
                 }).join('')}
             </div>
-            <div id="notification" class="copy-notification"></div>
-            ${assets.script}
-        </body>
-        </html>`;
+            <div id="notification" class="copy-notification"></div>`;
     }
 
-    /**
-     * Render a single attribute row
-     */
     private renderAttribute(attr: ObjectAttributeEntry): string {
         const valueStr = formatAttributeValue(attr.value, attr.isRepeating);
         const valueIsObjId = isObjectId(attr.value);
@@ -653,22 +238,5 @@ export class ObjectDumpPanel {
             <div class="attr-type">${escapeHtml(attr.type)}</div>
             <div class="attr-value">${valueHtml}</div>
         </div>`;
-    }
-
-    public dispose(): void {
-        // Remove from tracking sets
-        ObjectDumpPanel.allPanels.delete(this);
-        if (ObjectDumpPanel.currentPanel === this) {
-            ObjectDumpPanel.currentPanel = undefined;
-        }
-
-        this.panel.dispose();
-
-        while (this.disposables.length) {
-            const disposable = this.disposables.pop();
-            if (disposable) {
-                disposable.dispose();
-            }
-        }
     }
 }

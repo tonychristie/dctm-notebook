@@ -1,154 +1,72 @@
 import * as vscode from 'vscode';
-import { TypeCache, TypeInfo, TypeAttribute } from './typeCache';
+import { TypeInfo, TypeAttribute } from './typeCache';
 import { ConnectionManager } from './connectionManager';
 import { escapeHtml } from './htmlUtils';
 import { buildTypeQuery } from './dqlQueries';
 import { TypeAttributeGroup as AttributeGroup, formatTypeDisplay, groupTypeAttributes } from './attributeGroups';
-import { WebviewAssets, webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml';
+import { RepositoryConnection } from './repositoryConnection';
+import { DumpPanelBase, DumpPanelConfig, DumpPanelMessage } from './dumpPanelBase';
 
-/**
- * WebviewPanel for displaying Documentum type details with grouped attributes
- * Similar to ObjectDumpPanel but for type definitions
- */
-export class TypeDumpPanel {
-    public static currentPanel: TypeDumpPanel | undefined;
-    private static allPanels: Set<TypeDumpPanel> = new Set();
-    private static panelCounter: number = 0;
-    private static readonly viewType = 'dctmTypeDump';
+interface TypeDump {
+    type: TypeInfo;
+    childTypes: string[];
+}
 
-    private readonly panel: vscode.WebviewPanel;
-    private readonly connectionManager: ConnectionManager;
-    private connectionName: string;
-    private disposables: vscode.Disposable[] = [];
+const config: DumpPanelConfig = {
+    viewType: 'dctmTypeDump',
+    entry: 'typeDumpPanel',
+    title: 'Type',
+    noun: 'type'
+};
 
-    // Current state
-    private currentTypeName: string = '';
-
+export class TypeDumpPanel extends DumpPanelBase<string, TypeDump> {
     public static async createOrShow(
         extensionUri: vscode.Uri,
         connectionManager: ConnectionManager,
         connectionName: string,
         typeName: string
     ): Promise<void> {
-        const column = vscode.window.activeTextEditor
-            ? vscode.window.activeTextEditor.viewColumn
-            : undefined;
-
-        // Check the reuseWindow setting
-        const config = vscode.workspace.getConfiguration('documentum.panels');
-        const reuseWindow = config.get<boolean>('reuseWindow', false);
-
-        // If reuseWindow is true and we already have a panel, show it and update content
-        if (reuseWindow && TypeDumpPanel.currentPanel) {
-            TypeDumpPanel.currentPanel.panel.reveal(column);
-            TypeDumpPanel.currentPanel.connectionName = connectionName;
-            await TypeDumpPanel.currentPanel.loadType(typeName);
-            return;
-        }
-
-        // Create a new panel
-        TypeDumpPanel.panelCounter++;
-        const panelTitle = reuseWindow ? `Type: ${typeName}` : `Type #${TypeDumpPanel.panelCounter}: ${typeName}`;
-        const panel = vscode.window.createWebviewPanel(
-            TypeDumpPanel.viewType,
-            panelTitle,
-            column || vscode.ViewColumn.One,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true,
-                localResourceRoots: webviewResourceRoots(extensionUri)
-            }
-        );
-
-        const typePanel = new TypeDumpPanel(panel, connectionManager, connectionName, extensionUri);
-        TypeDumpPanel.allPanels.add(typePanel);
-
-        // Only track as currentPanel when reuseWindow is true
-        if (reuseWindow) {
-            TypeDumpPanel.currentPanel = typePanel;
-        }
-
-        await typePanel.loadType(typeName);
+        await DumpPanelBase.show(config, extensionUri, connectionName, typeName,
+            panel => new TypeDumpPanel(panel, connectionManager, connectionName, typeName, extensionUri));
     }
 
     private constructor(
         panel: vscode.WebviewPanel,
         connectionManager: ConnectionManager,
         connectionName: string,
-        private readonly extensionUri: vscode.Uri
+        typeName: string,
+        extensionUri: vscode.Uri
     ) {
-        this.panel = panel;
-        this.connectionManager = connectionManager;
-        this.connectionName = connectionName;
-
-        // Set initial loading content
-        this.panel.webview.html = this.getLoadingHtml();
-
-        // Handle panel disposal
-        this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
-
-        // Handle messages from the webview
-        this.panel.webview.onDidReceiveMessage(
-            async (message) => {
-                switch (message.command) {
-                    case 'refresh':
-                        await this.loadType(this.currentTypeName, true);
-                        break;
-                    case 'openType':
-                        await this.loadType(message.typeName);
-                        break;
-                    case 'copyValue':
-                        await vscode.env.clipboard.writeText(message.value);
-                        vscode.window.showInformationMessage('Value copied to clipboard');
-                        break;
-                    case 'generateDql':
-                        await this.generateDqlQuery();
-                        break;
-                }
-            },
-            null,
-            this.disposables
-        );
+        super(config, panel, connectionManager, connectionName, typeName, extensionUri);
     }
 
-    /**
-     * Load and display a type's details
-     */
-    public async loadType(typeName: string, refresh = false): Promise<void> {
-        this.currentTypeName = typeName;
-        this.panel.title = `Type: ${typeName}`;
-        this.panel.webview.html = this.getLoadingHtml();
-
-        try {
-            const connection = this.connectionManager.getOpenConnection(this.connectionName);
-            if (!connection) {
-                throw new Error(`Not connected to ${this.connectionName}`);
-            }
-
-            const type = await connection.typeCache.fetchTypeDetails(typeName, refresh);
-            if (!type) {
-                this.panel.webview.html = this.getErrorHtml(typeName, 'Type not found');
-                return;
-            }
-
-            this.panel.webview.html = this.getContentHtml(type, connection.typeCache);
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            this.panel.webview.html = this.getErrorHtml(typeName, errorMessage);
+    protected async handleMessage(message: DumpPanelMessage): Promise<void> {
+        switch (message.command) {
+            case 'openType':
+                await this.load(message.typeName, this.connectionName);
+                break;
+            case 'generateDql':
+                await this.generateDqlQuery();
+                break;
         }
     }
 
-    /**
-     * Generate a DQL query for the current type
-     */
+    protected async fetch(connection: RepositoryConnection, typeName: string, refresh: boolean): Promise<TypeDump> {
+        const type = await connection.typeCache.fetchTypeDetails(typeName, refresh);
+        if (!type) {
+            throw new Error('Type not found');
+        }
+        return { type, childTypes: connection.typeCache.getChildTypes(type.name) };
+    }
+
     private async generateDqlQuery(): Promise<void> {
         const connection = this.connectionManager.getOpenConnection(this.connectionName);
         let type;
         try {
-            type = await connection?.typeCache.fetchTypeDetails(this.currentTypeName);
+            type = await connection?.typeCache.fetchTypeDetails(this.currentKey);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            vscode.window.showErrorMessage(`Failed to generate DQL for ${this.currentTypeName}: ${message}`);
+            vscode.window.showErrorMessage(`Failed to generate DQL for ${this.currentKey}: ${message}`);
             return;
         }
         if (!type) {
@@ -162,117 +80,11 @@ export class TypeDumpPanel {
         await vscode.window.showTextDocument(doc);
     }
 
-    private assets(): WebviewAssets {
-        return webviewAssets(this.panel.webview, this.extensionUri, 'typeDumpPanel');
+    protected pageData({ type }: TypeDump): unknown {
+        return { typeName: type.name };
     }
 
-    /**
-     * Generate loading HTML
-     */
-    private getLoadingHtml(): string {
-        const assets = this.assets();
-        return `<!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            ${assets.csp}
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                body {
-                    font-family: var(--vscode-font-family);
-                    padding: 20px;
-                    color: var(--vscode-foreground);
-                    background: var(--vscode-editor-background);
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    height: 100vh;
-                    margin: 0;
-                }
-                .loader {
-                    text-align: center;
-                }
-                .spinner {
-                    width: 40px;
-                    height: 40px;
-                    border: 3px solid var(--vscode-editor-foreground);
-                    border-top-color: transparent;
-                    border-radius: 50%;
-                    animation: spin 1s linear infinite;
-                    margin: 0 auto 16px;
-                }
-                @keyframes spin {
-                    to { transform: rotate(360deg); }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="loader">
-                <div class="spinner"></div>
-                <div>Loading type...</div>
-            </div>
-            ${assets.script}
-        </body>
-        </html>`;
-    }
-
-    /**
-     * Generate error HTML
-     */
-    private getErrorHtml(typeName: string, error: string): string {
-        const assets = this.assets();
-        return `<!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            ${assets.csp}
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                body {
-                    font-family: var(--vscode-font-family);
-                    padding: 20px;
-                    color: var(--vscode-foreground);
-                    background: var(--vscode-editor-background);
-                }
-                .error {
-                    background: var(--vscode-inputValidation-errorBackground);
-                    border: 1px solid var(--vscode-inputValidation-errorBorder);
-                    padding: 16px;
-                    border-radius: 4px;
-                }
-                .error-title {
-                    font-weight: bold;
-                    margin-bottom: 8px;
-                }
-                button {
-                    background: var(--vscode-button-background);
-                    color: var(--vscode-button-foreground);
-                    border: none;
-                    padding: 8px 16px;
-                    border-radius: 2px;
-                    cursor: pointer;
-                    margin-top: 16px;
-                }
-                button:hover {
-                    background: var(--vscode-button-hoverBackground);
-                }
-            </style>
-        </head>
-        <body>
-            <div class="error">
-                <div class="error-title">Failed to load type: ${escapeHtml(typeName)}</div>
-                <div>${escapeHtml(error)}</div>
-                <button data-action="refresh">Retry</button>
-            </div>
-            ${assets.script}
-        </body>
-        </html>`;
-    }
-
-    /**
-     * Generate content HTML with type details and grouped attributes
-     */
-    private getContentHtml(type: TypeInfo, typeCache: TypeCache): string {
+    protected renderContent({ type, childTypes }: TypeDump): string {
         const groups = groupTypeAttributes(type.attributes);
 
         const groupLabels: Record<AttributeGroup, string> = {
@@ -285,233 +97,13 @@ export class TypeDumpPanel {
 
         const groupOrder: AttributeGroup[] = ['custom', 'standard', 'application', 'system', 'internal'];
 
-        // Get child types
-        const childTypes = typeCache.getChildTypes(type.name);
-
-        // Count attributes
         const totalAttrs = type.attributes.length;
         const inheritedAttrs = type.attributes.filter(a => a.isInherited).length;
         const ownAttrs = totalAttrs - inheritedAttrs;
 
-        const assets = this.assets();
-        return `<!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            ${assets.csp}
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                body {
-                    font-family: var(--vscode-font-family);
-                    font-size: 13px;
-                    padding: 0;
-                    margin: 0;
-                    color: var(--vscode-foreground);
-                    background: var(--vscode-editor-background);
-                }
-                .header {
-                    background: var(--vscode-sideBar-background);
-                    padding: 12px 16px;
-                    border-bottom: 1px solid var(--vscode-panel-border);
-                    position: sticky;
-                    top: 0;
-                    z-index: 100;
-                }
-                .header-title {
-                    font-size: 16px;
-                    font-weight: 600;
-                    margin-bottom: 8px;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                }
-                .header-title .icon {
-                    font-size: 18px;
-                }
-                .header-info {
-                    color: var(--vscode-descriptionForeground);
-                    font-size: 12px;
-                    margin-bottom: 8px;
-                }
-                .header-info a {
-                    color: var(--vscode-textLink-foreground);
-                    cursor: pointer;
-                    text-decoration: none;
-                }
-                .header-info a:hover {
-                    text-decoration: underline;
-                }
-                .header-actions {
-                    display: flex;
-                    gap: 8px;
-                    flex-wrap: wrap;
-                    align-items: center;
-                }
-                .header-actions button {
-                    background: var(--vscode-button-secondaryBackground);
-                    color: var(--vscode-button-secondaryForeground);
-                    border: none;
-                    padding: 4px 10px;
-                    border-radius: 2px;
-                    cursor: pointer;
-                    font-size: 11px;
-                }
-                .header-actions button:hover {
-                    background: var(--vscode-button-secondaryHoverBackground);
-                }
-                .header-actions button.primary {
-                    background: var(--vscode-button-background);
-                    color: var(--vscode-button-foreground);
-                }
-                .header-actions button.primary:hover {
-                    background: var(--vscode-button-hoverBackground);
-                }
-                .toggle-container {
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                    font-size: 12px;
-                }
-                .toggle-container input[type="checkbox"] {
-                    width: 14px;
-                    height: 14px;
-                    cursor: pointer;
-                }
-                .filter-bar {
-                    margin-top: 8px;
-                }
-                .filter-bar input {
-                    width: 100%;
-                    padding: 6px 10px;
-                    background: var(--vscode-input-background);
-                    color: var(--vscode-input-foreground);
-                    border: 1px solid var(--vscode-input-border);
-                    border-radius: 2px;
-                    font-size: 12px;
-                    box-sizing: border-box;
-                }
-                .filter-bar input:focus {
-                    outline: 1px solid var(--vscode-focusBorder);
-                }
-                .content {
-                    padding: 16px;
-                }
-                .group {
-                    margin-bottom: 24px;
-                }
-                .group-header {
-                    font-weight: 600;
-                    font-size: 12px;
-                    text-transform: uppercase;
-                    color: var(--vscode-descriptionForeground);
-                    padding: 8px 0;
-                    border-bottom: 1px solid var(--vscode-panel-border);
-                    margin-bottom: 8px;
-                    display: flex;
-                    align-items: center;
-                    cursor: pointer;
-                    user-select: none;
-                }
-                .group-header:hover {
-                    color: var(--vscode-foreground);
-                }
-                .group-header .count {
-                    background: var(--vscode-badge-background);
-                    color: var(--vscode-badge-foreground);
-                    padding: 2px 6px;
-                    border-radius: 10px;
-                    font-size: 10px;
-                    margin-left: 8px;
-                }
-                .group-header .toggle {
-                    margin-right: 8px;
-                }
-                .group-content {
-                    display: block;
-                }
-                .group-content.collapsed {
-                    display: none;
-                }
-                .child-types-section {
-                    margin-bottom: 24px;
-                }
-                .child-types {
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 8px;
-                }
-                .child-type {
-                    background: var(--vscode-badge-background);
-                    color: var(--vscode-badge-foreground);
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    font-size: 11px;
-                    cursor: pointer;
-                }
-                .child-type:hover {
-                    background: var(--vscode-button-secondaryHoverBackground);
-                }
-                .attribute {
-                    display: flex;
-                    padding: 6px 0;
-                    border-bottom: 1px solid var(--vscode-panel-border);
-                    align-items: center;
-                }
-                .attribute:hover {
-                    background: var(--vscode-list-hoverBackground);
-                }
-                .attribute.hidden {
-                    display: none;
-                }
-                .attr-name {
-                    width: 220px;
-                    flex-shrink: 0;
-                    font-weight: 500;
-                    color: var(--vscode-symbolIcon-propertyForeground);
-                    padding-right: 12px;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    white-space: nowrap;
-                    cursor: pointer;
-                }
-                .attr-name:hover {
-                    text-decoration: underline;
-                }
-                .attr-type {
-                    width: 100px;
-                    flex-shrink: 0;
-                    color: var(--vscode-descriptionForeground);
-                    font-size: 12px;
-                    padding-right: 12px;
-                }
-                .attr-details {
-                    flex-grow: 1;
-                    display: flex;
-                    gap: 8px;
-                    font-size: 11px;
-                }
-                .attr-badge {
-                    background: var(--vscode-badge-background);
-                    color: var(--vscode-badge-foreground);
-                    padding: 2px 6px;
-                    border-radius: 4px;
-                    font-size: 10px;
-                }
-                .attr-badge.repeating {
-                    background: var(--vscode-editorWarning-foreground);
-                }
-                .no-results {
-                    color: var(--vscode-descriptionForeground);
-                    font-style: italic;
-                    padding: 16px;
-                    text-align: center;
-                }
-            </style>
-        </head>
-        <body ${webviewData({ typeName: type.name })}>
-            <div class="header">
+        return `<div class="header">
                 <div class="header-title">
-                    <span class="icon">&#128450;</span>
+                    <span class="codicon codicon-symbol-class"></span>
                     ${escapeHtml(type.name)}
                 </div>
                 <div class="header-info">
@@ -569,15 +161,9 @@ export class TypeDumpPanel {
                         </div>
                     `;
                 }).join('')}
-            </div>
-            ${assets.script}
-        </body>
-        </html>`;
+            </div>`;
     }
 
-    /**
-     * Render a single attribute row
-     */
     private renderAttribute(attr: TypeAttribute, isInherited: boolean): string {
         const typeDisplay = formatTypeDisplay(attr);
 
@@ -588,21 +174,5 @@ export class TypeDumpPanel {
                 ${attr.isRepeating ? '<span class="attr-badge repeating">repeating</span>' : ''}
             </div>
         </div>`;
-    }
-
-    public dispose(): void {
-        TypeDumpPanel.allPanels.delete(this);
-        if (TypeDumpPanel.currentPanel === this) {
-            TypeDumpPanel.currentPanel = undefined;
-        }
-
-        this.panel.dispose();
-
-        while (this.disposables.length) {
-            const disposable = this.disposables.pop();
-            if (disposable) {
-                disposable.dispose();
-            }
-        }
     }
 }

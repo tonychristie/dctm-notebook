@@ -2,6 +2,8 @@
 !out/extension.js
 !out/notebook/renderer.js
 !out/webviews/*.js
+!out/webviews/*.css
+!out/webviews/*.ttf
 !data/**
 !resources/**
 !syntaxes/**

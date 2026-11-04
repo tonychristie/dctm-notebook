@@ -28,9 +28,14 @@ export function webviewAssets(webview: vscode.Webview, extensionUri: vscode.Uri,
     const nonce = randomBytes(16).toString('base64');
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewsRoot(extensionUri), `${entry}.js`));
     return {
-        csp: `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">`,
+        csp: `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';">`,
         script: `<script nonce="${nonce}" src="${scriptUri}"></script>`
     };
+}
+
+export function dumpPanelStylesheet(webview: vscode.Webview, extensionUri: vscode.Uri): string {
+    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewsRoot(extensionUri), 'dumpPanel.css'));
+    return `<link rel="stylesheet" href="${styleUri}">`;
 }
 
 export function webviewData(data: unknown): string {

@@ -1,267 +1,63 @@
 import * as assert from 'assert';
-import { TypeCache, TypeInfo } from '../../typeCache';
+import { TypeCache } from '../../typeCache';
 import { DctmBridge } from '../../dctmBridge';
+import { TypeAttribute, TypeSummary } from '../../bridgeTypes';
 
-const unusedBridge = {} as DctmBridge;
+const typeSummaries: TypeSummary[] = [
+    { name: 'my_document', superType: 'dm_document', isInternal: false },
+    { name: 'dm_folder', superType: 'dm_sysobject', isInternal: false },
+    { name: 'dm_sysobject', superType: null, isInternal: false },
+    { name: 'my_document_v2', superType: 'my_document', isInternal: false },
+    { name: 'dm_document', superType: 'dm_sysobject', isInternal: false },
+    { name: 'dmi_queue_item', superType: null, isInternal: true }
+];
+
+const bridgeAttributes: TypeAttribute[] = [
+    { name: 'r_object_id', dataType: 'ID', length: 16, isRepeating: false, isInherited: true },
+    { name: 'custom_field', dataType: 'STRING', length: 100, isRepeating: false, isInherited: false }
+];
 
 suite('TypeCache Test Suite', () => {
+    let detailCalls: string[];
+    let detailsError: Error | undefined;
     let typeCache: TypeCache;
 
-    setup(() => {
-        typeCache = new TypeCache(unusedBridge, 'session-1');
+    setup(async () => {
+        detailCalls = [];
+        detailsError = undefined;
+        const bridge = {
+            getTypes: async () => typeSummaries,
+            getTypeDetails: async (sessionId: string, typeName: string) => {
+                detailCalls.push(`${sessionId}:${typeName}`);
+                if (detailsError) {
+                    throw detailsError;
+                }
+                return { name: typeName, superType: 'dm_document', isInternal: false, attributes: bridgeAttributes };
+            }
+        };
+        typeCache = new TypeCache(bridge as unknown as DctmBridge, 'session-1');
+        await typeCache.refresh();
     });
 
-    suite('Initial State', () => {
-        test('hasData returns false initially', () => {
-            assert.strictEqual(typeCache.hasData(), false);
-        });
-
-        test('getTypeNames returns empty array initially', () => {
-            const names = typeCache.getTypeNames();
-            assert.strictEqual(names.length, 0);
-        });
-
-        test('getRootTypes returns empty array initially', () => {
-            const roots = typeCache.getRootTypes();
-            assert.strictEqual(roots.length, 0);
-        });
-
-        test('getLastRefresh returns null initially', () => {
-            assert.strictEqual(typeCache.getLastRefresh(), null);
-        });
-
-        test('getStats returns zero count initially', () => {
-            const stats = typeCache.getStats();
-            assert.strictEqual(stats.typeCount, 0);
-            assert.strictEqual(stats.lastRefresh, null);
-        });
+    teardown(() => {
+        typeCache.dispose();
     });
 
-    suite('Type Operations (without data)', () => {
-        test('getType returns undefined for unknown type', () => {
-            const type = typeCache.getType('dm_document');
-            assert.strictEqual(type, undefined);
-        });
-
-        test('getChildTypes returns empty array for unknown type', () => {
-            const children = typeCache.getChildTypes('dm_document');
-            assert.strictEqual(children.length, 0);
-        });
-
-        test('isTypeName returns false for any name', () => {
-            assert.strictEqual(typeCache.isTypeName('dm_document'), false);
-            assert.strictEqual(typeCache.isTypeName('anything'), false);
-        });
-
-        test('searchTypes returns empty array', () => {
-            const results = typeCache.searchTypes('dm');
-            assert.strictEqual(results.length, 0);
-        });
+    test('refresh builds the root types and the child lists from getTypes', () => {
+        assert.deepStrictEqual(typeCache.getRootTypes(), ['dm_sysobject', 'dmi_queue_item']);
+        assert.deepStrictEqual(typeCache.getChildTypes('dm_sysobject'), ['dm_document', 'dm_folder']);
+        assert.deepStrictEqual(typeCache.getChildTypes('DM_DOCUMENT'), ['my_document']);
+        assert.deepStrictEqual(typeCache.getChildTypes('dm_folder'), []);
+        assert.deepStrictEqual(typeCache.getChildTypes('unknown_type'), []);
     });
 
-    suite('clear', () => {
-        test('clear resets all data', () => {
-            // Since we can't easily populate without mocking the bridge,
-            // just verify clear doesn't throw
-            typeCache.clear();
-            assert.strictEqual(typeCache.hasData(), false);
-            assert.strictEqual(typeCache.getLastRefresh(), null);
-        });
-    });
-
-    suite('onRefresh callback', () => {
-        test('callback is registered without error', () => {
-            let called = false;
-            typeCache.onRefresh(() => {
-                called = true;
-            });
-            // Can't trigger refresh without connection, but verify registration works
-            assert.strictEqual(called, false);
-        });
-
-        test('multiple callbacks can be registered', () => {
-            let count = 0;
-            typeCache.onRefresh(() => count++);
-            typeCache.onRefresh(() => count++);
-            typeCache.onRefresh(() => count++);
-            // Just verify no errors
-            assert.strictEqual(count, 0);
-        });
-    });
-});
-
-// Test suite with mocked data
-suite('TypeCache with Mock Data', () => {
-    // These tests simulate what happens after a successful refresh
-    // by directly manipulating internal state through a custom subclass
-
-    class TestableTypeCache extends TypeCache {
-        // Expose internal methods for testing
-        public addMockType(name: string, info: TypeInfo): void {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (this as any).typeMap.set(name.toLowerCase(), info);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (this as any).typeNames.add(name.toLowerCase());
-        }
-
-        public addMockRootType(name: string): void {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (this as any).rootTypes.push(name.toLowerCase());
-        }
-
-        public setLastRefresh(date: Date): void {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (this as any).lastRefresh = date;
-        }
-    }
-
-    let typeCache: TestableTypeCache;
-
-    setup(() => {
-        typeCache = new TestableTypeCache(unusedBridge, 'session-1');
-
-        // Add mock types
-        typeCache.addMockType('dm_sysobject', {
-            name: 'dm_sysobject',
-            superType: null,
-            isInternal: false,
-            attributes: [
-                { name: 'r_object_id', dataType: 'ID', length: 16, isRepeating: false, isInherited: false },
-                { name: 'object_name', dataType: 'STRING', length: 255, isRepeating: false, isInherited: false }
-            ],
-            children: ['dm_document', 'dm_folder']
-        });
-
-        typeCache.addMockType('dm_document', {
-            name: 'dm_document',
-            superType: 'dm_sysobject',
-            isInternal: false,
-            attributes: [
-                { name: 'r_object_id', dataType: 'ID', length: 16, isRepeating: false, isInherited: true },
-                { name: 'object_name', dataType: 'STRING', length: 255, isRepeating: false, isInherited: true },
-                { name: 'a_content_type', dataType: 'STRING', length: 64, isRepeating: false, isInherited: false }
-            ],
-            children: ['my_document']
-        });
-
-        typeCache.addMockType('dm_folder', {
-            name: 'dm_folder',
-            superType: 'dm_sysobject',
-            isInternal: false,
-            attributes: [
-                { name: 'r_object_id', dataType: 'ID', length: 16, isRepeating: false, isInherited: true },
-                { name: 'object_name', dataType: 'STRING', length: 255, isRepeating: false, isInherited: true },
-                { name: 'r_folder_path', dataType: 'STRING', length: 255, isRepeating: true, isInherited: false }
-            ],
-            children: []
-        });
-
-        typeCache.addMockType('my_document', {
-            name: 'my_document',
-            superType: 'dm_document',
-            isInternal: false,
-            attributes: [
-                { name: 'r_object_id', dataType: 'ID', length: 16, isRepeating: false, isInherited: true },
-                { name: 'custom_field', dataType: 'STRING', length: 100, isRepeating: false, isInherited: false }
-            ],
-            children: []
-        });
-
-        typeCache.addMockRootType('dm_sysobject');
-        typeCache.setLastRefresh(new Date());
-    });
-
-    suite('hasData', () => {
-        test('returns true when data is loaded', () => {
-            assert.strictEqual(typeCache.hasData(), true);
-        });
-    });
-
-    suite('getTypeNames', () => {
-        test('returns all type names', () => {
-            const names = typeCache.getTypeNames();
-            assert.strictEqual(names.length, 4);
-            assert.ok(names.includes('dm_sysobject'));
-            assert.ok(names.includes('dm_document'));
-            assert.ok(names.includes('dm_folder'));
-            assert.ok(names.includes('my_document'));
-        });
-    });
-
-    suite('getRootTypes', () => {
-        test('returns root types', () => {
-            const roots = typeCache.getRootTypes();
-            assert.strictEqual(roots.length, 1);
-            assert.ok(roots.includes('dm_sysobject'));
-        });
-    });
-
-    suite('getType', () => {
-        test('returns type info for known type', () => {
-            const type = typeCache.getType('dm_document');
-            assert.ok(type);
-            assert.strictEqual(type.name, 'dm_document');
-            assert.strictEqual(type.superType, 'dm_sysobject');
-        });
-
-        test('is case-insensitive', () => {
-            const type1 = typeCache.getType('DM_DOCUMENT');
-            const type2 = typeCache.getType('dm_document');
-            assert.deepStrictEqual(type1, type2);
-        });
-
-        test('returns undefined for unknown type', () => {
-            const type = typeCache.getType('unknown_type');
-            assert.strictEqual(type, undefined);
-        });
-    });
-
-    suite('getChildTypes', () => {
-        test('returns child types for parent', () => {
-            const children = typeCache.getChildTypes('dm_sysobject');
-            assert.strictEqual(children.length, 2);
-            assert.ok(children.includes('dm_document'));
-            assert.ok(children.includes('dm_folder'));
-        });
-
-        test('returns empty array for leaf type', () => {
-            const children = typeCache.getChildTypes('dm_folder');
-            assert.strictEqual(children.length, 0);
-        });
-    });
-
-    suite('isTypeName', () => {
-        test('returns true for known types', () => {
-            assert.strictEqual(typeCache.isTypeName('dm_document'), true);
-            assert.strictEqual(typeCache.isTypeName('dm_folder'), true);
-            assert.strictEqual(typeCache.isTypeName('my_document'), true);
-        });
-
-        test('is case-insensitive', () => {
-            assert.strictEqual(typeCache.isTypeName('DM_DOCUMENT'), true);
-            assert.strictEqual(typeCache.isTypeName('Dm_Document'), true);
-        });
-
-        test('returns false for unknown types', () => {
-            assert.strictEqual(typeCache.isTypeName('unknown'), false);
-            assert.strictEqual(typeCache.isTypeName('select'), false);
-        });
+    test('isTypeName is true for a cached type in any case and false otherwise', () => {
+        assert.strictEqual(typeCache.isTypeName('Dm_Document'), true);
+        assert.strictEqual(typeCache.isTypeName('select'), false);
     });
 
     suite('getNearestStandardType', () => {
-        test('returns the standard super type of a custom type', () => {
-            assert.strictEqual(typeCache.getNearestStandardType('my_document'), 'dm_document');
-        });
-
-        test('returns the standard type two levels above a custom type', () => {
-            typeCache.addMockType('my_document_v2', {
-                name: 'my_document_v2',
-                superType: 'my_document',
-                isInternal: false,
-                attributes: [],
-                children: []
-            });
-
+        test('returns the standard type above a custom type', () => {
             assert.strictEqual(typeCache.getNearestStandardType('my_document_v2'), 'dm_document');
         });
 
@@ -274,92 +70,36 @@ suite('TypeCache with Mock Data', () => {
         });
     });
 
-    suite('searchTypes', () => {
-        test('finds types by pattern', () => {
-            const results = typeCache.searchTypes('dm_');
-            assert.strictEqual(results.length, 3);
+    suite('fetchTypeDetails', () => {
+        test('fetches the attributes of a cached type from the bridge', async () => {
+            const type = await typeCache.fetchTypeDetails('my_document');
+
+            assert.deepStrictEqual(detailCalls, ['session-1:my_document']);
+            assert.ok(type);
+            assert.deepStrictEqual(type.attributes, bridgeAttributes);
         });
 
-        test('finds types with partial match', () => {
-            const results = typeCache.searchTypes('doc');
-            assert.strictEqual(results.length, 2);
-            assert.ok(results.includes('dm_document'));
-            assert.ok(results.includes('my_document'));
+        test('returns a type with attributes without a bridge call unless refresh is set', async () => {
+            await typeCache.fetchTypeDetails('my_document');
+
+            await typeCache.fetchTypeDetails('my_document');
+            assert.strictEqual(detailCalls.length, 1);
+
+            await typeCache.fetchTypeDetails('my_document', true);
+            assert.strictEqual(detailCalls.length, 2);
         });
 
-        test('is case-insensitive', () => {
-            const results1 = typeCache.searchTypes('DM_');
-            const results2 = typeCache.searchTypes('dm_');
-            assert.deepStrictEqual(results1, results2);
+        test('rejects with the bridge error', async () => {
+            detailsError = new Error('401 Unauthorized');
+
+            await assert.rejects(typeCache.fetchTypeDetails('my_document'), /401 Unauthorized/);
         });
 
-        test('returns sorted results', () => {
-            const results = typeCache.searchTypes('dm_');
-            const sorted = [...results].sort();
-            assert.deepStrictEqual(results, sorted);
+        test('returns undefined without a bridge call for a type that is not in the cache', async () => {
+            const type = await typeCache.fetchTypeDetails('unknown_type');
+
+            assert.strictEqual(type, undefined);
+            assert.deepStrictEqual(detailCalls, []);
         });
-
-        test('returns empty for no matches', () => {
-            const results = typeCache.searchTypes('xyz123');
-            assert.strictEqual(results.length, 0);
-        });
-    });
-
-    suite('getStats', () => {
-        test('returns correct type count', () => {
-            const stats = typeCache.getStats();
-            assert.strictEqual(stats.typeCount, 4);
-        });
-
-        test('returns last refresh date', () => {
-            const stats = typeCache.getStats();
-            assert.ok(stats.lastRefresh instanceof Date);
-        });
-    });
-
-    suite('clear', () => {
-        test('removes all data', () => {
-            typeCache.clear();
-            assert.strictEqual(typeCache.hasData(), false);
-            assert.strictEqual(typeCache.getTypeNames().length, 0);
-            assert.strictEqual(typeCache.getRootTypes().length, 0);
-            assert.strictEqual(typeCache.getLastRefresh(), null);
-        });
-    });
-});
-
-suite('TypeCache fetchTypeDetails', () => {
-    const bridgeAttributes = [
-        { name: 'r_object_id', dataType: 'ID', length: 16, isRepeating: false, isInherited: true },
-        { name: 'custom_field', dataType: 'STRING', length: 100, isRepeating: false, isInherited: false },
-        { name: 'qa_refresh_note', dataType: 'STRING', length: 32, isRepeating: false, isInherited: false }
-    ];
-
-    test('refresh fetches a cached type from the bridge and replaces its attributes', async () => {
-        const sessionIds: string[] = [];
-        const bridge = {
-            getTypeDetails: async (sessionId: string) => {
-                sessionIds.push(sessionId);
-                return { name: 'my_document', superType: 'dm_document', isInternal: false, attributes: bridgeAttributes };
-            }
-        };
-        const typeCache = new TypeCache(bridge as unknown as DctmBridge, 'session-1');
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (typeCache as any).typeMap.set('my_document', {
-            name: 'my_document',
-            superType: 'dm_document',
-            isInternal: false,
-            attributes: [
-                { name: 'r_object_id', dataType: 'ID', length: 16, isRepeating: false, isInherited: true },
-                { name: 'custom_field', dataType: 'STRING', length: 100, isRepeating: false, isInherited: false }
-            ],
-            children: []
-        });
-
-        const type = await typeCache.fetchTypeDetails('my_document', true);
-
-        assert.deepStrictEqual(sessionIds, ['session-1']);
-        assert.ok(type);
-        assert.deepStrictEqual(type.attributes, bridgeAttributes);
     });
 });

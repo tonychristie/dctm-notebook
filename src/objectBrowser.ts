@@ -96,7 +96,8 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
             const openConnection = this.connectionManager.getOpenConnection(conn.name);
             const isConnected = !!openConnection;
             const data: ConnectionNodeData = {
-                id: createNodeId(conn.name, 'connection', conn.name),
+                // VS Code ignores a new collapsible state for an id it has seen, so an open node needs its own id.
+                id: createNodeId(conn.name, 'connection', isConnected ? `${conn.name}::open` : conn.name),
                 name: conn.name,
                 type: 'connection',
                 connectionName: conn.name,

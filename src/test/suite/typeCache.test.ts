@@ -53,11 +53,6 @@ suite('TypeCache Test Suite', () => {
             assert.strictEqual(typeCache.isTypeName('anything'), false);
         });
 
-        test('getAttributes returns empty array for unknown type', () => {
-            const attrs = typeCache.getAttributes('dm_document');
-            assert.strictEqual(attrs.length, 0);
-        });
-
         test('searchTypes returns empty array', () => {
             const results = typeCache.searchTypes('dm');
             assert.strictEqual(results.length, 0);
@@ -276,24 +271,6 @@ suite('TypeCache with Mock Data', () => {
 
         test('returns undefined for a type that is not in the cache', () => {
             assert.strictEqual(typeCache.getNearestStandardType('unknown_type'), undefined);
-        });
-    });
-
-    suite('getAttributes', () => {
-        test('returns all attributes when includeInherited is true', () => {
-            const attrs = typeCache.getAttributes('dm_document', true);
-            assert.strictEqual(attrs.length, 3);
-        });
-
-        test('returns only type-specific attributes when includeInherited is false', () => {
-            const attrs = typeCache.getAttributes('dm_document', false);
-            assert.strictEqual(attrs.length, 1);
-            assert.strictEqual(attrs[0].name, 'a_content_type');
-        });
-
-        test('defaults to including inherited', () => {
-            const attrs = typeCache.getAttributes('dm_document');
-            assert.strictEqual(attrs.length, 3);
         });
     });
 

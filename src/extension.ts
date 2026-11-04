@@ -18,7 +18,7 @@ let dqlExecutor: DqlExecutor;
 let apiExecutor: ApiExecutor;
 
 export function activate(context: vscode.ExtensionContext) {
-    connectionManager = new ConnectionManager(context);
+    connectionManager = new ConnectionManager();
     dqlExecutor = new DqlExecutor();
     apiExecutor = new ApiExecutor();
     context.subscriptions.push(connectionManager);

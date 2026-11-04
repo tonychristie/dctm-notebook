@@ -103,11 +103,6 @@ suite('UserCache with Mock Data', () => {
             defaultFolder: '/System',
             defaultGroup: 'docu',
             description: 'Administrator',
-            email: 'admin@example.com',
-            homeDocbase: 'repo1',
-            clientCapability: 15,
-            aliasSetId: '',
-            acl: 'dm_45000000000001',
             attributes: []
         });
 
@@ -121,11 +116,6 @@ suite('UserCache with Mock Data', () => {
             defaultFolder: '/Temp',
             defaultGroup: 'dm_world',
             description: 'Test User',
-            email: 'test@example.com',
-            homeDocbase: 'repo1',
-            clientCapability: 1,
-            aliasSetId: '',
-            acl: 'dm_45000000000002',
             attributes: []
         });
 
@@ -139,11 +129,6 @@ suite('UserCache with Mock Data', () => {
             defaultFolder: '/Users/power_user',
             defaultGroup: 'power_users',
             description: 'Power User',
-            email: 'power@example.com',
-            homeDocbase: 'repo1',
-            clientCapability: 7,
-            aliasSetId: '',
-            acl: 'dm_45000000000003',
             attributes: []
         });
 
@@ -283,11 +268,6 @@ suite('UserCache fetchUserDetails', () => {
             defaultFolder: '/testuser',
             defaultGroup: 'docu',
             description: 'Test User',
-            email: '',
-            homeDocbase: '',
-            clientCapability: 0,
-            aliasSetId: '',
-            acl: '',
             attributes: [{ name: 'user_state', value: 0, dataType: 'integer' }]
         });
     });

@@ -101,7 +101,7 @@ export class ConnectionManager implements vscode.Disposable {
     private readonly openConnectionsEmitter = new vscode.EventEmitter<void>();
     readonly onDidChangeOpenConnections: vscode.Event<void> = this.openConnectionsEmitter.event;
 
-    constructor(context: vscode.ExtensionContext, dctmBridge: DctmBridge = new DctmBridge(context)) {
+    constructor(dctmBridge: DctmBridge = new DctmBridge()) {
         this.dctmBridge = dctmBridge;
     }
 

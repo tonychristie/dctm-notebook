@@ -1,5 +1,4 @@
 import * as assert from 'assert';
-import * as vscode from 'vscode';
 import {
     ConnectionManager,
     Credentials,
@@ -10,8 +9,6 @@ import {
 import { DctmBridge, DfcConnectParams } from '../../dctmBridge';
 import { RepositoryConnection } from '../../repositoryConnection';
 import { resolveNotebookConnection } from '../../notebook/notebookConnection';
-
-const context = {} as vscode.ExtensionContext;
 
 class FakeBridge {
     ensureRunningCalls: { profile?: DfcProfile; connectionType?: 'dfc' | 'rest' }[] = [];
@@ -61,7 +58,7 @@ class TestConnectionManager extends ConnectionManager {
         private connections: DocumentumConnection[],
         private profiles: Record<string, DfcProfile> = {}
     ) {
-        super(context, bridge as unknown as DctmBridge);
+        super(bridge as unknown as DctmBridge);
     }
 
     getConnections(): DocumentumConnection[] {

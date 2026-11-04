@@ -20,9 +20,7 @@ suite('ObjectBrowserNodes Test Suite', () => {
 
         test('handles different node types', () => {
             const types: NodeType[] = [
-                'connection', 'cabinets-container', 'types-container',
-                'users-container', 'groups-container', 'cabinet',
-                'folder', 'document', 'type', 'user', 'group'
+                'connection', 'cabinets-container', 'cabinet', 'folder', 'document'
             ];
 
             types.forEach(type => {

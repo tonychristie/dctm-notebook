@@ -23,11 +23,6 @@ export interface UserInfo {
     defaultFolder: string;
     defaultGroup: string;
     description: string;
-    email: string;
-    homeDocbase: string;
-    clientCapability: number;
-    aliasSetId: string;
-    acl: string;
     // Raw attributes for detailed view
     attributes: UserAttribute[];
 }
@@ -132,11 +127,6 @@ export class UserCache {
                 defaultFolder: user.defaultFolder || '',
                 defaultGroup: user.userGroupName || '',
                 description: user.description || '',
-                email: '',
-                homeDocbase: '',
-                clientCapability: 0,
-                aliasSetId: '',
-                acl: '',
                 attributes: []
             });
         }
@@ -183,11 +173,6 @@ export class UserCache {
                 defaultFolder: bridgeUser.defaultFolder || '',
                 defaultGroup: bridgeUser.userGroupName || '',
                 description: bridgeUser.description || '',
-                email: '',
-                homeDocbase: '',
-                clientCapability: 0,
-                aliasSetId: '',
-                acl: '',
                 attributes: attributes
             };
             this.userMap.set(userKey, fetched);

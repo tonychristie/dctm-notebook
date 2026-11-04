@@ -3,7 +3,6 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import { DfcProfile } from './connectionManager';
 import { extractBridgeError } from './errorUtils';
 import {
-    IUnifiedBridge,
     ObjectInfo,
     UserInfo,
     UserDetails,
@@ -14,6 +13,7 @@ import {
 } from './bridgeTypes';
 import { DfcBridgeImpl } from './dfcBridgeImpl';
 import { RestBridgeImpl } from './restBridgeImpl';
+import { ApiOptions, BridgeImplBase, ConnectionType, DmApiResult, DqlResult } from './bridgeImplBase';
 
 export interface DfcConnectParams {
     // For DFC connections - docbroker and port
@@ -27,11 +27,13 @@ export interface DfcConnectParams {
     password: string;
 }
 
-export interface DqlQueryResult {
-    columns: string[];
-    rows: Record<string, unknown>[];
-    rowCount: number;
+export interface DqlQueryResult extends DqlResult {
     executionTime: number;
+}
+
+interface BridgeClientEntry {
+    client: AxiosInstance;
+    baseUrl: string;
 }
 
 // Re-export types for consumers
@@ -45,7 +47,7 @@ export function createBridgeClient(baseUrl: string): AxiosInstance {
         headers: {
             'Content-Type': 'application/json'
         },
-        timeout: 30000 // 30 second timeout for DFC operations
+        timeout: 30000 // Default for browser and cache calls; DQL, dmAPI and API method calls set their own
     });
 
     client.interceptors.response.use(
@@ -79,60 +81,22 @@ export function createBridgeClient(baseUrl: string): AxiosInstance {
  * - Adding new connection types by implementing IUnifiedBridge
  */
 export class DctmBridge {
-    private dfcClient: AxiosInstance | null = null;
-    private restClient: AxiosInstance | null = null;
+    private clients: Map<ConnectionType, BridgeClientEntry> = new Map();
 
-    /**
-     * Track which session IDs belong to which connection type.
-     * This allows us to route requests to the correct bridge.
-     */
-    private sessionTypes: Map<string, 'dfc' | 'rest'> = new Map();
-
-    /**
-     * Polymorphic implementations per session.
-     * Created at connect time based on connection type.
-     */
-    private sessionImpls: Map<string, IUnifiedBridge> = new Map();
+    private sessionImpls: Map<string, BridgeImplBase> = new Map();
 
     constructor(private createClient: BridgeClientFactory = createBridgeClient) {}
 
-    /**
-     * Get the client for a specific connection type.
-     * Throws if the client hasn't been initialized via ensureRunning().
-     */
-    private getClientForType(connectionType: 'dfc' | 'rest'): AxiosInstance {
-        const client = connectionType === 'rest' ? this.restClient : this.dfcClient;
-        if (!client) {
+    private getClientForType(connectionType: ConnectionType): AxiosInstance {
+        const entry = this.clients.get(connectionType);
+        if (!entry) {
             const bridgeName = connectionType === 'rest' ? 'REST Bridge' : 'DFC Bridge';
             throw new Error(`${bridgeName} not initialized. Call ensureRunning() first.`);
         }
-        return client;
+        return entry.client;
     }
 
-    /**
-     * Get the client for a specific session ID.
-     * Uses the stored session type to route to the correct bridge.
-     */
-    private getClientForSession(sessionId: string): AxiosInstance {
-        const connectionType = this.sessionTypes.get(sessionId);
-        if (!connectionType) {
-            // Fall back to DFC client for backwards compatibility
-            if (this.dfcClient) {
-                return this.dfcClient;
-            }
-            if (this.restClient) {
-                return this.restClient;
-            }
-            throw new Error('No bridge client initialized. Call ensureRunning() first.');
-        }
-        return this.getClientForType(connectionType);
-    }
-
-    /**
-     * Get the unified implementation for a session.
-     * Returns the appropriate DfcBridgeImpl or RestBridgeImpl.
-     */
-    private getImplForSession(sessionId: string): IUnifiedBridge {
+    private getImplForSession(sessionId: string): BridgeImplBase {
         const impl = this.sessionImpls.get(sessionId);
         if (!impl) {
             throw new Error(`No implementation found for session ${sessionId}. Was connect() called?`);
@@ -145,8 +109,14 @@ export class DctmBridge {
         return {
             host: config.get<string>('bridge.host', 'localhost'),
             port: config.get<number>('bridge.port', 9876),
-            restPort: config.get<number>('bridge.restPort', 9877)
+            restPort: config.get<number>('bridge.restPort', 9877),
+            queryTimeout: config.get<number>('bridge.queryTimeout', 300)
         };
+    }
+
+    // Read on each call so a settings change applies without reconnecting. 0 means no timeout in axios too.
+    private getQueryTimeoutMs(): number {
+        return this.getConfig().queryTimeout * 1000;
     }
 
     /**
@@ -154,7 +124,7 @@ export class DctmBridge {
      * Uses bridge.host for the hostname (default: localhost).
      * DFC connections use bridge.port (9876), REST connections use bridge.restPort (9877).
      */
-    private getBaseUrlForType(connectionType: 'dfc' | 'rest'): string {
+    private getBaseUrlForType(connectionType: ConnectionType): string {
         const config = this.getConfig();
         if (connectionType === 'rest') {
             return `http://${config.host}:${config.restPort}`;
@@ -174,16 +144,14 @@ export class DctmBridge {
      * @param profile Optional DFC profile configuration
      * @param connectionType The connection type ('dfc' or 'rest'), defaults to 'dfc'
      */
-    async ensureRunning(profile?: DfcProfile, connectionType: 'dfc' | 'rest' = 'dfc'): Promise<void> {
+    async ensureRunning(profile?: DfcProfile, connectionType: ConnectionType = 'dfc'): Promise<void> {
         const config = this.getConfig();
         const baseUrl = this.getBaseUrlForType(connectionType);
 
-        // Check if we already have a client for this connection type
-        const existingClient = connectionType === 'rest' ? this.restClient : this.dfcClient;
-        if (existingClient) {
-            // Client already exists, just verify bridge is running
+        const existing = this.clients.get(connectionType);
+        if (existing && existing.baseUrl === baseUrl) {
             try {
-                const response = await existingClient.get('/health');
+                const response = await existing.client.get('/health');
                 if (response.status === 200) {
                     return;
                 }
@@ -193,13 +161,7 @@ export class DctmBridge {
         }
 
         const client = this.createClient(baseUrl);
-
-        // Store client in the appropriate slot
-        if (connectionType === 'rest') {
-            this.restClient = client;
-        } else {
-            this.dfcClient = client;
-        }
+        this.clients.set(connectionType, { client, baseUrl });
 
         // Check if bridge is already running
         try {
@@ -230,7 +192,7 @@ export class DctmBridge {
      */
     async connect(params: DfcConnectParams): Promise<string> {
         // Determine connection type based on params
-        const connectionType: 'dfc' | 'rest' = params.endpoint ? 'rest' : 'dfc';
+        const connectionType: ConnectionType = params.endpoint ? 'rest' : 'dfc';
         const client = this.getClientForType(connectionType);
 
         // Build request body based on connection type
@@ -253,12 +215,6 @@ export class DctmBridge {
         const response = await client.post('/api/v1/connect', requestBody);
         const sessionId = response.data.sessionId;
 
-        // Track session type for routing future requests
-        this.sessionTypes.set(sessionId, connectionType);
-
-        // Create polymorphic implementation for this session
-        // This is the key change: we create the implementation once at connect time
-        // and all subsequent calls use it directly - no branching needed
         const impl = connectionType === 'rest'
             ? new RestBridgeImpl(client)
             : new DfcBridgeImpl(client);
@@ -272,13 +228,10 @@ export class DctmBridge {
      */
     async disconnect(sessionId: string): Promise<void> {
         try {
-            const client = this.getClientForSession(sessionId);
-            await client.post('/api/v1/disconnect', { sessionId });
+            await this.sessionImpls.get(sessionId)?.disconnect(sessionId);
         } catch {
-            // Ignore errors if client not available
+            // The session is dropped locally even when the bridge no longer knows it
         } finally {
-            // Always clean up the session tracking
-            this.sessionTypes.delete(sessionId);
             this.sessionImpls.delete(sessionId);
         }
     }
@@ -287,23 +240,10 @@ export class DctmBridge {
      * Execute a DQL query
      */
     async executeDql(sessionId: string, query: string): Promise<DqlQueryResult> {
-        const client = this.getClientForSession(sessionId);
+        const impl = this.getImplForSession(sessionId);
         const startTime = Date.now();
-
-        const response = await client.post('/api/v1/dql', { sessionId, query });
-        const executionTime = Date.now() - startTime;
-
-        // Bridge returns columns as ColumnInfo objects, extract just the names
-        const columns = (response.data.columns || []).map(
-            (col: { name: string }) => col.name
-        );
-
-        return {
-            columns,
-            rows: response.data.rows || [],
-            rowCount: response.data.rowCount || 0,
-            executionTime
-        };
+        const result = await impl.executeDql(sessionId, query, this.getQueryTimeoutMs());
+        return { ...result, executionTime: Date.now() - startTime };
     }
 
     /**
@@ -318,23 +258,9 @@ export class DctmBridge {
         sessionId: string,
         typeName: string,
         method: string,
-        options: {
-            objectId?: string;
-            args?: unknown[];
-            namedArgs?: Record<string, unknown>;
-        }
+        options: ApiOptions
     ): Promise<unknown> {
-        const client = this.getClientForSession(sessionId);
-        const response = await client.post('/api/v1/api', {
-            sessionId,
-            objectId: options.objectId,
-            typeName: typeName || undefined,
-            method,
-            args: options.args,
-            namedArgs: options.namedArgs
-        });
-
-        return response.data;
+        return this.getImplForSession(sessionId).executeApi(sessionId, typeName, method, options, this.getQueryTimeoutMs());
     }
 
     /**
@@ -351,14 +277,8 @@ export class DctmBridge {
         sessionId: string,
         apiType: 'get' | 'exec' | 'set',
         command: string
-    ): Promise<{
-        result: unknown;
-        resultType: string;
-        executionTimeMs: number;
-    }> {
-        const client = this.getClientForSession(sessionId);
-        const response = await client.post('/api/v1/dmapi', { sessionId, apiType, command });
-        return response.data;
+    ): Promise<DmApiResult> {
+        return this.getImplForSession(sessionId).executeDmApi(sessionId, apiType, command, this.getQueryTimeoutMs());
     }
 
     /**
@@ -421,7 +341,7 @@ export class DctmBridge {
      * @returns true if the session is using REST connection, false for DFC
      */
     isRestSession(sessionId: string): boolean {
-        return this.sessionTypes.get(sessionId) === 'rest';
+        return this.sessionImpls.get(sessionId)?.connectionType === 'rest';
     }
 
     // ========================================
@@ -452,8 +372,8 @@ export class DctmBridge {
      * Get users from the repository.
      * Delegates to the appropriate implementation (DFC or REST) for this session.
      */
-    async getUsers(sessionId: string, pattern?: string): Promise<UserInfo[]> {
-        return this.getImplForSession(sessionId).getUsers(sessionId, pattern);
+    async getUsers(sessionId: string): Promise<UserInfo[]> {
+        return this.getImplForSession(sessionId).getUsers(sessionId);
     }
 
     /**
@@ -468,8 +388,8 @@ export class DctmBridge {
      * Get groups from the repository.
      * Delegates to the appropriate implementation (DFC or REST) for this session.
      */
-    async getGroups(sessionId: string, pattern?: string): Promise<GroupInfo[]> {
-        return this.getImplForSession(sessionId).getGroups(sessionId, pattern);
+    async getGroups(sessionId: string): Promise<GroupInfo[]> {
+        return this.getImplForSession(sessionId).getGroups(sessionId);
     }
 
     /**
@@ -500,9 +420,7 @@ export class DctmBridge {
      * Stop the bridges if we started them
      */
     async stop(): Promise<void> {
-        this.dfcClient = null;
-        this.restClient = null;
-        this.sessionTypes.clear();
+        this.clients.clear();
         this.sessionImpls.clear();
     }
 }

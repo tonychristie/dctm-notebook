@@ -292,6 +292,7 @@ This extension contributes the following settings:
 * `documentum.bridge.host`: Hostname or IP address where the bridge services are running (default: localhost)
 * `documentum.bridge.port`: Port for DFC Bridge microservice (default: 9876)
 * `documentum.bridge.restPort`: Port for REST Bridge microservice (default: 9877)
+* `documentum.bridge.queryTimeout`: Timeout in seconds for DQL queries, dmAPI commands and API method calls; 0 means no timeout (default: 300)
 
 ## Sample Files
 

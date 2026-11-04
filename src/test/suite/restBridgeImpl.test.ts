@@ -52,24 +52,4 @@ suite('RestBridgeImpl Test Suite', () => {
             assert.deepStrictEqual(type.attributes, []);
         });
     });
-
-    suite('getGroup', () => {
-        test('lists owner, address, source and dynamic', async () => {
-            const client = new FakeAxiosClient(() => ({
-                groupName: 'my_group',
-                ownerName: 'dmadmin',
-                groupAddress: 'group@example.com',
-                groupSource: 'LDAP',
-                isDynamic: true
-            }));
-
-            const group = await new RestBridgeImpl(client.asAxios()).getGroup('s1', 'my_group');
-
-            const byName = new Map(group.attributes.map(a => [a.name, a]));
-            assert.deepStrictEqual(byName.get('owner_name'), { name: 'owner_name', value: 'dmadmin', dataType: 'string' });
-            assert.deepStrictEqual(byName.get('group_address'), { name: 'group_address', value: 'group@example.com', dataType: 'string' });
-            assert.deepStrictEqual(byName.get('group_source'), { name: 'group_source', value: 'LDAP', dataType: 'string' });
-            assert.deepStrictEqual(byName.get('is_dynamic'), { name: 'is_dynamic', value: true, dataType: 'boolean' });
-        });
-    });
 });

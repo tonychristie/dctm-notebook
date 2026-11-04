@@ -1,4 +1,4 @@
-function quoteDqlString(value: string): string {
+export function quoteDqlString(value: string): string {
     return `'${value.replace(/'/g, "''")}'`;
 }
 

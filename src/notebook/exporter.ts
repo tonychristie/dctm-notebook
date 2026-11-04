@@ -247,6 +247,15 @@ export function toCsv(columns: string[], rows: Record<string, unknown>[]): strin
 }
 
 /**
+ * Build tab-separated text with a header row followed by one line per result row
+ */
+export function toTsv(columns: string[], rows: Record<string, unknown>[]): string {
+    const header = columns.join('\t');
+    const lines = rows.map(row => columns.map(col => String(row[col] ?? '')).join('\t'));
+    return [header, ...lines].join('\n');
+}
+
+/**
  * Export data to CSV file (.csv)
  */
 export async function exportToCsv(

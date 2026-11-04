@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import { DqlResult } from './dqlExecutor';
 import { escapeHtml } from './htmlUtils';
-import { exportToCsv } from './notebook/exporter';
-import { webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml';
+import { exportToCsv, toTsv } from './notebook/exporter';
+import { webviewAssets, webviewResourceRoots } from './webviewHtml';
 
 export class ResultsPanel {
     public static currentPanel: ResultsPanel | undefined;
@@ -30,6 +30,9 @@ export class ResultsPanel {
                             const errorMsg = error instanceof Error ? error.message : String(error);
                             vscode.window.showErrorMessage(`Export failed: ${errorMsg}`);
                         }
+                        break;
+                    case 'copyAll':
+                        await vscode.env.clipboard.writeText(toTsv(this.results.columns, this.results.rows));
                         break;
                 }
             },
@@ -166,7 +169,7 @@ export class ResultsPanel {
         }
     </style>
 </head>
-<body ${webviewData({ columns: results.columns, rows: results.rows })}>
+<body>
     <div class="info">
         <span><strong>Rows:</strong> ${results.rowCount}</span>
         <span><strong>Time:</strong> ${results.executionTime}ms</span>

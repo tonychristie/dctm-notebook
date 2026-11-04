@@ -3,7 +3,7 @@ import { ConnectionManager } from './connectionManager';
 import { ObjectDumpPanel } from './objectDumpPanel';
 import { escapeHtml, isObjectId } from './htmlUtils';
 import { addToRecent } from './navigationHistory';
-import { webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml';
+import { webviewAssets, webviewResourceRoots } from './webviewHtml';
 
 /**
  * WebviewViewProvider for the Object Dump sidebar panel.
@@ -46,6 +46,10 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider, vscod
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
+                case 'ready':
+                    this.updateConnectionStatus();
+                    this.updateHistory();
+                    break;
                 case 'dumpObject':
                     await this.dumpObject(message.objectId);
                     break;
@@ -53,13 +57,6 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider, vscod
                     this.dumpHistory = [];
                     this.updateHistory();
                     break;
-            }
-        });
-
-        // Update connection status when view becomes visible
-        webviewView.onDidChangeVisibility(() => {
-            if (webviewView.visible) {
-                this.updateConnectionStatus();
             }
         });
     }
@@ -268,7 +265,7 @@ export class ObjectDumpViewProvider implements vscode.WebviewViewProvider, vscod
                 }
             </style>
         </head>
-        <body ${webviewData({ history: this.dumpHistory })}>
+        <body>
             <div class="section">
                 <div class="section-title">Object Dump</div>
                 <div class="input-group">

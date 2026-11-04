@@ -56,9 +56,6 @@ export class UserDumpPanel extends DumpPanelBase<string, UserDump> {
 
     protected async fetch(connection: RepositoryConnection, userName: string, refresh: boolean): Promise<UserDump> {
         const user = await connection.userCache.fetchUserDetails(userName, refresh);
-        if (!user) {
-            throw new Error('User not found');
-        }
         const groups = await connection.userCache.getUserGroups(userName);
         return { user, groups };
     }

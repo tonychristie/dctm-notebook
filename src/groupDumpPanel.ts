@@ -64,9 +64,6 @@ export class GroupDumpPanel extends DumpPanelBase<string, GroupDump> {
 
     protected async fetch(connection: RepositoryConnection, groupName: string, refresh: boolean): Promise<GroupDump> {
         const group = await connection.groupCache.fetchGroupDetails(groupName, refresh);
-        if (!group) {
-            throw new Error('Group not found');
-        }
         const parentGroups = await connection.groupCache.getParentGroups(groupName);
         return { group, parentGroups };
     }

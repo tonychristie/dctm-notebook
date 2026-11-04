@@ -476,6 +476,12 @@
           "default": 9877,
           "description": "Port for REST Bridge microservice (REST connections)"
         },
+        "documentum.bridge.queryTimeout": {
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "description": "Timeout in seconds for DQL queries, dmAPI commands and API method calls. 0 means no timeout."
+        },
         "documentum.panels.reuseWindow": {
           "type": "boolean",
           "default": false,

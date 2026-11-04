@@ -66,7 +66,7 @@ suite('DfcBridgeImpl Test Suite', () => {
                 default_folder: '/jsmith',
                 user_group_name: 'docu',
                 description: 'Test user',
-                r_is_superuser: false
+                user_privileges: 16
             }]);
 
             const user = await impl.getUser('s1', 'jsmith');
@@ -75,6 +75,7 @@ suite('DfcBridgeImpl Test Suite', () => {
             assert.strictEqual(user.userSource, 'LDAP');
             assert.strictEqual(user.description, 'Test user');
             assert.strictEqual(user.userState, '1');
+            assert.strictEqual(user.superUser, true);
         });
 
         test('maps rows to groups', async () => {
@@ -95,6 +96,37 @@ suite('DfcBridgeImpl Test Suite', () => {
         });
     });
 
+    suite('users', () => {
+        test('getUsers lists inactive users as well as active ones', async () => {
+            const { client, impl } = createImpl();
+
+            await impl.getUsers('s1');
+
+            assert.ok(!dqlQueries(client)[0].includes('user_state ='), dqlQueries(client)[0]);
+        });
+
+        test('getUsers sets superUser from the superuser bit of user_privileges', async () => {
+            const { impl } = createImpl([
+                { user_name: 'a', user_privileges: 16 },
+                { user_name: 'b', user_privileges: 0 },
+                { user_name: 'c', user_privileges: 24 },
+                { user_name: 'd', user_privileges: 8 }
+            ]);
+
+            const users = await impl.getUsers('s1');
+
+            assert.deepStrictEqual(users.map(u => u.superUser), [true, false, true, false]);
+        });
+
+        test('getUser sets superUser false when user_privileges is 0', async () => {
+            const { impl } = createImpl([{ user_name: 'jsmith', user_privileges: 0 }]);
+
+            const user = await impl.getUser('s1', 'jsmith');
+
+            assert.strictEqual(user.superUser, false);
+        });
+    });
+
     suite('getFolderContents', () => {
         test('rejects without a folder path', async () => {
             const { impl } = createImpl();
@@ -110,6 +142,22 @@ suite('DfcBridgeImpl Test Suite', () => {
             const queries = dqlQueries(client);
             assert.strictEqual(queries.length, 2);
             queries.forEach(q => assert.ok(q.includes("folder('/Temp/O''Brien')"), q));
+        });
+
+        test('returns folders before documents when the document query answers first', async () => {
+            const client = new FakeAxiosClient(async (call: RecordedCall) => {
+                const query = (call.body as { query: string }).query;
+                if (query.includes('FROM dm_folder')) {
+                    await new Promise(resolve => setTimeout(resolve, 20));
+                    return { rows: [{ r_object_id: '0b00000180000101', object_name: 'Sub' }] };
+                }
+                return { rows: [{ r_object_id: '0900000180000101', object_name: 'Doc', r_object_type: 'dm_document' }] };
+            });
+            const impl = new DfcBridgeImpl(client.asAxios());
+
+            const items = await impl.getFolderContents('s1', '0b00000180000100', '/Temp');
+
+            assert.deepStrictEqual(items.map(i => i.name), ['Sub', 'Doc']);
         });
     });
 

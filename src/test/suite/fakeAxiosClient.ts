@@ -5,9 +5,15 @@ export interface RecordedCall {
     url: string;
     body?: unknown;
     params?: Record<string, unknown>;
+    timeout?: number;
 }
 
-// A responder that throws makes the request reject.
+interface RequestConfig {
+    params?: Record<string, unknown>;
+    timeout?: number;
+}
+
+// A responder that throws makes the request reject. A responder may also return a promise.
 export type Responder = (call: RecordedCall) => unknown;
 
 export class FakeAxiosClient {
@@ -15,20 +21,20 @@ export class FakeAxiosClient {
 
     constructor(private respond: Responder = () => ({})) {}
 
-    get(url: string, config?: { params?: Record<string, unknown> }) {
-        return this.record({ method: 'get', url, params: config?.params });
+    get(url: string, config?: RequestConfig) {
+        return this.record({ method: 'get', url, ...this.fromConfig(config) });
     }
 
-    post(url: string, body?: unknown, config?: { params?: Record<string, unknown> }) {
-        return this.record({ method: 'post', url, body, params: config?.params });
+    post(url: string, body?: unknown, config?: RequestConfig) {
+        return this.record({ method: 'post', url, body, ...this.fromConfig(config) });
     }
 
-    put(url: string, body?: unknown, config?: { params?: Record<string, unknown> }) {
-        return this.record({ method: 'put', url, body, params: config?.params });
+    put(url: string, body?: unknown, config?: RequestConfig) {
+        return this.record({ method: 'put', url, body, ...this.fromConfig(config) });
     }
 
-    delete(url: string, config?: { params?: Record<string, unknown> }) {
-        return this.record({ method: 'delete', url, params: config?.params });
+    delete(url: string, config?: RequestConfig) {
+        return this.record({ method: 'delete', url, ...this.fromConfig(config) });
     }
 
     asAxios(): AxiosInstance {
@@ -39,12 +45,12 @@ export class FakeAxiosClient {
         return this.calls.filter(c => c.method === method && c.url === url);
     }
 
-    private record(call: RecordedCall): Promise<{ status: number; data: unknown }> {
+    private fromConfig(config?: RequestConfig): Pick<RecordedCall, 'params' | 'timeout'> {
+        return { params: config?.params, timeout: config?.timeout };
+    }
+
+    private async record(call: RecordedCall): Promise<{ status: number; data: unknown }> {
         this.calls.push(call);
-        try {
-            return Promise.resolve({ status: 200, data: this.respond(call) });
-        } catch (error) {
-            return Promise.reject(error);
-        }
+        return { status: 200, data: await this.respond(call) };
     }
 }

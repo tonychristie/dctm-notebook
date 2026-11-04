@@ -15,7 +15,7 @@ function showNotification(message: string): void {
 
 onActions({
     ...groupActions,
-    refresh: () => vscode.postMessage({ command: 'refresh', objectId }),
+    refresh: () => vscode.postMessage({ command: 'refresh' }),
     copyObjectId: () => vscode.postMessage({ command: 'copyValue', value: objectId }),
     goBack: () => vscode.postMessage({ command: 'goBack' }),
     goForward: () => vscode.postMessage({ command: 'goForward' }),

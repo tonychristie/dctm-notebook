@@ -79,10 +79,8 @@ export function createBridgeClient(baseUrl: string): AxiosInstance {
  * - Adding new connection types by implementing IUnifiedBridge
  */
 export class DctmBridge {
-    private context: vscode.ExtensionContext;
     private dfcClient: AxiosInstance | null = null;
     private restClient: AxiosInstance | null = null;
-    private bridgeProcess: unknown = null;
 
     /**
      * Track which session IDs belong to which connection type.
@@ -96,12 +94,7 @@ export class DctmBridge {
      */
     private sessionImpls: Map<string, IUnifiedBridge> = new Map();
 
-    constructor(
-        context: vscode.ExtensionContext,
-        private createClient: BridgeClientFactory = createBridgeClient
-    ) {
-        this.context = context;
-    }
+    constructor(private createClient: BridgeClientFactory = createBridgeClient) {}
 
     /**
      * Get the client for a specific connection type.
@@ -314,15 +307,6 @@ export class DctmBridge {
     }
 
     /**
-     * Get session information
-     */
-    async getSessionInfo(sessionId: string): Promise<Record<string, unknown>> {
-        const client = this.getClientForSession(sessionId);
-        const response = await client.get(`/api/v1/session/${sessionId}`);
-        return response.data;
-    }
-
-    /**
      * Execute an arbitrary DFC API method on an object or type.
      *
      * @param sessionId Active session ID
@@ -516,9 +500,6 @@ export class DctmBridge {
      * Stop the bridges if we started them
      */
     async stop(): Promise<void> {
-        if (this.bridgeProcess) {
-            this.bridgeProcess = null;
-        }
         this.dfcClient = null;
         this.restClient = null;
         this.sessionTypes.clear();

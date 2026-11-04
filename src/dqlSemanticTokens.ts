@@ -212,30 +212,6 @@ export class DqlSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             return true;
         }
 
-        // Generic: word appears standalone after whitespace following a keyword
-        // This catches cases like: FROM dm_document WHERE
-        // But we need to be careful not to highlight attribute names
-
-        // Check if we're in a SELECT clause (before FROM) - don't highlight there
-        const lineUpper = line.toUpperCase();
-        const fromIndex = lineUpper.indexOf('FROM');
-        const selectIndex = lineUpper.indexOf('SELECT');
-
-        if (selectIndex !== -1 && fromIndex !== -1) {
-            // We're in a line with both SELECT and FROM
-            if (position > selectIndex && position < fromIndex) {
-                // We're in the SELECT clause - don't highlight as type
-                return false;
-            }
-        }
-
-        // Check for WHERE/AND/OR clause - these are usually attribute comparisons
-        if (beforeWord.match(/(where|and|or)\s+$/i)) {
-            // Could be a type in: WHERE TYPE(object) = 'dm_document'
-            // But usually it's an attribute, so return false
-            return false;
-        }
-
         return false;
     }
 }

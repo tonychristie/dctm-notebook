@@ -117,7 +117,6 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
 
     /**
      * Get container nodes for a connected connection
-     * Only shows Cabinets - Types, Users, Groups are now in separate browser views
      */
     private getConnectionChildren(data: ConnectionNodeData): ObjectBrowserItem[] {
         if (!data.connected) {

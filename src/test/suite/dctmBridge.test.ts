@@ -1,9 +1,6 @@
 import * as assert from 'assert';
-import * as vscode from 'vscode';
 import { DctmBridge } from '../../dctmBridge';
 import { FakeAxiosClient, RecordedCall, Responder } from './fakeAxiosClient';
-
-const context = {} as vscode.ExtensionContext;
 
 const bridgeResponder: Responder = (call: RecordedCall) => {
     if (call.url === '/api/v1/connect') {
@@ -20,7 +17,7 @@ suite('DctmBridge Test Suite', () => {
     let clients: FakeAxiosClient[];
 
     function createBridge(respond: Responder = bridgeResponder): DctmBridge {
-        return new DctmBridge(context, (baseUrl: string) => {
+        return new DctmBridge((baseUrl: string) => {
             baseUrls.push(baseUrl);
             const client = new FakeAxiosClient(respond);
             clients.push(client);

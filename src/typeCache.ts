@@ -89,22 +89,6 @@ export class TypeCache {
     }
 
     /**
-     * Get attributes for a type (optionally including inherited, case-insensitive)
-     */
-    getAttributes(typeName: string, includeInherited: boolean = true): TypeAttribute[] {
-        const type = this.typeMap.get(typeName.toLowerCase());
-        if (!type) {
-            return [];
-        }
-
-        if (includeInherited) {
-            return type.attributes;
-        } else {
-            return type.attributes.filter(a => !a.isInherited);
-        }
-    }
-
-    /**
      * Search types by name pattern
      */
     searchTypes(pattern: string): string[] {

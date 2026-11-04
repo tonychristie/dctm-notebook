@@ -15,15 +15,9 @@ export interface NodeData {
 export type NodeType =
     | 'connection'
     | 'cabinets-container'
-    | 'types-container'
-    | 'users-container'
-    | 'groups-container'
     | 'cabinet'
     | 'folder'
-    | 'document'
-    | 'type'
-    | 'user'
-    | 'group';
+    | 'document';
 
 /**
  * Connection node data
@@ -37,10 +31,10 @@ export interface ConnectionNodeData extends NodeData {
 }
 
 /**
- * Container node data (Cabinets, Types, Users, Groups)
+ * Container node data
  */
 export interface ContainerNodeData extends NodeData {
-    type: 'cabinets-container' | 'types-container' | 'users-container' | 'groups-container';
+    type: 'cabinets-container';
     connectionName: string;
 }
 
@@ -79,36 +73,6 @@ export interface DocumentNodeData extends NodeData {
 }
 
 /**
- * Type node data
- */
-export interface TypeNodeData extends NodeData {
-    type: 'type';
-    typeName: string;
-    superType?: string;
-    isSystemType: boolean;
-    connectionName: string;
-}
-
-/**
- * User node data
- */
-export interface UserNodeData extends NodeData {
-    type: 'user';
-    userName: string;
-    userLoginName: string;
-    connectionName: string;
-}
-
-/**
- * Group node data
- */
-export interface GroupNodeData extends NodeData {
-    type: 'group';
-    groupName: string;
-    connectionName: string;
-}
-
-/**
  * Union type for all node data types
  */
 export type AnyNodeData =
@@ -116,10 +80,7 @@ export type AnyNodeData =
     | ContainerNodeData
     | CabinetNodeData
     | FolderNodeData
-    | DocumentNodeData
-    | TypeNodeData
-    | UserNodeData
-    | GroupNodeData;
+    | DocumentNodeData;
 
 /**
  * Tree item representing a node in the object browser
@@ -170,15 +131,6 @@ export class ObjectBrowserItem extends vscode.TreeItem {
             case 'document':
                 const docData = this.data as DocumentNodeData;
                 return `${docData.name}\nType: ${docData.objectType}\nFormat: ${docData.format || 'unknown'}\nID: ${docData.objectId}`;
-            case 'type':
-                const typeData = this.data as TypeNodeData;
-                return `${typeData.typeName}${typeData.superType ? `\nSuper: ${typeData.superType}` : ''}\n${typeData.isSystemType ? 'System type' : 'Custom type'}`;
-            case 'user':
-                const userData = this.data as UserNodeData;
-                return `${userData.userName}\nLogin: ${userData.userLoginName}`;
-            case 'group':
-                const groupData = this.data as GroupNodeData;
-                return groupData.groupName;
             default:
                 return this.data.name;
         }
@@ -194,27 +146,12 @@ export class ObjectBrowserItem extends vscode.TreeItem {
                 );
             case 'cabinets-container':
                 return new vscode.ThemeIcon('folder-library');
-            case 'types-container':
-                return new vscode.ThemeIcon('symbol-class');
-            case 'users-container':
-                return new vscode.ThemeIcon('organization');
-            case 'groups-container':
-                return new vscode.ThemeIcon('people');
             case 'cabinet':
                 return new vscode.ThemeIcon('archive');
             case 'folder':
                 return new vscode.ThemeIcon('folder');
             case 'document':
                 return this.getDocumentIcon();
-            case 'type':
-                const typeData = this.data as TypeNodeData;
-                return new vscode.ThemeIcon(
-                    typeData.isSystemType ? 'symbol-class' : 'symbol-struct'
-                );
-            case 'user':
-                return new vscode.ThemeIcon('person');
-            case 'group':
-                return new vscode.ThemeIcon('organization');
             default:
                 return new vscode.ThemeIcon('circle-outline');
         }
@@ -253,9 +190,6 @@ export class ObjectBrowserItem extends vscode.TreeItem {
             case 'document':
                 const docData = this.data as DocumentNodeData;
                 return docData.format;
-            case 'type':
-                const typeData = this.data as TypeNodeData;
-                return typeData.superType;
             default:
                 return undefined;
         }

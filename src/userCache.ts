@@ -1,4 +1,5 @@
-import { ConnectionManager } from './connectionManager';
+import * as vscode from 'vscode';
+import { DctmBridge } from './dctmBridge';
 
 /**
  * User attribute information
@@ -36,24 +37,21 @@ export interface UserInfo {
  * Fetches from DFC Bridge and caches locally for performance
  */
 export class UserCache {
-    private connectionManager: ConnectionManager;
     private userMap: Map<string, UserInfo> = new Map();
     private userNames: string[] = [];
     private lastRefresh: Date | null = null;
     private refreshPromise: Promise<void> | null = null;
 
-    // Event callbacks
-    private onRefreshCallbacks: Array<() => void> = [];
+    private readonly refreshEmitter = new vscode.EventEmitter<void>();
+    readonly onRefresh: vscode.Event<void> = this.refreshEmitter.event;
 
-    constructor(connectionManager: ConnectionManager) {
-        this.connectionManager = connectionManager;
-    }
+    constructor(
+        private readonly bridge: DctmBridge,
+        private readonly sessionId: string
+    ) {}
 
-    /**
-     * Register callback for when cache is refreshed
-     */
-    onRefresh(callback: () => void): void {
-        this.onRefreshCallbacks.push(callback);
+    dispose(): void {
+        this.refreshEmitter.dispose();
     }
 
     /**
@@ -98,13 +96,8 @@ export class UserCache {
             return this.refreshPromise;
         }
 
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection || !connection.sessionId) {
-            throw new Error('No active connection');
-        }
-
         // Create and store the refresh promise
-        this.refreshPromise = this.doRefresh(connection.sessionId);
+        this.refreshPromise = this.doRefresh();
 
         try {
             await this.refreshPromise;
@@ -116,15 +109,13 @@ export class UserCache {
     /**
      * Internal refresh implementation.
      */
-    private async doRefresh(sessionId: string): Promise<void> {
-        const bridge = this.connectionManager.getDctmBridge();
-
+    private async doRefresh(): Promise<void> {
         // Clear existing cache
         this.userMap.clear();
         this.userNames = [];
 
         // Bridge handles REST vs DQL routing internally
-        const users = await bridge.getUsers(sessionId);
+        const users = await this.bridge.getUsers(this.sessionId);
 
         for (const user of users) {
             const userName = user.userName;
@@ -155,10 +146,7 @@ export class UserCache {
 
         this.lastRefresh = new Date();
 
-        // Notify listeners
-        for (const callback of this.onRefreshCallbacks) {
-            callback();
-        }
+        this.refreshEmitter.fire();
     }
 
     /**
@@ -166,11 +154,6 @@ export class UserCache {
      * The bridge handles REST vs DQL routing internally.
      */
     async fetchUserDetails(userName: string, refresh = false): Promise<UserInfo | undefined> {
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection || !connection.sessionId) {
-            return undefined;
-        }
-
         const userKey = userName.toLowerCase();
         const user = this.userMap.get(userKey);
 
@@ -180,10 +163,8 @@ export class UserCache {
         }
 
         try {
-            const bridge = this.connectionManager.getDctmBridge();
-
             // Bridge handles REST vs DQL routing internally and returns attributes
-            const bridgeUser = await bridge.getUser(connection.sessionId, userName);
+            const bridgeUser = await this.bridge.getUser(this.sessionId, userName);
 
             // Convert bridge attributes to UserAttribute format
             const attributes: UserAttribute[] = bridgeUser.attributes.map(attr => ({
@@ -223,14 +204,8 @@ export class UserCache {
      * The bridge handles REST vs DQL routing internally.
      */
     async getUserGroups(userName: string): Promise<string[]> {
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection || !connection.sessionId) {
-            return [];
-        }
-
         try {
-            const bridge = this.connectionManager.getDctmBridge();
-            const groups = await bridge.getGroupsForUser(connection.sessionId, userName);
+            const groups = await this.bridge.getGroupsForUser(this.sessionId, userName);
             return groups.map(g => g.groupName).sort();
         } catch {
             return [];

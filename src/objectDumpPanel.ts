@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
 import { escapeHtml, isObjectId } from './htmlUtils';
 import { NavigationHistory } from './navigationHistory';
-import { TypeCache } from './typeCache';
+import { DctmBridge } from './dctmBridge';
+import { RepositoryConnection } from './repositoryConnection';
 import { WebviewAssets, webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml';
 import {
     ObjectAttributeEntry,
@@ -28,6 +29,7 @@ export interface ObjectDump {
  * Navigation history entry
  */
 export interface NavigationEntry {
+    connectionName: string;
     objectId: string;
     objectName: string;
     typeName: string;
@@ -45,7 +47,7 @@ export class ObjectDumpPanel {
 
     private readonly panel: vscode.WebviewPanel;
     private readonly connectionManager: ConnectionManager;
-    private readonly typeCache: TypeCache;
+    private connectionName: string;
     private disposables: vscode.Disposable[] = [];
 
     private history = new NavigationHistory<NavigationEntry>();
@@ -53,7 +55,7 @@ export class ObjectDumpPanel {
     public static async createOrShow(
         extensionUri: vscode.Uri,
         connectionManager: ConnectionManager,
-        typeCache: TypeCache,
+        connectionName: string,
         objectId: string
     ): Promise<void> {
         const column = vscode.window.activeTextEditor
@@ -67,7 +69,7 @@ export class ObjectDumpPanel {
         // If reuseWindow is true and we already have a panel, show it and update content
         if (reuseWindow && ObjectDumpPanel.currentPanel) {
             ObjectDumpPanel.currentPanel.panel.reveal(column);
-            await ObjectDumpPanel.currentPanel.loadObject(objectId);
+            await ObjectDumpPanel.currentPanel.loadObject(objectId, connectionName);
             return;
         }
 
@@ -85,7 +87,7 @@ export class ObjectDumpPanel {
             }
         );
 
-        const dumpPanel = new ObjectDumpPanel(panel, connectionManager, typeCache, extensionUri);
+        const dumpPanel = new ObjectDumpPanel(panel, connectionManager, connectionName, extensionUri);
         ObjectDumpPanel.allPanels.add(dumpPanel);
 
         // Only track as currentPanel when reuseWindow is true
@@ -93,18 +95,18 @@ export class ObjectDumpPanel {
             ObjectDumpPanel.currentPanel = dumpPanel;
         }
 
-        await dumpPanel.loadObject(objectId);
+        await dumpPanel.loadObject(objectId, connectionName);
     }
 
     private constructor(
         panel: vscode.WebviewPanel,
         connectionManager: ConnectionManager,
-        typeCache: TypeCache,
+        connectionName: string,
         private readonly extensionUri: vscode.Uri
     ) {
         this.panel = panel;
         this.connectionManager = connectionManager;
-        this.typeCache = typeCache;
+        this.connectionName = connectionName;
 
         // Set initial loading content
         this.panel.webview.html = this.getLoadingHtml();
@@ -117,14 +119,14 @@ export class ObjectDumpPanel {
             async (message) => {
                 switch (message.command) {
                     case 'refresh':
-                        await this.loadObject(message.objectId, false);
+                        await this.loadObject(message.objectId, this.connectionName, false);
                         break;
                     case 'copyValue':
                         await vscode.env.clipboard.writeText(message.value);
                         vscode.window.showInformationMessage('Value copied to clipboard');
                         break;
                     case 'dumpObject':
-                        await this.loadObject(message.objectId, true);
+                        await this.loadObject(message.objectId, this.connectionName);
                         break;
                     case 'goBack':
                         await this.goBack();
@@ -139,12 +141,8 @@ export class ObjectDumpPanel {
         );
     }
 
-    /**
-     * Load and display an object's attributes
-     * @param objectId The object ID to load
-     * @param addToHistory Whether to add this navigation to history (default: true)
-     */
-    public async loadObject(objectId: string, addToHistory: boolean = true): Promise<void> {
+    public async loadObject(objectId: string, connectionName: string, addToHistory: boolean = true): Promise<void> {
+        this.connectionName = connectionName;
         this.panel.title = `Object: ${objectId}`;
         this.panel.webview.html = this.getLoadingHtml();
 
@@ -160,6 +158,7 @@ export class ObjectDumpPanel {
 
             if (addToHistory) {
                 this.history.add({
+                    connectionName,
                     objectId: dump.objectId,
                     objectName: dump.objectName,
                     typeName: dump.typeName
@@ -179,7 +178,7 @@ export class ObjectDumpPanel {
     private async goBack(): Promise<void> {
         const entry = this.history.back();
         if (entry) {
-            await this.loadObject(entry.objectId, false);
+            await this.loadObject(entry.objectId, entry.connectionName, false);
         }
     }
 
@@ -189,7 +188,7 @@ export class ObjectDumpPanel {
     private async goForward(): Promise<void> {
         const entry = this.history.forward();
         if (entry) {
-            await this.loadObject(entry.objectId, false);
+            await this.loadObject(entry.objectId, entry.connectionName, false);
         }
     }
 
@@ -197,23 +196,26 @@ export class ObjectDumpPanel {
      * Fetch object dump via the bridge /objects endpoint.
      */
     private async fetchObjectDump(objectId: string): Promise<ObjectDump> {
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection || !connection.sessionId) {
-            throw new Error('Not connected to Documentum');
+        const connection = this.connectionManager.getOpenConnection(this.connectionName);
+        if (!connection) {
+            throw new Error(`Not connected to ${this.connectionName}`);
         }
 
-        const bridge = this.connectionManager.getDctmBridge();
-        const dump = await this.fetchObjectFromBridge(bridge, connection.sessionId, objectId, Date.now());
-        dump.standardAttributeNames = await this.fetchStandardAttributeNames(dump.typeName);
+        const dump = await this.fetchObjectFromBridge(connection.bridge, connection.sessionId, objectId, Date.now());
+        dump.standardAttributeNames = await this.fetchStandardAttributeNames(connection, dump.typeName);
         return dump;
     }
 
-    private async fetchStandardAttributeNames(typeName: string): Promise<ReadonlySet<string> | undefined> {
-        const standardTypeName = this.typeCache.getNearestStandardType(typeName);
+    private async fetchStandardAttributeNames(
+        connection: RepositoryConnection,
+        typeName: string
+    ): Promise<ReadonlySet<string> | undefined> {
+        const typeCache = connection.typeCache;
+        const standardTypeName = typeCache.getNearestStandardType(typeName);
         if (!standardTypeName) {
             return undefined;
         }
-        const type = await this.typeCache.fetchTypeDetails(standardTypeName);
+        const type = await typeCache.fetchTypeDetails(standardTypeName);
         // fetchTypeDetails returns the type with no attributes when the request fails.
         if (!type || type.attributes.length === 0) {
             return undefined;
@@ -226,7 +228,7 @@ export class ObjectDumpPanel {
      * An attribute arrives as { type, value, repeating } or, from dfc-bridge 1.2.0, as a plain value.
      */
     private async fetchObjectFromBridge(
-        bridge: ReturnType<ConnectionManager['getDctmBridge']>,
+        bridge: DctmBridge,
         sessionId: string,
         objectId: string,
         startTime: number

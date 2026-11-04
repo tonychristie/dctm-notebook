@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
-import { TypeCache } from './typeCache';
-import { ConnectionManager } from './connectionManager';
+import { ConnectionManager, followSelectedCache } from './connectionManager';
 import { TypeDumpPanel } from './typeDumpPanel';
 
 /**
@@ -65,27 +64,24 @@ class TypeBrowserItem extends vscode.TreeItem {
  * Tree data provider for the Type Browser
  * Shows type hierarchy only - clicking a type opens it in a panel view
  */
-export class TypeBrowserProvider implements vscode.TreeDataProvider<TypeBrowserItem> {
+export class TypeBrowserProvider implements vscode.TreeDataProvider<TypeBrowserItem>, vscode.Disposable {
     private _onDidChangeTreeData = new vscode.EventEmitter<TypeBrowserItem | undefined | null | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-    private typeCache: TypeCache;
-    private connectionManager: ConnectionManager;
     private searchFilter: string = '';
+    private readonly cacheSubscription: vscode.Disposable;
 
-    constructor(typeCache: TypeCache, connectionManager: ConnectionManager) {
-        this.typeCache = typeCache;
-        this.connectionManager = connectionManager;
+    constructor(private readonly connectionManager: ConnectionManager) {
+        this.cacheSubscription = followSelectedCache(
+            connectionManager,
+            connection => connection.typeCache,
+            () => this._onDidChangeTreeData.fire()
+        );
+    }
 
-        // Refresh tree when cache is updated
-        this.typeCache.onRefresh(() => {
-            this._onDidChangeTreeData.fire();
-        });
-
-        // Refresh tree when connection changes
-        this.connectionManager.onConnectionChange(() => {
-            this._onDidChangeTreeData.fire();
-        });
+    dispose(): void {
+        this.cacheSubscription.dispose();
+        this._onDidChangeTreeData.dispose();
     }
 
     refresh(): void {
@@ -103,9 +99,8 @@ export class TypeBrowserProvider implements vscode.TreeDataProvider<TypeBrowserI
     }
 
     async getChildren(element?: TypeBrowserItem): Promise<TypeBrowserItem[]> {
-        // Check connection
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection) {
+        const typeCache = this.connectionManager.getSelectedConnection()?.typeCache;
+        if (!typeCache) {
             return [
                 new TypeBrowserItem(
                     'Connect to repository to browse types',
@@ -117,10 +112,10 @@ export class TypeBrowserProvider implements vscode.TreeDataProvider<TypeBrowserI
 
         // Root level - show type hierarchy
         if (!element) {
-            if (!this.typeCache.hasData()) {
+            if (!typeCache.hasData()) {
                 // Try to refresh cache
                 try {
-                    await this.typeCache.refresh();
+                    await typeCache.refresh();
                 } catch {
                     return [
                         new TypeBrowserItem(
@@ -135,13 +130,13 @@ export class TypeBrowserProvider implements vscode.TreeDataProvider<TypeBrowserI
             // Get root types or search results
             let typeNames: string[];
             if (this.searchFilter) {
-                typeNames = this.typeCache.searchTypes(this.searchFilter);
+                typeNames = typeCache.searchTypes(this.searchFilter);
             } else {
-                typeNames = this.typeCache.getRootTypes();
+                typeNames = typeCache.getRootTypes();
             }
 
             return typeNames.map(name => {
-                const type = this.typeCache.getType(name);
+                const type = typeCache.getType(name);
                 const hasChildren = type && type.children.length > 0;
                 // When searching, show flat list (no children expansion)
                 // When browsing hierarchy, allow expansion if type has children
@@ -160,9 +155,9 @@ export class TypeBrowserProvider implements vscode.TreeDataProvider<TypeBrowserI
 
         // Type node - show only child types (no attributes - those are shown in panel)
         if (element.itemType === 'type' && element.typeName) {
-            const childTypes = this.typeCache.getChildTypes(element.typeName);
+            const childTypes = typeCache.getChildTypes(element.typeName);
             return childTypes.map(childName => {
-                const childType = this.typeCache.getType(childName);
+                const childType = typeCache.getType(childName);
                 const hasGrandchildren = childType && childType.children.length > 0;
                 return new TypeBrowserItem(
                     childType?.name || childName,
@@ -185,10 +180,18 @@ export class TypeBrowserProvider implements vscode.TreeDataProvider<TypeBrowserI
  */
 export function registerTypeBrowser(
     context: vscode.ExtensionContext,
-    typeCache: TypeCache,
     connectionManager: ConnectionManager
 ): TypeBrowserProvider {
-    const provider = new TypeBrowserProvider(typeCache, connectionManager);
+    const provider = new TypeBrowserProvider(connectionManager);
+
+    const openType = async (typeName: string) => {
+        const name = connectionManager.getSelectedConnection()?.name;
+        if (!name) {
+            vscode.window.showErrorMessage('Not connected to Documentum. Use "Documentum: Connect" first.');
+            return;
+        }
+        await TypeDumpPanel.createOrShow(context.extensionUri, connectionManager, name, typeName);
+    };
 
     // Register tree view
     const treeView = vscode.window.createTreeView('documentumTypeBrowser', {
@@ -204,16 +207,18 @@ export function registerTypeBrowser(
                 return;
             }
 
-            await TypeDumpPanel.createOrShow(
-                context.extensionUri,
-                typeCache,
-                item.typeName
-            );
+            await openType(item.typeName);
         }
     );
 
     // Refresh command
     const refreshCommand = vscode.commands.registerCommand('dctm.refreshTypeBrowser', async () => {
+        const typeCache = connectionManager.getSelectedConnection()?.typeCache;
+        if (!typeCache) {
+            vscode.window.showErrorMessage('Failed to refresh types: No active connection');
+            return;
+        }
+
         try {
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
@@ -242,7 +247,7 @@ export function registerTypeBrowser(
         if (filter !== undefined) {
             provider.setSearchFilter(filter);
             if (filter) {
-                const results = typeCache.searchTypes(filter);
+                const results = connectionManager.getSelectedConnection()?.typeCache.searchTypes(filter) ?? [];
                 vscode.window.showInformationMessage(`Found ${results.length} matching types`);
             }
         }
@@ -261,11 +266,7 @@ export function registerTypeBrowser(
                 return;
             }
 
-            await TypeDumpPanel.createOrShow(
-                context.extensionUri,
-                typeCache,
-                item.typeName
-            );
+            await openType(item.typeName);
         }
     );
 
@@ -277,7 +278,7 @@ export function registerTypeBrowser(
                 return;
             }
 
-            const type = await typeCache.fetchTypeDetails(item.typeName);
+            const type = await connectionManager.getSelectedConnection()?.typeCache.fetchTypeDetails(item.typeName);
             if (!type) {
                 return;
             }
@@ -304,6 +305,7 @@ export function registerTypeBrowser(
     );
 
     context.subscriptions.push(
+        provider,
         treeView,
         openTypePanelCommand,
         refreshCommand,

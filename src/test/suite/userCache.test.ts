@@ -1,19 +1,14 @@
 import * as assert from 'assert';
 import { UserCache, UserInfo } from '../../userCache';
+import { DctmBridge } from '../../dctmBridge';
 
-// Mock ConnectionManager for testing
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockConnectionManager: any = {
-    getActiveConnection: () => null,
-    getDctmBridge: () => null,
-    onConnectionChange: () => {}
-};
+const unusedBridge = {} as DctmBridge;
 
 suite('UserCache Test Suite', () => {
     let userCache: UserCache;
 
     setup(() => {
-        userCache = new UserCache(mockConnectionManager);
+        userCache = new UserCache(unusedBridge, 'session-1');
     });
 
     suite('Initial State', () => {
@@ -74,32 +69,6 @@ suite('UserCache Test Suite', () => {
             assert.strictEqual(count, 0);
         });
     });
-
-    suite('refresh error handling', () => {
-        test('refresh throws error without connection', async () => {
-            try {
-                await userCache.refresh();
-                assert.fail('Should have thrown error');
-            } catch (error) {
-                assert.ok(error instanceof Error);
-                assert.ok((error as Error).message.includes('No active connection'));
-            }
-        });
-    });
-
-    suite('fetchUserDetails error handling', () => {
-        test('fetchUserDetails returns undefined without connection', async () => {
-            const result = await userCache.fetchUserDetails('dmadmin');
-            assert.strictEqual(result, undefined);
-        });
-    });
-
-    suite('getUserGroups error handling', () => {
-        test('getUserGroups returns empty array without connection', async () => {
-            const result = await userCache.getUserGroups('dmadmin');
-            assert.strictEqual(result.length, 0);
-        });
-    });
 });
 
 // Test suite with mocked data
@@ -121,7 +90,7 @@ suite('UserCache with Mock Data', () => {
     let userCache: TestableUserCache;
 
     setup(() => {
-        userCache = new TestableUserCache(mockConnectionManager);
+        userCache = new TestableUserCache(unusedBridge, 'session-1');
 
         // Add mock users
         userCache.addMockUser('dmadmin', {
@@ -288,22 +257,20 @@ suite('UserCache fetchUserDetails', () => {
     };
 
     let bridgeCalls: number;
+    let sessionIds: string[];
     let userCache: UserCache;
 
     setup(() => {
         bridgeCalls = 0;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const connectionManager: any = {
-            getActiveConnection: () => ({ sessionId: 'session-1' }),
-            getDctmBridge: () => ({
-                getUser: async () => {
-                    bridgeCalls++;
-                    return bridgeUser;
-                }
-            }),
-            onConnectionChange: () => {}
+        sessionIds = [];
+        const bridge = {
+            getUser: async (sessionId: string) => {
+                bridgeCalls++;
+                sessionIds.push(sessionId);
+                return bridgeUser;
+            }
         };
-        userCache = new UserCache(connectionManager);
+        userCache = new UserCache(bridge as unknown as DctmBridge, 'session-1');
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (userCache as any).userMap.set('testuser', {
@@ -328,7 +295,7 @@ suite('UserCache fetchUserDetails', () => {
     test('refresh fetches a cached user from the bridge and rebuilds it', async () => {
         const user = await userCache.fetchUserDetails('testuser', true);
 
-        assert.strictEqual(bridgeCalls, 1);
+        assert.deepStrictEqual(sessionIds, ['session-1']);
         assert.ok(user);
         assert.strictEqual(user.userState, 1);
         assert.strictEqual(user.userLoginName, 'tuser');

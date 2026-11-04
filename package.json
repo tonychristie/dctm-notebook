@@ -325,18 +325,6 @@
         "title": "Unbind Connection",
         "category": "Documentum Notebook",
         "icon": "$(link-external)"
-      },
-      {
-        "command": "dctm.notebook.connectNotebook",
-        "title": "Connect Notebook",
-        "category": "Documentum Notebook",
-        "icon": "$(plug)"
-      },
-      {
-        "command": "dctm.notebook.disconnectNotebook",
-        "title": "Disconnect Notebook",
-        "category": "Documentum Notebook",
-        "icon": "$(debug-disconnect)"
       }
     ],
     "views": {
@@ -659,16 +647,6 @@
           "command": "dctm.notebook.unbindConnection",
           "when": "notebookType == dctmbook && dctm.notebookBound",
           "group": "navigation@2"
-        },
-        {
-          "command": "dctm.notebook.connectNotebook",
-          "when": "notebookType == dctmbook && dctm.notebookBound && !dctm.notebookConnected",
-          "group": "navigation@3"
-        },
-        {
-          "command": "dctm.notebook.disconnectNotebook",
-          "when": "notebookType == dctmbook && dctm.notebookConnected",
-          "group": "navigation@4"
         }
       ],
       "commandPalette": [
@@ -679,14 +657,6 @@
         {
           "command": "dctm.notebook.unbindConnection",
           "when": "notebookType == dctmbook && dctm.notebookBound"
-        },
-        {
-          "command": "dctm.notebook.connectNotebook",
-          "when": "notebookType == dctmbook && dctm.notebookBound && !dctm.notebookConnected"
-        },
-        {
-          "command": "dctm.notebook.disconnectNotebook",
-          "when": "notebookType == dctmbook && dctm.notebookConnected"
         }
       ]
     },

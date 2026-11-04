@@ -1,6 +1,5 @@
 import * as assert from 'assert';
 import { UserBrowserProvider } from '../../userBrowser';
-import { UserCache } from '../../userCache';
 import { ConnectionManager } from '../../connectionManager';
 
 class FakeUserCache {
@@ -11,7 +10,9 @@ class FakeUserCache {
 
     constructor(private names: string[]) {}
 
-    onRefresh(): void {}
+    onRefresh() {
+        return { dispose: () => {} };
+    }
 
     hasData(): boolean {
         return this.loaded;
@@ -41,13 +42,10 @@ class FakeUserCache {
 
 function createProvider(cache: FakeUserCache, connected: boolean): UserBrowserProvider {
     const connectionManager = {
-        getActiveConnection: () => (connected ? { sessionId: 's1' } : null),
-        onConnectionChange: () => {}
+        getSelectedConnection: () => (connected ? { userCache: cache } : undefined),
+        onDidChangeSelection: () => ({ dispose: () => {} })
     };
-    return new UserBrowserProvider(
-        cache as unknown as UserCache,
-        connectionManager as unknown as ConnectionManager
-    );
+    return new UserBrowserProvider(connectionManager as unknown as ConnectionManager);
 }
 
 suite('UserBrowser Test Suite', () => {

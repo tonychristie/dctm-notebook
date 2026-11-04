@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
-import { UserCache } from './userCache';
-import { ConnectionManager } from './connectionManager';
+import { ConnectionManager, followSelectedCache } from './connectionManager';
 import { UserDumpPanel } from './userDumpPanel';
 import { buildUserQuery } from './dqlQueries';
 
@@ -61,27 +60,24 @@ class UserBrowserItem extends vscode.TreeItem {
  * Tree data provider for the User Browser
  * Shows flat list of users - clicking a user opens it in a panel view
  */
-export class UserBrowserProvider implements vscode.TreeDataProvider<UserBrowserItem> {
+export class UserBrowserProvider implements vscode.TreeDataProvider<UserBrowserItem>, vscode.Disposable {
     private _onDidChangeTreeData = new vscode.EventEmitter<UserBrowserItem | undefined | null | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-    private userCache: UserCache;
-    private connectionManager: ConnectionManager;
     private searchFilter: string = '';
+    private readonly cacheSubscription: vscode.Disposable;
 
-    constructor(userCache: UserCache, connectionManager: ConnectionManager) {
-        this.userCache = userCache;
-        this.connectionManager = connectionManager;
+    constructor(private readonly connectionManager: ConnectionManager) {
+        this.cacheSubscription = followSelectedCache(
+            connectionManager,
+            connection => connection.userCache,
+            () => this._onDidChangeTreeData.fire()
+        );
+    }
 
-        // Refresh tree when cache is updated
-        this.userCache.onRefresh(() => {
-            this._onDidChangeTreeData.fire();
-        });
-
-        // Refresh tree when connection changes
-        this.connectionManager.onConnectionChange(() => {
-            this._onDidChangeTreeData.fire();
-        });
+    dispose(): void {
+        this.cacheSubscription.dispose();
+        this._onDidChangeTreeData.dispose();
     }
 
     refresh(): void {
@@ -99,9 +95,8 @@ export class UserBrowserProvider implements vscode.TreeDataProvider<UserBrowserI
     }
 
     async getChildren(element?: UserBrowserItem): Promise<UserBrowserItem[]> {
-        // Check connection
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection) {
+        const userCache = this.connectionManager.getSelectedConnection()?.userCache;
+        if (!userCache) {
             return [
                 new UserBrowserItem(
                     'Connect to repository to browse users',
@@ -113,10 +108,10 @@ export class UserBrowserProvider implements vscode.TreeDataProvider<UserBrowserI
 
         // Root level - show users
         if (!element) {
-            if (!this.userCache.hasData()) {
+            if (!userCache.hasData()) {
                 // Try to refresh cache
                 try {
-                    await this.userCache.refresh();
+                    await userCache.refresh();
                 } catch {
                     return [
                         new UserBrowserItem(
@@ -131,13 +126,13 @@ export class UserBrowserProvider implements vscode.TreeDataProvider<UserBrowserI
             // Get users or search results
             let userNames: string[];
             if (this.searchFilter) {
-                userNames = this.userCache.searchUsers(this.searchFilter);
+                userNames = userCache.searchUsers(this.searchFilter);
             } else {
-                userNames = this.userCache.getUserNames();
+                userNames = userCache.getUserNames();
             }
 
             return userNames.map(name => {
-                const user = this.userCache.getUser(name);
+                const user = userCache.getUser(name);
                 return new UserBrowserItem(
                     user?.userName || name,
                     'user',
@@ -156,10 +151,18 @@ export class UserBrowserProvider implements vscode.TreeDataProvider<UserBrowserI
  */
 export function registerUserBrowser(
     context: vscode.ExtensionContext,
-    userCache: UserCache,
     connectionManager: ConnectionManager
 ): UserBrowserProvider {
-    const provider = new UserBrowserProvider(userCache, connectionManager);
+    const provider = new UserBrowserProvider(connectionManager);
+
+    const openUser = async (userName: string, connectionName?: string) => {
+        const name = connectionName ?? connectionManager.getSelectedConnection()?.name;
+        if (!name) {
+            vscode.window.showErrorMessage('Not connected to Documentum. Use "Documentum: Connect" first.');
+            return;
+        }
+        await UserDumpPanel.createOrShow(context.extensionUri, connectionManager, name, userName);
+    };
 
     // Register tree view
     const treeView = vscode.window.createTreeView('documentumUserBrowser', {
@@ -175,16 +178,18 @@ export function registerUserBrowser(
                 return;
             }
 
-            await UserDumpPanel.createOrShow(
-                context.extensionUri,
-                userCache,
-                item.userName
-            );
+            await openUser(item.userName);
         }
     );
 
     // Refresh command
     const refreshCommand = vscode.commands.registerCommand('dctm.refreshUserBrowser', async () => {
+        const userCache = connectionManager.getSelectedConnection()?.userCache;
+        if (!userCache) {
+            vscode.window.showErrorMessage('Failed to refresh users: No active connection');
+            return;
+        }
+
         try {
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
@@ -213,7 +218,7 @@ export function registerUserBrowser(
         if (filter !== undefined) {
             provider.setSearchFilter(filter);
             if (filter) {
-                const results = userCache.searchUsers(filter);
+                const results = connectionManager.getSelectedConnection()?.userCache.searchUsers(filter) ?? [];
                 vscode.window.showInformationMessage(`Found ${results.length} matching users`);
             }
         }
@@ -232,11 +237,7 @@ export function registerUserBrowser(
                 return;
             }
 
-            await UserDumpPanel.createOrShow(
-                context.extensionUri,
-                userCache,
-                item.userName
-            );
+            await openUser(item.userName);
         }
     );
 
@@ -259,19 +260,16 @@ export function registerUserBrowser(
     // Open user panel by name (for cross-panel navigation)
     const openUserByNameCommand = vscode.commands.registerCommand(
         'dctm.openUserByName',
-        async (userName: string) => {
+        async (userName: string, connectionName?: string) => {
             if (!userName) {
                 return;
             }
-            await UserDumpPanel.createOrShow(
-                context.extensionUri,
-                userCache,
-                userName
-            );
+            await openUser(userName, connectionName);
         }
     );
 
     context.subscriptions.push(
+        provider,
         treeView,
         openUserPanelCommand,
         refreshCommand,

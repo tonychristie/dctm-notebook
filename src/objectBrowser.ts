@@ -22,21 +22,23 @@ import {
  *
  * Note: Types, Users, and Groups are now in separate browser views
  */
-export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrowserItem> {
+export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrowserItem>, vscode.Disposable {
     private _onDidChangeTreeData: vscode.EventEmitter<ObjectBrowserItem | undefined | null | void> =
         new vscode.EventEmitter<ObjectBrowserItem | undefined | null | void>();
     readonly onDidChangeTreeData: vscode.Event<ObjectBrowserItem | undefined | null | void> =
         this._onDidChangeTreeData.event;
 
     private connectionManager: ConnectionManager;
+    private readonly openConnectionsSubscription: vscode.Disposable;
 
     constructor(connectionManager: ConnectionManager) {
         this.connectionManager = connectionManager;
+        this.openConnectionsSubscription = connectionManager.onDidChangeOpenConnections(() => this.refresh());
+    }
 
-        // Refresh tree when connection changes
-        connectionManager.onConnectionChange(() => {
-            this.refresh();
-        });
+    dispose(): void {
+        this.openConnectionsSubscription.dispose();
+        this._onDidChangeTreeData.dispose();
     }
 
     /**
@@ -89,10 +91,10 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
      */
     private getConnectionNodes(): ObjectBrowserItem[] {
         const connections = this.connectionManager.getConnections();
-        const activeConnection = this.connectionManager.getActiveConnection();
 
         return connections.map(conn => {
-            const isConnected = activeConnection?.config.name === conn.name;
+            const openConnection = this.connectionManager.getOpenConnection(conn.name);
+            const isConnected = !!openConnection;
             const data: ConnectionNodeData = {
                 id: createNodeId(conn.name, 'connection', conn.name),
                 name: conn.name,
@@ -100,7 +102,7 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
                 connectionName: conn.name,
                 repository: conn.repository,
                 connected: isConnected,
-                username: isConnected ? activeConnection?.username : undefined
+                username: openConnection?.username
             };
 
             return new ObjectBrowserItem(
@@ -138,14 +140,13 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
      * The bridge handles REST vs DQL routing internally.
      */
     private async getCabinets(data: ContainerNodeData): Promise<ObjectBrowserItem[]> {
-        const connection = this.connectionManager.getActiveConnection();
+        const connection = this.connectionManager.getOpenConnection(data.connectionName);
         if (!connection) {
             return [];
         }
 
         try {
-            const bridge = this.connectionManager.getDctmBridge();
-            const cabinets = await bridge.getCabinets(connection.sessionId);
+            const cabinets = await connection.bridge.getCabinets(connection.sessionId);
 
             return cabinets.map(cabinet => {
                 const cabinetData: CabinetNodeData = {
@@ -169,15 +170,14 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
      * The bridge handles REST vs DQL routing internally.
      */
     private async getFolderContents(data: CabinetNodeData | FolderNodeData): Promise<ObjectBrowserItem[]> {
-        const connection = this.connectionManager.getActiveConnection();
+        const connection = this.connectionManager.getOpenConnection(data.connectionName);
         if (!connection) {
             return [];
         }
 
         try {
-            const bridge = this.connectionManager.getDctmBridge();
             // Pass the path for DFC sessions (required for DQL queries)
-            const contents = await bridge.getFolderContents(connection.sessionId, data.objectId, data.path);
+            const contents = await connection.bridge.getFolderContents(connection.sessionId, data.objectId, data.path);
             const items: ObjectBrowserItem[] = [];
 
             // Sort by name
@@ -242,7 +242,7 @@ export function registerObjectBrowser(
         treeDataProvider: provider,
         showCollapseAll: true
     });
-    context.subscriptions.push(treeView);
+    context.subscriptions.push(provider, treeView);
 
     // Register refresh command
     const refreshCommand = vscode.commands.registerCommand('dctm.refreshObjectBrowser', () => {
@@ -255,7 +255,7 @@ export function registerObjectBrowser(
         'dctm.connectFromTree',
         async (item: ObjectBrowserItem) => {
             if (item.data.type === 'connection') {
-                await connectionManager.connect();
+                await connectionManager.connect(item.data.connectionName);
             }
         }
     );
@@ -264,8 +264,8 @@ export function registerObjectBrowser(
     // Register disconnect from tree command
     const disconnectFromTreeCommand = vscode.commands.registerCommand(
         'dctm.disconnectFromTree',
-        async () => {
-            await connectionManager.disconnect();
+        async (item?: ObjectBrowserItem) => {
+            await connectionManager.disconnect(item?.data.connectionName);
         }
     );
     context.subscriptions.push(disconnectFromTreeCommand);
@@ -273,8 +273,8 @@ export function registerObjectBrowser(
     // Register switch user from tree command
     const switchUserFromTreeCommand = vscode.commands.registerCommand(
         'dctm.switchUserFromTree',
-        async () => {
-            await connectionManager.switchUser();
+        async (item?: ObjectBrowserItem) => {
+            await connectionManager.switchUser(item?.data.connectionName);
         }
     );
     context.subscriptions.push(switchUserFromTreeCommand);
@@ -286,7 +286,7 @@ export function registerObjectBrowser(
             // Handle both ObjectBrowserItem (from context menu) and AnyNodeData (from click command)
             const data = 'data' in item ? item.data : item;
             if ('objectId' in data) {
-                await vscode.commands.executeCommand('dctm.dumpObject', data.objectId);
+                await vscode.commands.executeCommand('dctm.dumpObject', data.objectId, data.connectionName);
             }
         }
     );

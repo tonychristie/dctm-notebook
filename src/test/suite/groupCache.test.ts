@@ -1,19 +1,14 @@
 import * as assert from 'assert';
 import { GroupCache, GroupInfo } from '../../groupCache';
+import { DctmBridge } from '../../dctmBridge';
 
-// Mock ConnectionManager for testing
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockConnectionManager: any = {
-    getActiveConnection: () => null,
-    getDctmBridge: () => null,
-    onConnectionChange: () => {}
-};
+const unusedBridge = {} as DctmBridge;
 
 suite('GroupCache Test Suite', () => {
     let groupCache: GroupCache;
 
     setup(() => {
-        groupCache = new GroupCache(mockConnectionManager);
+        groupCache = new GroupCache(unusedBridge, 'session-1');
     });
 
     suite('Initial State', () => {
@@ -74,32 +69,6 @@ suite('GroupCache Test Suite', () => {
             assert.strictEqual(count, 0);
         });
     });
-
-    suite('refresh error handling', () => {
-        test('refresh throws error without connection', async () => {
-            try {
-                await groupCache.refresh();
-                assert.fail('Should have thrown error');
-            } catch (error) {
-                assert.ok(error instanceof Error);
-                assert.ok((error as Error).message.includes('No active connection'));
-            }
-        });
-    });
-
-    suite('fetchGroupDetails error handling', () => {
-        test('fetchGroupDetails returns undefined without connection', async () => {
-            const result = await groupCache.fetchGroupDetails('docu');
-            assert.strictEqual(result, undefined);
-        });
-    });
-
-    suite('getParentGroups error handling', () => {
-        test('getParentGroups returns empty array without connection', async () => {
-            const result = await groupCache.getParentGroups('docu');
-            assert.strictEqual(result.length, 0);
-        });
-    });
 });
 
 // Test suite with mocked data
@@ -121,7 +90,7 @@ suite('GroupCache with Mock Data', () => {
     let groupCache: TestableGroupCache;
 
     setup(() => {
-        groupCache = new TestableGroupCache(mockConnectionManager);
+        groupCache = new TestableGroupCache(unusedBridge, 'session-1');
 
         // Add mock groups
         groupCache.addMockGroup('docu', {
@@ -336,22 +305,20 @@ suite('GroupCache fetchGroupDetails', () => {
     };
 
     let bridgeCalls: number;
+    let sessionIds: string[];
     let groupCache: GroupCache;
 
     setup(() => {
         bridgeCalls = 0;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const connectionManager: any = {
-            getActiveConnection: () => ({ sessionId: 'session-1' }),
-            getDctmBridge: () => ({
-                getGroup: async () => {
-                    bridgeCalls++;
-                    return bridgeGroup;
-                }
-            }),
-            onConnectionChange: () => {}
+        sessionIds = [];
+        const bridge = {
+            getGroup: async (sessionId: string) => {
+                bridgeCalls++;
+                sessionIds.push(sessionId);
+                return bridgeGroup;
+            }
         };
-        groupCache = new GroupCache(connectionManager);
+        groupCache = new GroupCache(bridge as unknown as DctmBridge, 'session-1');
     });
 
     function cacheGroupWithAttributes(): void {
@@ -379,7 +346,7 @@ suite('GroupCache fetchGroupDetails', () => {
 
         const group = await groupCache.fetchGroupDetails('docu', true);
 
-        assert.strictEqual(bridgeCalls, 1);
+        assert.deepStrictEqual(sessionIds, ['session-1']);
         assert.ok(group);
         assert.strictEqual(group.groupClass, 'qa_refresh');
         assert.strictEqual(group.description, 'Documentum Users (updated)');

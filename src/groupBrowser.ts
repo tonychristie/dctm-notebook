@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
-import { GroupCache } from './groupCache';
-import { ConnectionManager } from './connectionManager';
+import { ConnectionManager, followSelectedCache } from './connectionManager';
 import { GroupDumpPanel } from './groupDumpPanel';
 import { buildGroupQuery } from './dqlQueries';
 
@@ -61,27 +60,24 @@ class GroupBrowserItem extends vscode.TreeItem {
  * Tree data provider for the Group Browser
  * Shows flat list of groups - clicking a group opens it in a panel view
  */
-export class GroupBrowserProvider implements vscode.TreeDataProvider<GroupBrowserItem> {
+export class GroupBrowserProvider implements vscode.TreeDataProvider<GroupBrowserItem>, vscode.Disposable {
     private _onDidChangeTreeData = new vscode.EventEmitter<GroupBrowserItem | undefined | null | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-    private groupCache: GroupCache;
-    private connectionManager: ConnectionManager;
     private searchFilter: string = '';
+    private readonly cacheSubscription: vscode.Disposable;
 
-    constructor(groupCache: GroupCache, connectionManager: ConnectionManager) {
-        this.groupCache = groupCache;
-        this.connectionManager = connectionManager;
+    constructor(private readonly connectionManager: ConnectionManager) {
+        this.cacheSubscription = followSelectedCache(
+            connectionManager,
+            connection => connection.groupCache,
+            () => this._onDidChangeTreeData.fire()
+        );
+    }
 
-        // Refresh tree when cache is updated
-        this.groupCache.onRefresh(() => {
-            this._onDidChangeTreeData.fire();
-        });
-
-        // Refresh tree when connection changes
-        this.connectionManager.onConnectionChange(() => {
-            this._onDidChangeTreeData.fire();
-        });
+    dispose(): void {
+        this.cacheSubscription.dispose();
+        this._onDidChangeTreeData.dispose();
     }
 
     refresh(): void {
@@ -99,9 +95,8 @@ export class GroupBrowserProvider implements vscode.TreeDataProvider<GroupBrowse
     }
 
     async getChildren(element?: GroupBrowserItem): Promise<GroupBrowserItem[]> {
-        // Check connection
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection) {
+        const groupCache = this.connectionManager.getSelectedConnection()?.groupCache;
+        if (!groupCache) {
             return [
                 new GroupBrowserItem(
                     'Connect to repository to browse groups',
@@ -113,10 +108,10 @@ export class GroupBrowserProvider implements vscode.TreeDataProvider<GroupBrowse
 
         // Root level - show groups
         if (!element) {
-            if (!this.groupCache.hasData()) {
+            if (!groupCache.hasData()) {
                 // Try to refresh cache
                 try {
-                    await this.groupCache.refresh();
+                    await groupCache.refresh();
                 } catch {
                     return [
                         new GroupBrowserItem(
@@ -131,13 +126,13 @@ export class GroupBrowserProvider implements vscode.TreeDataProvider<GroupBrowse
             // Get groups or search results
             let groupNames: string[];
             if (this.searchFilter) {
-                groupNames = this.groupCache.searchGroups(this.searchFilter);
+                groupNames = groupCache.searchGroups(this.searchFilter);
             } else {
-                groupNames = this.groupCache.getGroupNames();
+                groupNames = groupCache.getGroupNames();
             }
 
             return groupNames.map(name => {
-                const group = this.groupCache.getGroup(name);
+                const group = groupCache.getGroup(name);
                 return new GroupBrowserItem(
                     group?.groupName || name,
                     'group',
@@ -156,10 +151,18 @@ export class GroupBrowserProvider implements vscode.TreeDataProvider<GroupBrowse
  */
 export function registerGroupBrowser(
     context: vscode.ExtensionContext,
-    groupCache: GroupCache,
     connectionManager: ConnectionManager
 ): GroupBrowserProvider {
-    const provider = new GroupBrowserProvider(groupCache, connectionManager);
+    const provider = new GroupBrowserProvider(connectionManager);
+
+    const openGroup = async (groupName: string, connectionName?: string) => {
+        const name = connectionName ?? connectionManager.getSelectedConnection()?.name;
+        if (!name) {
+            vscode.window.showErrorMessage('Not connected to Documentum. Use "Documentum: Connect" first.');
+            return;
+        }
+        await GroupDumpPanel.createOrShow(context.extensionUri, connectionManager, name, groupName);
+    };
 
     // Register tree view
     const treeView = vscode.window.createTreeView('documentumGroupBrowser', {
@@ -175,16 +178,18 @@ export function registerGroupBrowser(
                 return;
             }
 
-            await GroupDumpPanel.createOrShow(
-                context.extensionUri,
-                groupCache,
-                item.groupName
-            );
+            await openGroup(item.groupName);
         }
     );
 
     // Refresh command
     const refreshCommand = vscode.commands.registerCommand('dctm.refreshGroupBrowser', async () => {
+        const groupCache = connectionManager.getSelectedConnection()?.groupCache;
+        if (!groupCache) {
+            vscode.window.showErrorMessage('Failed to refresh groups: No active connection');
+            return;
+        }
+
         try {
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
@@ -213,7 +218,7 @@ export function registerGroupBrowser(
         if (filter !== undefined) {
             provider.setSearchFilter(filter);
             if (filter) {
-                const results = groupCache.searchGroups(filter);
+                const results = connectionManager.getSelectedConnection()?.groupCache.searchGroups(filter) ?? [];
                 vscode.window.showInformationMessage(`Found ${results.length} matching groups`);
             }
         }
@@ -232,11 +237,7 @@ export function registerGroupBrowser(
                 return;
             }
 
-            await GroupDumpPanel.createOrShow(
-                context.extensionUri,
-                groupCache,
-                item.groupName
-            );
+            await openGroup(item.groupName);
         }
     );
 
@@ -259,19 +260,16 @@ export function registerGroupBrowser(
     // Open group panel by name (for cross-panel navigation)
     const openGroupByNameCommand = vscode.commands.registerCommand(
         'dctm.openGroupByName',
-        async (groupName: string) => {
+        async (groupName: string, connectionName?: string) => {
             if (!groupName) {
                 return;
             }
-            await GroupDumpPanel.createOrShow(
-                context.extensionUri,
-                groupCache,
-                groupName
-            );
+            await openGroup(groupName, connectionName);
         }
     );
 
     context.subscriptions.push(
+        provider,
         treeView,
         openGroupPanelCommand,
         refreshCommand,

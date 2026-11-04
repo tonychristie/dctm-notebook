@@ -1,6 +1,5 @@
 import * as assert from 'assert';
 import { GroupBrowserProvider } from '../../groupBrowser';
-import { GroupCache } from '../../groupCache';
 import { ConnectionManager } from '../../connectionManager';
 
 class FakeGroupCache {
@@ -11,7 +10,9 @@ class FakeGroupCache {
 
     constructor(private names: string[]) {}
 
-    onRefresh(): void {}
+    onRefresh() {
+        return { dispose: () => {} };
+    }
 
     hasData(): boolean {
         return this.loaded;
@@ -41,13 +42,10 @@ class FakeGroupCache {
 
 function createProvider(cache: FakeGroupCache, connected: boolean): GroupBrowserProvider {
     const connectionManager = {
-        getActiveConnection: () => (connected ? { sessionId: 's1' } : null),
-        onConnectionChange: () => {}
+        getSelectedConnection: () => (connected ? { groupCache: cache } : undefined),
+        onDidChangeSelection: () => ({ dispose: () => {} })
     };
-    return new GroupBrowserProvider(
-        cache as unknown as GroupCache,
-        connectionManager as unknown as ConnectionManager
-    );
+    return new GroupBrowserProvider(connectionManager as unknown as ConnectionManager);
 }
 
 suite('GroupBrowser Test Suite', () => {

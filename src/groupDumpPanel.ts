@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { GroupCache, GroupInfo, GroupAttribute } from './groupCache';
+import { ConnectionManager } from './connectionManager';
 import { escapeHtml } from './htmlUtils';
 import { buildGroupQuery } from './dqlQueries';
 import { GroupAttributeGroup as AttributeGroup, describeAttributeValue, groupGroupAttributes } from './attributeGroups';
@@ -15,7 +16,8 @@ export class GroupDumpPanel {
     private static readonly viewType = 'dctmGroupDump';
 
     private readonly panel: vscode.WebviewPanel;
-    private readonly groupCache: GroupCache;
+    private readonly connectionManager: ConnectionManager;
+    private connectionName: string;
     private disposables: vscode.Disposable[] = [];
 
     // Current state
@@ -24,7 +26,8 @@ export class GroupDumpPanel {
 
     public static async createOrShow(
         extensionUri: vscode.Uri,
-        groupCache: GroupCache,
+        connectionManager: ConnectionManager,
+        connectionName: string,
         groupName: string
     ): Promise<void> {
         const column = vscode.window.activeTextEditor
@@ -38,6 +41,7 @@ export class GroupDumpPanel {
         // If reuseWindow is true and we already have a panel, show it and update content
         if (reuseWindow && GroupDumpPanel.currentPanel) {
             GroupDumpPanel.currentPanel.panel.reveal(column);
+            GroupDumpPanel.currentPanel.connectionName = connectionName;
             await GroupDumpPanel.currentPanel.loadGroup(groupName);
             return;
         }
@@ -56,7 +60,7 @@ export class GroupDumpPanel {
             }
         );
 
-        const groupPanel = new GroupDumpPanel(panel, groupCache, extensionUri);
+        const groupPanel = new GroupDumpPanel(panel, connectionManager, connectionName, extensionUri);
         GroupDumpPanel.allPanels.add(groupPanel);
 
         // Only track as currentPanel when reuseWindow is true
@@ -69,11 +73,13 @@ export class GroupDumpPanel {
 
     private constructor(
         panel: vscode.WebviewPanel,
-        groupCache: GroupCache,
+        connectionManager: ConnectionManager,
+        connectionName: string,
         private readonly extensionUri: vscode.Uri
     ) {
         this.panel = panel;
-        this.groupCache = groupCache;
+        this.connectionManager = connectionManager;
+        this.connectionName = connectionName;
 
         // Set initial loading content
         this.panel.webview.html = this.getLoadingHtml();
@@ -96,13 +102,18 @@ export class GroupDumpPanel {
                         await this.generateDqlQuery();
                         break;
                     case 'openGroup':
-                        await GroupDumpPanel.createOrShow(this.extensionUri, this.groupCache, message.groupName);
+                        await GroupDumpPanel.createOrShow(
+                            this.extensionUri,
+                            this.connectionManager,
+                            this.connectionName,
+                            message.groupName
+                        );
                         break;
                     case 'openUser':
-                        await vscode.commands.executeCommand('dctm.openUserByName', message.userName);
+                        await vscode.commands.executeCommand('dctm.openUserByName', message.userName, this.connectionName);
                         break;
                     case 'dumpObject':
-                        await vscode.commands.executeCommand('dctm.dumpObject', message.objectId);
+                        await vscode.commands.executeCommand('dctm.dumpObject', message.objectId, this.connectionName);
                         break;
                 }
             },
@@ -120,20 +131,28 @@ export class GroupDumpPanel {
         this.panel.webview.html = this.getLoadingHtml();
 
         try {
-            const group = await this.groupCache.fetchGroupDetails(groupName, refresh);
+            const groupCache = this.groupCache();
+            const group = await groupCache.fetchGroupDetails(groupName, refresh);
             if (!group) {
                 this.panel.webview.html = this.getErrorHtml(groupName, 'Group not found');
                 return;
             }
 
-            // Fetch parent groups
-            this.parentGroups = await this.groupCache.getParentGroups(groupName);
+            this.parentGroups = await groupCache.getParentGroups(groupName);
 
             this.panel.webview.html = this.getContentHtml(group);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.panel.webview.html = this.getErrorHtml(groupName, errorMessage);
         }
+    }
+
+    private groupCache(): GroupCache {
+        const connection = this.connectionManager.getOpenConnection(this.connectionName);
+        if (!connection) {
+            throw new Error(`Not connected to ${this.connectionName}`);
+        }
+        return connection.groupCache;
     }
 
     /**

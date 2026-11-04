@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
-import { ConnectionManager, ActiveConnection } from '../connectionManager';
+import { ConnectionManager } from '../connectionManager';
+import { RepositoryConnection } from '../repositoryConnection';
 import { DqlExecutor, DqlResult } from '../dqlExecutor';
 import { ApiExecutor, ApiMethodResponse } from '../apiExecutor';
+import { resolveNotebookConnection } from './notebookConnection';
 import {
     OutputFormat,
     formatValue,
@@ -72,31 +74,16 @@ export class DctmNotebookController {
         execution.start(Date.now());
 
         try {
-            // Get notebook URI for connection lookup
-            const notebookUri = cell.notebook.uri.toString();
-
-            // Check for notebook-bound connection first, then fall back to global
-            const connection = this.connectionManager.getEffectiveConnection(notebookUri);
+            const { connection, error } = await resolveNotebookConnection(
+                this.connectionManager,
+                cell.notebook.metadata
+            );
             if (!connection) {
-                // Check if notebook has a connection binding in metadata but isn't connected yet
-                const boundConnection = cell.notebook.metadata?.connection as string | undefined;
-                if (boundConnection) {
-                    execution.replaceOutput([
-                        new vscode.NotebookCellOutput([
-                            vscode.NotebookCellOutputItem.error(
-                                new Error(`Notebook is bound to "${boundConnection}" but not connected. Use "Documentum: Connect Notebook" to connect.`)
-                            )
-                        ])
-                    ]);
-                } else {
-                    execution.replaceOutput([
-                        new vscode.NotebookCellOutput([
-                            vscode.NotebookCellOutputItem.error(
-                                new Error('Not connected to Documentum. Use "Documentum: Connect" first.')
-                            )
-                        ])
-                    ]);
-                }
+                execution.replaceOutput([
+                    new vscode.NotebookCellOutput([
+                        vscode.NotebookCellOutputItem.error(new Error(error))
+                    ])
+                ]);
                 execution.end(false, Date.now());
                 return;
             }
@@ -152,7 +139,7 @@ export class DctmNotebookController {
         query: string,
         execution: vscode.NotebookCellExecution,
         outputFormat: OutputFormat,
-        connection: ActiveConnection
+        connection: RepositoryConnection
     ): Promise<void> {
         try {
             // Strip comments before execution (DQL supports block comments)
@@ -162,8 +149,7 @@ export class DctmNotebookController {
                 execution.end(true, Date.now());
                 return;
             }
-            // Use the session ID from the provided connection
-            const result = await this.dqlExecutor.executeWithSession(cleanQuery, connection.sessionId);
+            const result = await this.dqlExecutor.execute(cleanQuery, connection);
             const output = this.formatDqlOutput(result, outputFormat);
 
             execution.replaceOutput([output]);
@@ -223,7 +209,7 @@ export class DctmNotebookController {
         command: string,
         execution: vscode.NotebookCellExecution,
         outputFormat: OutputFormat,
-        connection: ActiveConnection
+        connection: RepositoryConnection
     ): Promise<void> {
         try {
             // dmAPI supports line comments only
@@ -245,7 +231,7 @@ export class DctmNotebookController {
                     connection
                 );
             } else {
-                result = await this.apiExecutor.execute(parseApiCommand(command));
+                result = await this.apiExecutor.execute(parseApiCommand(command), connection);
             }
 
             const output = this.formatApiOutput(result, outputFormat);
@@ -275,13 +261,9 @@ export class DctmNotebookController {
     private async executeDmApiCommand(
         apiType: 'get' | 'exec' | 'set',
         commandString: string,
-        connection: ActiveConnection
+        connection: RepositoryConnection
     ): Promise<ApiMethodResponse> {
-        if (!connection.sessionId) {
-            throw new Error('No active session');
-        }
-
-        const bridge = this.connectionManager.getDctmBridge();
+        const bridge = connection.bridge;
 
         // Check if this is a REST connection - REST doesn't support dmAPI
         if (bridge.isRestSession(connection.sessionId)) {

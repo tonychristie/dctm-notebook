@@ -1,13 +1,15 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import {
-    ActiveConnection,
     ConnectionManager,
+    Credentials,
     DfcProfile,
     DocumentumConnection,
     describeConnection
 } from '../../connectionManager';
 import { DctmBridge, DfcConnectParams } from '../../dctmBridge';
+import { RepositoryConnection } from '../../repositoryConnection';
+import { resolveNotebookConnection } from '../../notebook/notebookConnection';
 
 const context = {} as vscode.ExtensionContext;
 
@@ -15,6 +17,7 @@ class FakeBridge {
     ensureRunningCalls: { profile?: DfcProfile; connectionType?: 'dfc' | 'rest' }[] = [];
     connectCalls: DfcConnectParams[] = [];
     disconnectCalls: string[] = [];
+    failConnect = false;
     failDisconnect = false;
 
     async ensureRunning(profile?: DfcProfile, connectionType?: 'dfc' | 'rest'): Promise<void> {
@@ -23,6 +26,9 @@ class FakeBridge {
 
     async connect(params: DfcConnectParams): Promise<string> {
         this.connectCalls.push(params);
+        if (this.failConnect) {
+            throw new Error('authentication failed');
+        }
         return `session-${this.connectCalls.length}`;
     }
 
@@ -32,9 +38,24 @@ class FakeBridge {
             throw new Error('bridge unavailable');
         }
     }
+
+    async getTypes(): Promise<unknown[]> {
+        return [];
+    }
+
+    async getUsers(): Promise<unknown[]> {
+        return [];
+    }
+
+    async getGroups(): Promise<unknown[]> {
+        return [];
+    }
 }
 
 class TestConnectionManager extends ConnectionManager {
+    prompts: { name: string; askUsername: boolean }[] = [];
+    answers: (Credentials | undefined)[] = [];
+
     constructor(
         bridge: FakeBridge,
         private connections: DocumentumConnection[],
@@ -49,6 +70,14 @@ class TestConnectionManager extends ConnectionManager {
 
     getDfcProfiles(): Record<string, DfcProfile> {
         return this.profiles;
+    }
+
+    protected async promptCredentials(
+        config: DocumentumConnection,
+        askUsername = false
+    ): Promise<Credentials | undefined> {
+        this.prompts.push({ name: config.name, askUsername });
+        return this.answers.length > 0 ? this.answers.shift() : { username: 'user', password: 'pass' };
     }
 }
 
@@ -76,10 +105,11 @@ const defaultsConnection: DocumentumConnection = {
 
 const profile: DfcProfile = { dfcPath: '/opt/dfc' };
 
-suite('Notebook Connections Test Suite', () => {
+suite('Connection Manager Test Suite', () => {
     let bridge: FakeBridge;
     let manager: TestConnectionManager;
-    let notifications: { uri: string; connected: boolean; name?: string; username?: string }[];
+    let selectionEvents: (string | undefined)[];
+    let openConnectionsEvents: number;
 
     setup(() => {
         bridge = new FakeBridge();
@@ -88,28 +118,32 @@ suite('Notebook Connections Test Suite', () => {
             [restConnection, dfcConnection, defaultsConnection],
             { dfc22: profile }
         );
-        notifications = [];
-        manager.onNotebookConnectionChange((uri, connected, name, username) => {
-            notifications.push({ uri, connected, name, username });
-        });
+        selectionEvents = [];
+        openConnectionsEvents = 0;
+        manager.onDidChangeSelection(connection => selectionEvents.push(connection?.name));
+        manager.onDidChangeOpenConnections(() => openConnectionsEvents++);
     });
 
-    suite('connectNotebook', () => {
-        test('throws for an unknown connection', async () => {
-            await assert.rejects(manager.connectNotebook('nb1', 'Missing', 'user', 'pass'));
+    teardown(() => {
+        manager.dispose();
+    });
+
+    suite('openConnection', () => {
+        test('rejects for an unknown connection', async () => {
+            await assert.rejects(manager.openConnection('Missing'));
             assert.strictEqual(bridge.connectCalls.length, 0);
         });
 
-        test('throws for a missing DFC profile', async () => {
+        test('rejects for a missing DFC profile', async () => {
             const noProfiles = new TestConnectionManager(bridge, [dfcConnection]);
 
-            await assert.rejects(noProfiles.connectNotebook('nb1', 'Dfc', 'user', 'pass'));
+            await assert.rejects(noProfiles.openConnection('Dfc'));
             assert.strictEqual(bridge.ensureRunningCalls.length, 0);
         });
 
         test('ensures the bridge for the connection type is running', async () => {
-            await manager.connectNotebook('nb1', 'Rest', 'user', 'pass');
-            await manager.connectNotebook('nb2', 'Dfc', 'user', 'pass');
+            await manager.openConnection('Rest');
+            await manager.openConnection('Dfc');
 
             assert.deepStrictEqual(bridge.ensureRunningCalls, [
                 { profile: undefined, connectionType: 'rest' },
@@ -118,7 +152,7 @@ suite('Notebook Connections Test Suite', () => {
         });
 
         test('passes REST parameters to connect', async () => {
-            await manager.connectNotebook('nb1', 'Rest', 'user', 'pass');
+            await manager.openConnection('Rest');
 
             assert.deepStrictEqual(bridge.connectCalls[0], {
                 endpoint: 'http://dctm:8080/dctm-rest',
@@ -129,7 +163,7 @@ suite('Notebook Connections Test Suite', () => {
         });
 
         test('passes DFC parameters to connect', async () => {
-            await manager.connectNotebook('nb1', 'Dfc', 'user', 'pass');
+            await manager.openConnection('Dfc');
 
             assert.deepStrictEqual(bridge.connectCalls[0], {
                 docbroker: 'broker',
@@ -141,75 +175,171 @@ suite('Notebook Connections Test Suite', () => {
         });
 
         test('defaults the DFC docbroker to empty and the port to 1489', async () => {
-            await manager.connectNotebook('nb1', 'Defaults', 'user', 'pass');
+            await manager.openConnection('Defaults');
 
             assert.strictEqual(bridge.connectCalls[0].docbroker, '');
             assert.strictEqual(bridge.connectCalls[0].port, 1489);
         });
 
-        test('stores the connection and notifies the notebook callbacks', async () => {
-            const sessionId = await manager.connectNotebook('nb1', 'Rest', 'user', 'pass');
+        test('two sequential calls make one bridge connect and one prompt, and return the same connection', async () => {
+            const first = await manager.openConnection('Rest');
+            const second = await manager.openConnection('Rest');
 
-            assert.deepStrictEqual(manager.getNotebookConnection('nb1'), {
-                config: restConnection,
-                sessionId,
-                username: 'user'
-            });
-            assert.deepStrictEqual(notifications, [
-                { uri: 'nb1', connected: true, name: 'Rest', username: 'user' }
+            assert.strictEqual(bridge.connectCalls.length, 1);
+            assert.strictEqual(manager.prompts.length, 1);
+            assert.ok(first);
+            assert.strictEqual(second, first);
+        });
+
+        test('two concurrent calls make one bridge connect and one prompt, and return the same connection', async () => {
+            const [first, second] = await Promise.all([
+                manager.openConnection('Rest'),
+                manager.openConnection('Rest')
             ]);
+
+            assert.strictEqual(bridge.connectCalls.length, 1);
+            assert.strictEqual(manager.prompts.length, 1);
+            assert.ok(first);
+            assert.strictEqual(second, first);
+        });
+
+        test('resolves to undefined and makes no bridge call when the prompt is cancelled', async () => {
+            manager.answers = [undefined];
+
+            const connection = await manager.openConnection('Rest');
+
+            assert.strictEqual(connection, undefined);
+            assert.strictEqual(bridge.connectCalls.length, 0);
+            assert.strictEqual(bridge.ensureRunningCalls.length, 0);
+        });
+
+        test('prompts again when a connect with stored credentials fails', async () => {
+            await manager.openConnection('Rest');
+            await manager.disconnect('Rest');
+            bridge.failConnect = true;
+
+            await assert.rejects(manager.openConnection('Rest'));
+            assert.strictEqual(manager.prompts.length, 1);
+
+            bridge.failConnect = false;
+            await manager.openConnection('Rest');
+
+            assert.strictEqual(manager.prompts.length, 2);
         });
     });
 
-    suite('disconnectNotebook', () => {
-        test('disconnects the session, removes the binding and notifies', async () => {
-            const sessionId = await manager.connectNotebook('nb1', 'Rest', 'user', 'pass');
+    suite('connect', () => {
+        test('selects the named connection without the picker', async () => {
+            await manager.connect('Rest');
 
-            await manager.disconnectNotebook('nb1');
-
-            assert.deepStrictEqual(bridge.disconnectCalls, [sessionId]);
-            assert.strictEqual(manager.hasNotebookConnection('nb1'), false);
-            assert.deepStrictEqual(notifications[1], { uri: 'nb1', connected: false, name: undefined, username: undefined });
+            assert.strictEqual(manager.getSelectedConnection()?.name, 'Rest');
+            assert.deepStrictEqual(selectionEvents, ['Rest']);
         });
 
-        test('removes the binding and notifies when the bridge disconnect fails', async () => {
-            await manager.connectNotebook('nb1', 'Rest', 'user', 'pass');
+        test('selecting an open connection makes no bridge call', async () => {
+            await manager.connect('Rest');
+            await manager.connect('Dfc');
+
+            await manager.connect('Rest');
+
+            assert.strictEqual(bridge.connectCalls.length, 2);
+            assert.strictEqual(manager.prompts.length, 2);
+            assert.strictEqual(manager.getSelectedConnection()?.name, 'Rest');
+        });
+
+        test('selecting a second connection leaves the first one open', async () => {
+            await manager.connect('Rest');
+            await manager.connect('Dfc');
+
+            assert.ok(manager.getOpenConnection('Rest'));
+            assert.strictEqual(manager.getSelectedConnection()?.name, 'Dfc');
+            assert.deepStrictEqual(bridge.disconnectCalls, []);
+        });
+    });
+
+    suite('disconnect', () => {
+        test('reconnects with the stored credentials and does not prompt on the next open', async () => {
+            await manager.openConnection('Rest');
+            await manager.disconnect('Rest');
+
+            const reopened = await manager.openConnection('Rest');
+
+            assert.ok(reopened);
+            assert.strictEqual(manager.prompts.length, 1);
+            assert.strictEqual(bridge.connectCalls.length, 2);
+        });
+
+        test('closes only the named session, fires both events and clears the selection when it was selected', async () => {
+            await manager.connect('Rest');
+            await manager.connect('Dfc');
+            const dfcSession = manager.getOpenConnection('Dfc')?.sessionId;
+            selectionEvents = [];
+            openConnectionsEvents = 0;
+
+            await manager.disconnect('Dfc');
+
+            assert.deepStrictEqual(bridge.disconnectCalls, [dfcSession]);
+            assert.ok(manager.getOpenConnection('Rest'));
+            assert.strictEqual(manager.getOpenConnection('Dfc'), undefined);
+            assert.strictEqual(manager.getSelectedConnection(), undefined);
+            assert.deepStrictEqual(selectionEvents, [undefined]);
+            assert.strictEqual(openConnectionsEvents, 1);
+        });
+
+        test('keeps the selection when the disconnected connection is not selected', async () => {
+            await manager.connect('Rest');
+            await manager.connect('Dfc');
+            selectionEvents = [];
+            openConnectionsEvents = 0;
+
+            await manager.disconnect('Rest');
+
+            assert.strictEqual(manager.getSelectedConnection()?.name, 'Dfc');
+            assert.deepStrictEqual(selectionEvents, []);
+            assert.strictEqual(openConnectionsEvents, 1);
+        });
+
+        test('removes the connection when the bridge disconnect fails', async () => {
+            await manager.openConnection('Rest');
             bridge.failDisconnect = true;
 
-            await manager.disconnectNotebook('nb1');
+            await manager.disconnect('Rest');
 
-            assert.strictEqual(manager.hasNotebookConnection('nb1'), false);
-            assert.strictEqual(notifications[1].connected, false);
+            assert.strictEqual(manager.getOpenConnection('Rest'), undefined);
         });
 
-        test('disconnectAllNotebooks disconnects every bound notebook', async () => {
-            const first = await manager.connectNotebook('nb1', 'Rest', 'user', 'pass');
-            const second = await manager.connectNotebook('nb2', 'Dfc', 'user', 'pass');
+        test('disconnectAll closes every open session', async () => {
+            const first = await manager.openConnection('Rest');
+            const second = await manager.openConnection('Dfc');
 
-            await manager.disconnectAllNotebooks();
+            await manager.disconnectAll();
 
-            assert.deepStrictEqual(bridge.disconnectCalls.sort(), [first, second].sort());
-            assert.strictEqual(manager.getAllNotebookConnections().size, 0);
+            assert.deepStrictEqual(bridge.disconnectCalls.sort(), [first?.sessionId, second?.sessionId].sort());
+            assert.strictEqual(manager.getOpenConnection('Rest'), undefined);
+            assert.strictEqual(manager.getOpenConnection('Dfc'), undefined);
         });
     });
 
-    suite('getEffectiveConnection', () => {
-        const globalConnection: ActiveConnection = { config: dfcConnection, sessionId: 'global', username: 'admin' };
+    suite('switchUser', () => {
+        test('closes the old session, opens a new one and replaces the stored credentials', async () => {
+            await manager.connect('Rest');
+            const oldSession = manager.getOpenConnection('Rest')?.sessionId;
+            manager.answers = [{ username: 'other', password: 'secret' }];
 
-        setup(() => {
-            // The global connection is only set through the interactive connect() flow.
-            (manager as unknown as { activeConnection: ActiveConnection }).activeConnection = globalConnection;
-        });
+            await manager.switchUser('Rest');
 
-        test('returns the notebook connection when the notebook has one', async () => {
-            await manager.connectNotebook('nb1', 'Rest', 'user', 'pass');
+            const switched = manager.getOpenConnection('Rest');
+            assert.deepStrictEqual(bridge.disconnectCalls, [oldSession]);
+            assert.strictEqual(switched?.username, 'other');
+            assert.notStrictEqual(switched?.sessionId, oldSession);
+            assert.strictEqual(manager.getSelectedConnection(), switched);
+            assert.deepStrictEqual(manager.prompts[1], { name: 'Rest', askUsername: true });
 
-            assert.strictEqual(manager.getEffectiveConnection('nb1')?.config, restConnection);
-        });
+            await manager.disconnect('Rest');
+            await manager.openConnection('Rest');
 
-        test('returns the global connection otherwise', () => {
-            assert.strictEqual(manager.getEffectiveConnection('nb1'), globalConnection);
-            assert.strictEqual(manager.getEffectiveConnection(), globalConnection);
+            assert.strictEqual(manager.prompts.length, 2);
+            assert.strictEqual(bridge.connectCalls[bridge.connectCalls.length - 1].username, 'other');
         });
     });
 
@@ -233,5 +363,55 @@ suite('Notebook Connections Test Suite', () => {
         test('returns DFC for a DFC connection without a docbroker', () => {
             assert.strictEqual(describeConnection(defaultsConnection), 'DFC');
         });
+    });
+});
+
+suite('Notebook Connection Resolution Test Suite', () => {
+    let bridge: FakeBridge;
+    let manager: TestConnectionManager;
+    let selected: RepositoryConnection | undefined;
+
+    setup(async () => {
+        bridge = new FakeBridge();
+        manager = new TestConnectionManager(bridge, [restConnection, dfcConnection], { dfc22: profile });
+        await manager.connect('Dfc');
+        selected = manager.getSelectedConnection();
+        assert.ok(selected);
+    });
+
+    teardown(() => {
+        manager.dispose();
+    });
+
+    test('a bound notebook resolves to its bound connection while another connection is selected', async () => {
+        const { connection } = await resolveNotebookConnection(manager, { connection: 'Rest' });
+
+        assert.strictEqual(connection?.name, 'Rest');
+        assert.strictEqual(manager.getSelectedConnection(), selected);
+    });
+
+    test('a bound notebook whose prompt is cancelled resolves to no connection', async () => {
+        manager.answers = [undefined];
+
+        const { connection, error } = await resolveNotebookConnection(manager, { connection: 'Rest' });
+
+        assert.strictEqual(connection, undefined);
+        assert.ok(error);
+        assert.deepStrictEqual(manager.prompts.map(p => p.name), ['Dfc', 'Rest']);
+    });
+
+    test('an unbound notebook resolves to the selected connection', async () => {
+        const { connection } = await resolveNotebookConnection(manager, {});
+
+        assert.strictEqual(connection, selected);
+    });
+
+    test('a binding that is not in the configured connections is reported as not found', async () => {
+        const { connection, error } = await resolveNotebookConnection(manager, { connection: 'Missing' });
+
+        assert.strictEqual(connection, undefined);
+        assert.ok(error);
+        assert.strictEqual(manager.prompts.length, 1);
+        assert.strictEqual(bridge.connectCalls.length, 1);
     });
 });

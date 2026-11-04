@@ -1,4 +1,4 @@
-import { byId, onActions, vscode } from './common';
+import { byId, onActions, readWebviewData, vscode } from './common';
 
 const objectIdInput = byId<HTMLInputElement>('objectId');
 const dumpBtn = byId<HTMLButtonElement>('dumpBtn');
@@ -21,6 +21,8 @@ function updateHistoryDisplay(history: string[]): void {
         return item;
     }));
 }
+
+updateHistoryDisplay(readWebviewData<{ history?: string[] }>().history ?? []);
 
 dumpBtn.addEventListener('click', () => {
     const objectId = objectIdInput.value.trim();

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ApiExecutor, ApiMethodResponse, COMMON_DFC_METHODS } from './apiExecutor';
 import { ConnectionManager } from './connectionManager';
+import { RepositoryConnection } from './repositoryConnection';
 import { webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml';
 
 /**
@@ -31,6 +32,16 @@ export function extractObjectId(arg: unknown): string | undefined {
     return undefined;
 }
 
+export function extractConnectionName(arg: unknown): string | undefined {
+    if (arg && typeof arg === 'object') {
+        const item = arg as { data?: { connectionName?: string } };
+        if (item.data && typeof item.data.connectionName === 'string') {
+            return item.data.connectionName;
+        }
+    }
+    return undefined;
+}
+
 /**
  * Webview panel for executing DFC API methods
  */
@@ -41,16 +52,22 @@ export class ApiPanel {
     private readonly panel: vscode.WebviewPanel;
     private readonly extensionUri: vscode.Uri;
     private readonly apiExecutor: ApiExecutor;
+    private readonly connectionManager: ConnectionManager;
+    private connectionName: string;
     private disposables: vscode.Disposable[] = [];
 
     private constructor(
         panel: vscode.WebviewPanel,
         extensionUri: vscode.Uri,
-        apiExecutor: ApiExecutor
+        apiExecutor: ApiExecutor,
+        connectionManager: ConnectionManager,
+        connectionName: string
     ) {
         this.panel = panel;
         this.extensionUri = extensionUri;
         this.apiExecutor = apiExecutor;
+        this.connectionManager = connectionManager;
+        this.connectionName = connectionName;
 
         this.panel.webview.html = this.getHtmlForWebview();
 
@@ -72,11 +89,15 @@ export class ApiPanel {
     public static createOrShow(
         extensionUri: vscode.Uri,
         apiExecutor: ApiExecutor,
+        connectionManager: ConnectionManager,
+        connectionName: string,
         objectId?: string
     ): void {
         const column = vscode.ViewColumn.Beside;
 
         if (ApiPanel.currentPanel) {
+            ApiPanel.currentPanel.connectionName = connectionName;
+            ApiPanel.currentPanel.panel.title = ApiPanel.title(connectionName);
             ApiPanel.currentPanel.panel.reveal(column);
             if (objectId) {
                 ApiPanel.currentPanel.setObjectId(objectId);
@@ -86,7 +107,7 @@ export class ApiPanel {
 
         const panel = vscode.window.createWebviewPanel(
             ApiPanel.viewType,
-            'DFC API Execution',
+            ApiPanel.title(connectionName),
             column,
             {
                 enableScripts: true,
@@ -95,11 +116,15 @@ export class ApiPanel {
             }
         );
 
-        ApiPanel.currentPanel = new ApiPanel(panel, extensionUri, apiExecutor);
+        ApiPanel.currentPanel = new ApiPanel(panel, extensionUri, apiExecutor, connectionManager, connectionName);
 
         if (objectId) {
             ApiPanel.currentPanel.setObjectId(objectId);
         }
+    }
+
+    private static title(connectionName: string): string {
+        return `DFC API Execution: ${connectionName}`;
     }
 
     /**
@@ -139,7 +164,7 @@ export class ApiPanel {
 
             case 'dumpObject':
                 if (message.objectId) {
-                    vscode.commands.executeCommand('dctm.dumpObject', message.objectId);
+                    vscode.commands.executeCommand('dctm.dumpObject', message.objectId, this.connectionName);
                 }
                 break;
         }
@@ -159,11 +184,16 @@ export class ApiPanel {
                 method
             });
 
+            const connection = this.connectionManager.getOpenConnection(this.connectionName);
+            if (!connection) {
+                throw new Error(`Not connected to ${this.connectionName}`);
+            }
+
             const response: ApiMethodResponse = await this.apiExecutor.execute({
                 objectId,
                 method,
                 args
-            });
+            }, connection);
 
             this.panel.webview.postMessage({
                 type: 'result',
@@ -537,11 +567,25 @@ export function registerApiPanel(
     apiExecutor: ApiExecutor,
     connectionManager: ConnectionManager
 ): void {
+    const connectionFor = (arg: unknown): RepositoryConnection | undefined => {
+        const name = extractConnectionName(arg);
+        return name ? connectionManager.getOpenConnection(name) : connectionManager.getSelectedConnection();
+    };
+
+    const openPanel = (arg: unknown, objectId?: string) => {
+        const connection = connectionFor(arg);
+        if (!connection) {
+            vscode.window.showErrorMessage('Not connected to Documentum. Use "Documentum: Connect" first.');
+            return;
+        }
+        ApiPanel.createOrShow(context.extensionUri, apiExecutor, connectionManager, connection.name, objectId);
+    };
+
     // Command to open API panel
     const openApiPanelCommand = vscode.commands.registerCommand(
         'dctm.openApiPanel',
         () => {
-            ApiPanel.createOrShow(context.extensionUri, apiExecutor);
+            openPanel(undefined);
         }
     );
     context.subscriptions.push(openApiPanelCommand);
@@ -550,7 +594,7 @@ export function registerApiPanel(
     const executeApiOnObjectCommand = vscode.commands.registerCommand(
         'dctm.executeApiOnObject',
         (arg?: unknown) => {
-            ApiPanel.createOrShow(context.extensionUri, apiExecutor, extractObjectId(arg));
+            openPanel(arg, extractObjectId(arg));
         }
     );
     context.subscriptions.push(executeApiOnObjectCommand);
@@ -565,15 +609,14 @@ export function registerApiPanel(
                 return;
             }
 
-            const connection = connectionManager.getActiveConnection();
-            if (!connection?.sessionId) {
+            const connection = connectionFor(arg);
+            if (!connection) {
                 vscode.window.showErrorMessage('No active connection');
                 return;
             }
 
             try {
-                const bridge = connectionManager.getDctmBridge();
-                const result = await bridge.checkout(connection.sessionId, objectId);
+                const result = await connection.bridge.checkout(connection.sessionId, objectId);
                 const objectInfo = result as { objectId?: string };
                 vscode.window.showInformationMessage(
                     `Checked out: ${objectInfo.objectId || objectId}`
@@ -596,8 +639,8 @@ export function registerApiPanel(
                 return;
             }
 
-            const connection = connectionManager.getActiveConnection();
-            if (!connection?.sessionId) {
+            const connection = connectionFor(arg);
+            if (!connection) {
                 vscode.window.showErrorMessage('No active connection');
                 return;
             }
@@ -613,8 +656,7 @@ export function registerApiPanel(
             }
 
             try {
-                const bridge = connectionManager.getDctmBridge();
-                const result = await bridge.checkin(connection.sessionId, objectId, versionLabel);
+                const result = await connection.bridge.checkin(connection.sessionId, objectId, versionLabel);
                 const objectInfo = result as { objectId?: string };
                 vscode.window.showInformationMessage(
                     `Checked in: ${objectInfo.objectId || objectId}`
@@ -637,8 +679,8 @@ export function registerApiPanel(
                 return;
             }
 
-            const connection = connectionManager.getActiveConnection();
-            if (!connection?.sessionId) {
+            const connection = connectionFor(arg);
+            if (!connection) {
                 vscode.window.showErrorMessage('No active connection');
                 return;
             }
@@ -654,8 +696,7 @@ export function registerApiPanel(
             }
 
             try {
-                const bridge = connectionManager.getDctmBridge();
-                await bridge.cancelCheckout(connection.sessionId, objectId);
+                await connection.bridge.cancelCheckout(connection.sessionId, objectId);
                 vscode.window.showInformationMessage('Checkout cancelled');
             } catch (error) {
                 vscode.window.showErrorMessage(

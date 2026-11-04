@@ -1,18 +1,12 @@
-import * as vscode from 'vscode';
-import { DctmBridge } from './dctmBridge';
+import { EntityCache } from './entityCache';
+import { GroupInfo as BridgeGroupInfo } from './bridgeTypes';
 
-/**
- * Group attribute information
- */
 export interface GroupAttribute {
     name: string;
     value: unknown;
     dataType: string;
 }
 
-/**
- * Group information from the repository
- */
 export interface GroupInfo {
     groupName: string;
     groupAddress: string;
@@ -25,214 +19,59 @@ export interface GroupInfo {
     isDynamic: boolean;
     aliasSetId: string;
     acl: string;
-    // Members (fetched on demand)
     members: string[];
     groupMembers: string[];
-    // Raw attributes for detailed view
     attributes: GroupAttribute[];
 }
 
-/**
- * Cache for repository group information
- * Fetches from DFC Bridge and caches locally for performance
- */
-export class GroupCache {
-    private groupMap: Map<string, GroupInfo> = new Map();
-    private groupNames: string[] = [];
-    private lastRefresh: Date | null = null;
-    private refreshPromise: Promise<void> | null = null;
+function toGroupInfo(group: BridgeGroupInfo, attributes: GroupAttribute[]): GroupInfo {
+    return {
+        groupName: group.groupName,
+        groupAddress: group.groupAddress || '',
+        groupSource: group.groupSource || '',
+        description: group.description || '',
+        groupClass: group.groupClass || '',
+        groupAdmin: group.groupAdmin || '',
+        owner: group.ownerName || '',
+        isPrivate: group.isPrivate || false,
+        isDynamic: group.isDynamic || false,
+        aliasSetId: '',
+        acl: '',
+        members: group.usersNames || [],
+        groupMembers: group.groupsNames || [],
+        attributes
+    };
+}
 
-    private readonly refreshEmitter = new vscode.EventEmitter<void>();
-    readonly onRefresh: vscode.Event<void> = this.refreshEmitter.event;
-
-    constructor(
-        private readonly bridge: DctmBridge,
-        private readonly sessionId: string
-    ) {}
-
-    dispose(): void {
-        this.refreshEmitter.dispose();
-    }
-
-    /**
-     * Check if cache has data
-     */
-    hasData(): boolean {
-        return this.groupMap.size > 0;
-    }
-
-    /**
-     * Get all group names
-     */
-    getGroupNames(): string[] {
-        return this.groupNames;
-    }
-
-    /**
-     * Get group info by name (case-insensitive)
-     */
-    getGroup(groupName: string): GroupInfo | undefined {
-        return this.groupMap.get(groupName.toLowerCase());
-    }
-
-    /**
-     * Search groups by name pattern
-     */
-    searchGroups(pattern: string): string[] {
-        const lowerPattern = pattern.toLowerCase();
-        return this.groupNames
-            .filter(name => name.toLowerCase().includes(lowerPattern))
-            .sort();
-    }
-
-    /**
-     * Refresh cache from the bridge.
-     * The bridge handles REST vs DQL routing internally.
-     * If a refresh is already in progress, waits for it to complete.
-     */
-    async refresh(): Promise<void> {
-        // If refresh already in progress, wait for it
-        if (this.refreshPromise) {
-            return this.refreshPromise;
-        }
-
-        // Create and store the refresh promise
-        this.refreshPromise = this.doRefresh();
-
-        try {
-            await this.refreshPromise;
-        } finally {
-            this.refreshPromise = null;
-        }
-    }
-
-    /**
-     * Internal refresh implementation.
-     */
-    private async doRefresh(): Promise<void> {
-        // Clear existing cache
-        this.groupMap.clear();
-        this.groupNames = [];
-
-        // Bridge handles REST vs DQL routing internally
+export class GroupCache extends EntityCache<GroupInfo> {
+    protected async fetchAll(): Promise<GroupInfo[]> {
         const groups = await this.bridge.getGroups(this.sessionId);
-
-        for (const group of groups) {
-            const groupName = group.groupName;
-            const groupKey = groupName.toLowerCase();
-
-            this.groupNames.push(groupName);
-            this.groupMap.set(groupKey, {
-                groupName: groupName,
-                groupAddress: group.groupAddress || '',
-                groupSource: group.groupSource || '',
-                description: group.description || '',
-                groupClass: group.groupClass || '',
-                groupAdmin: group.groupAdmin || '',
-                owner: group.ownerName || '',
-                isPrivate: group.isPrivate || false,
-                isDynamic: group.isDynamic || false,
-                aliasSetId: '',
-                acl: '',
-                members: group.usersNames || [],
-                groupMembers: group.groupsNames || [],
-                attributes: []
-            });
-        }
-
-        // Sort group names
-        this.groupNames.sort();
-
-        this.lastRefresh = new Date();
-
-        this.refreshEmitter.fire();
+        return groups.map(group => toGroupInfo(group, []));
     }
 
-    /**
-     * Fetch detailed group info including all attributes and members.
-     * The bridge handles REST vs DQL routing internally.
-     */
-    async fetchGroupDetails(groupName: string, refresh = false): Promise<GroupInfo | undefined> {
-        const groupKey = groupName.toLowerCase();
-        const group = this.groupMap.get(groupKey);
+    protected nameOf(group: GroupInfo): string {
+        return group.groupName;
+    }
 
-        // If we already have detailed attributes, return cached
+    async fetchGroupDetails(groupName: string, refresh = false): Promise<GroupInfo> {
+        const group = this.get(groupName);
         if (!refresh && group && group.attributes.length > 0) {
             return group;
         }
 
-        try {
-            // Bridge handles REST vs DQL routing internally and returns attributes
-            const bridgeGroup = await this.bridge.getGroup(this.sessionId, groupName);
-
-            // Convert bridge attributes to GroupAttribute format
-            const attributes: GroupAttribute[] = bridgeGroup.attributes.map(attr => ({
-                name: attr.name,
-                value: attr.value,
-                dataType: attr.dataType
-            }));
-
-            const fetched: GroupInfo = {
-                groupName: bridgeGroup.groupName,
-                groupAddress: bridgeGroup.groupAddress || '',
-                groupSource: bridgeGroup.groupSource || '',
-                description: bridgeGroup.description || '',
-                groupClass: bridgeGroup.groupClass || '',
-                groupAdmin: bridgeGroup.groupAdmin || '',
-                owner: bridgeGroup.ownerName || '',
-                isPrivate: bridgeGroup.isPrivate || false,
-                isDynamic: bridgeGroup.isDynamic || false,
-                aliasSetId: '',
-                acl: '',
-                members: (bridgeGroup.usersNames || []).sort(),
-                groupMembers: (bridgeGroup.groupsNames || []).sort(),
-                attributes: attributes
-            };
-            this.groupMap.set(groupKey, fetched);
-
-            return fetched;
-        } catch {
-            // Return basic group without attributes on error
-            return group;
-        }
+        const bridgeGroup = await this.bridge.getGroup(this.sessionId, groupName);
+        const fetched = toGroupInfo(
+            bridgeGroup,
+            bridgeGroup.attributes.map(attr => ({ name: attr.name, value: attr.value, dataType: attr.dataType }))
+        );
+        fetched.members = [...fetched.members].sort();
+        fetched.groupMembers = [...fetched.groupMembers].sort();
+        this.setEntry(fetched);
+        return fetched;
     }
 
-    /**
-     * Get parent groups (groups that contain this group).
-     * The bridge handles REST vs DQL routing internally.
-     */
     async getParentGroups(groupName: string): Promise<string[]> {
-        try {
-            const groups = await this.bridge.getParentGroups(this.sessionId, groupName);
-            return groups.map(g => g.groupName).sort();
-        } catch {
-            return [];
-        }
-    }
-
-    /**
-     * Clear the cache
-     */
-    clear(): void {
-        this.groupMap.clear();
-        this.groupNames = [];
-        this.lastRefresh = null;
-    }
-
-    /**
-     * Get last refresh time
-     */
-    getLastRefresh(): Date | null {
-        return this.lastRefresh;
-    }
-
-    /**
-     * Get cache statistics
-     */
-    getStats(): { groupCount: number; lastRefresh: Date | null } {
-        return {
-            groupCount: this.groupMap.size,
-            lastRefresh: this.lastRefresh
-        };
+        const groups = await this.bridge.getParentGroups(this.sessionId, groupName);
+        return groups.map(g => g.groupName).sort();
     }
 }

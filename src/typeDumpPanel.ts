@@ -61,7 +61,14 @@ export class TypeDumpPanel extends DumpPanelBase<string, TypeDump> {
 
     private async generateDqlQuery(): Promise<void> {
         const connection = this.connectionManager.getOpenConnection(this.connectionName);
-        const type = await connection?.typeCache.fetchTypeDetails(this.currentKey);
+        let type;
+        try {
+            type = await connection?.typeCache.fetchTypeDetails(this.currentKey);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Failed to generate DQL for ${this.currentKey}: ${message}`);
+            return;
+        }
         if (!type) {
             return;
         }

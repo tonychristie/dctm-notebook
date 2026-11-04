@@ -113,8 +113,12 @@ export class ObjectDumpPanel extends DumpPanelBase<string, ObjectDump> {
         if (!standardTypeName) {
             return undefined;
         }
-        const type = await typeCache.fetchTypeDetails(standardTypeName);
-        // fetchTypeDetails returns the type with no attributes when the request fails.
+        let type;
+        try {
+            type = await typeCache.fetchTypeDetails(standardTypeName);
+        } catch {
+            return undefined;
+        }
         if (!type || type.attributes.length === 0) {
             return undefined;
         }

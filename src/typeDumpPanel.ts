@@ -143,7 +143,14 @@ export class TypeDumpPanel {
      */
     private async generateDqlQuery(): Promise<void> {
         const connection = this.connectionManager.getOpenConnection(this.connectionName);
-        const type = await connection?.typeCache.fetchTypeDetails(this.currentTypeName);
+        let type;
+        try {
+            type = await connection?.typeCache.fetchTypeDetails(this.currentTypeName);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Failed to generate DQL for ${this.currentTypeName}: ${message}`);
+            return;
+        }
         if (!type) {
             return;
         }

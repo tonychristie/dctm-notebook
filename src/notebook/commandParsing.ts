@@ -10,13 +10,39 @@ export interface DmApiCommand {
 }
 
 export function stripComments(code: string, includeBlockComments: boolean = false): string {
-    let stripped = code;
+    let stripped = '';
+    let quote: string | null = null;
+    let i = 0;
 
-    if (includeBlockComments) {
-        stripped = stripped.replace(/\/\*[\s\S]*?\*\//g, '');
+    while (i < code.length) {
+        const ch = code[i];
+
+        if (quote) {
+            if (ch === quote) {
+                quote = null;
+            }
+            stripped += ch;
+            i++;
+        } else if (ch === "'" || ch === '"') {
+            quote = ch;
+            stripped += ch;
+            i++;
+        } else if (code.startsWith('--', i)) {
+            const lineEnd = code.indexOf('\n', i);
+            i = lineEnd === -1 ? code.length : lineEnd;
+        } else if (includeBlockComments && code.startsWith('/*', i)) {
+            const blockEnd = code.indexOf('*/', i + 2);
+            if (blockEnd === -1) {
+                stripped += '/*';
+                i += 2;
+            } else {
+                i = blockEnd + 2;
+            }
+        } else {
+            stripped += ch;
+            i++;
+        }
     }
-
-    stripped = stripped.replace(/--.*$/gm, '');
 
     return stripped
         .split('\n')

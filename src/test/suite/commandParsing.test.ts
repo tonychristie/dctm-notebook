@@ -35,6 +35,43 @@ suite('Command Parsing Test Suite', () => {
         test('returns an empty string for comment-only input', () => {
             assert.strictEqual(stripComments('-- one\n/* two */', true), '');
         });
+
+        test('keeps -- inside a single-quoted string and removes the line comment after it', () => {
+            assert.strictEqual(
+                stripComments("select r_object_id from dm_document where object_name like '%--%' -- find them"),
+                "select r_object_id from dm_document where object_name like '%--%'"
+            );
+        });
+
+        test('keeps a block comment inside a single-quoted string when block comments are removed', () => {
+            assert.strictEqual(
+                stripComments("select * from dm_document where object_name = 'a /* b */ c' /* note */", true),
+                "select * from dm_document where object_name = 'a /* b */ c'"
+            );
+        });
+
+        test('keeps -- inside a double-quoted string that holds a single-quoted part', () => {
+            const command = `dmAPIGet("query,c,select r_object_id from dm_document where object_name like '%--%'")`;
+            assert.strictEqual(stripComments(`-- run the query\n${command}`), command);
+        });
+
+        test('keeps a doubled quote inside a string whole', () => {
+            assert.strictEqual(
+                stripComments("select * from dm_document where object_name = 'it''s -- here'"),
+                "select * from dm_document where object_name = 'it''s -- here'"
+            );
+        });
+
+        test('an apostrophe inside a line comment does not open a string', () => {
+            assert.strictEqual(stripComments("-- don't run this\nselect 1 -- trailing"), 'select 1');
+        });
+
+        test('leaves a block comment with no closing marker in the text', () => {
+            assert.strictEqual(
+                stripComments('select 1 /* not closed', true),
+                'select 1 /* not closed'
+            );
+        });
     });
 
     suite('parseDmApiCommand', () => {

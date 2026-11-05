@@ -36,7 +36,7 @@ export function registerNotebook(
     const serializer = new DctmNotebookSerializer();
     context.subscriptions.push(
         vscode.workspace.registerNotebookSerializer('dctmbook', serializer, {
-            transientOutputs: false,
+            transientOutputs: true,
             transientCellMetadata: {
                 inputCollapsed: true,
                 outputCollapsed: true
@@ -178,6 +178,19 @@ function registerNotebookStatusBar(
     updateNotebookStatus();
 }
 
+async function insertCell(kind: vscode.NotebookCellKind, text: string, language: string): Promise<void> {
+    const editor = vscode.window.activeNotebookEditor;
+    if (!editor || editor.notebook.notebookType !== 'dctmbook') {
+        return;
+    }
+
+    const edit = new vscode.WorkspaceEdit();
+    edit.set(editor.notebook.uri, [
+        vscode.NotebookEdit.insertCells(editor.selection.end, [new vscode.NotebookCellData(kind, text, language)])
+    ]);
+    await vscode.workspace.applyEdit(edit);
+}
+
 /**
  * Register notebook-specific commands
  */
@@ -185,79 +198,20 @@ function registerNotebookCommands(
     context: vscode.ExtensionContext,
     connectionManager: ConnectionManager
 ): void {
-    // Command to insert a new DQL cell
-    const insertDqlCell = vscode.commands.registerCommand(
-        'dctm.notebook.insertDqlCell',
-        async () => {
-            const editor = vscode.window.activeNotebookEditor;
-            if (!editor || editor.notebook.notebookType !== 'dctmbook') {
-                return;
-            }
-
-            const cell = new vscode.NotebookCellData(
-                vscode.NotebookCellKind.Code,
-                '-- Enter your DQL query here\n',
-                'dql'
-            );
-
-            const edit = new vscode.WorkspaceEdit();
-            const cellIndex = editor.selection.end;
-            edit.set(editor.notebook.uri, [
-                vscode.NotebookEdit.insertCells(cellIndex, [cell])
-            ]);
-
-            await vscode.workspace.applyEdit(edit);
-        }
+    const insertDqlCell = vscode.commands.registerCommand('dctm.notebook.insertDqlCell', () =>
+        insertCell(vscode.NotebookCellKind.Code, '-- Enter your DQL query here\n', 'dql')
     );
 
-    // Command to insert a new API cell
-    const insertApiCell = vscode.commands.registerCommand(
-        'dctm.notebook.insertApiCell',
-        async () => {
-            const editor = vscode.window.activeNotebookEditor;
-            if (!editor || editor.notebook.notebookType !== 'dctmbook') {
-                return;
-            }
-
-            const cell = new vscode.NotebookCellData(
-                vscode.NotebookCellKind.Code,
-                '-- Enter your API command here\n-- Example: dmAPIGet("getdocbaseconfig,session")\n',
-                'dmapi'
-            );
-
-            const edit = new vscode.WorkspaceEdit();
-            const cellIndex = editor.selection.end;
-            edit.set(editor.notebook.uri, [
-                vscode.NotebookEdit.insertCells(cellIndex, [cell])
-            ]);
-
-            await vscode.workspace.applyEdit(edit);
-        }
+    const insertApiCell = vscode.commands.registerCommand('dctm.notebook.insertApiCell', () =>
+        insertCell(
+            vscode.NotebookCellKind.Code,
+            '-- Enter your API command here\n-- Example: dmAPIGet("getdocbaseconfig,session")\n',
+            'dmapi'
+        )
     );
 
-    // Command to insert a markdown cell
-    const insertMarkdownCell = vscode.commands.registerCommand(
-        'dctm.notebook.insertMarkdownCell',
-        async () => {
-            const editor = vscode.window.activeNotebookEditor;
-            if (!editor || editor.notebook.notebookType !== 'dctmbook') {
-                return;
-            }
-
-            const cell = new vscode.NotebookCellData(
-                vscode.NotebookCellKind.Markup,
-                '# Documentation\n\nAdd your notes here...',
-                'markdown'
-            );
-
-            const edit = new vscode.WorkspaceEdit();
-            const cellIndex = editor.selection.end;
-            edit.set(editor.notebook.uri, [
-                vscode.NotebookEdit.insertCells(cellIndex, [cell])
-            ]);
-
-            await vscode.workspace.applyEdit(edit);
-        }
+    const insertMarkdownCell = vscode.commands.registerCommand('dctm.notebook.insertMarkdownCell', () =>
+        insertCell(vscode.NotebookCellKind.Markup, '# Documentation\n\nAdd your notes here...', 'markdown')
     );
 
     // Command to toggle output format between HTML and JSON

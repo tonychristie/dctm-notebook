@@ -215,59 +215,6 @@ export class ApiMethodReference {
 }
 
 /**
- * Completion provider for API methods in DQL and API files
- */
-export class ApiMethodCompletionProvider implements vscode.CompletionItemProvider {
-    private reference: ApiMethodReference;
-
-    constructor(reference: ApiMethodReference) {
-        this.reference = reference;
-    }
-
-    provideCompletionItems(
-        document: vscode.TextDocument,
-        position: vscode.Position,
-        _token: vscode.CancellationToken,
-        _context: vscode.CompletionContext
-    ): vscode.CompletionItem[] {
-        // Get the word being typed
-        const wordRange = document.getWordRangeAtPosition(position);
-        const prefix = wordRange ? document.getText(wordRange) : '';
-
-        // Check if we're in an API command context
-        const lineText = document.lineAt(position.line).text;
-        const beforeCursor = lineText.substring(0, position.character);
-
-        // Match dmAPI patterns like: dmAPIExec("methodname or dmAPI*("
-        // Capture the API type (Exec, Get, Set) to filter completions
-        const apiPattern = /dmAPI(Exec|Get|Set)?\s*\(\s*["']?(\w*)$/i;
-        const match = beforeCursor.match(apiPattern);
-
-        if (match) {
-            // Determine category from API type (if specified)
-            let category: 'exec' | 'get' | 'set' | undefined;
-            if (match[1]) {
-                const apiType = match[1].toLowerCase();
-                if (apiType === 'exec' || apiType === 'get' || apiType === 'set') {
-                    category = apiType;
-                }
-            }
-
-            // We're inside an API call - provide method completions filtered by category
-            return this.reference.getCompletionItems(match[2] || prefix, category);
-        }
-
-        // Also provide completions after common keywords like 'exec', 'api' etc.
-        const keywordPattern = /(?:exec|api|execute)\s+(\w*)$/i;
-        if (keywordPattern.test(beforeCursor)) {
-            return this.reference.getCompletionItems(prefix);
-        }
-
-        return [];
-    }
-}
-
-/**
  * Hover provider for API methods
  */
 export class ApiMethodHoverProvider implements vscode.HoverProvider {
@@ -305,28 +252,9 @@ export function registerApiMethodReference(
     // Load reference data asynchronously
     reference.load();
 
-    // Register completion provider for DQL and API files
-    const completionProvider = new ApiMethodCompletionProvider(reference);
-    const completionDisposable = vscode.languages.registerCompletionItemProvider(
-        [
-            { language: 'dql' },
-            { language: 'plaintext', pattern: '**/*.api' }
-        ],
-        completionProvider,
-        '"', "'", '(' // Trigger characters
+    context.subscriptions.push(
+        vscode.languages.registerHoverProvider({ language: 'dmapi' }, new ApiMethodHoverProvider(reference))
     );
-    context.subscriptions.push(completionDisposable);
-
-    // Register hover provider
-    const hoverProvider = new ApiMethodHoverProvider(reference);
-    const hoverDisposable = vscode.languages.registerHoverProvider(
-        [
-            { language: 'dql' },
-            { language: 'plaintext', pattern: '**/*.api' }
-        ],
-        hoverProvider
-    );
-    context.subscriptions.push(hoverDisposable);
 
     return reference;
 }

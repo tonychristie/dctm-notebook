@@ -96,15 +96,29 @@ const DQL_KEYWORDS = new Set([
  * Semantic Token Provider for DQL files
  * Highlights repository-specific type names dynamically
  */
-export class DqlSemanticTokensProvider implements vscode.DocumentSemanticTokensProvider {
-    constructor(private readonly getTypeCache: () => TypeCache | undefined) {}
+export class DqlSemanticTokensProvider implements vscode.DocumentSemanticTokensProvider, vscode.Disposable {
+    private readonly _onDidChangeSemanticTokens = new vscode.EventEmitter<void>();
+    readonly onDidChangeSemanticTokens = this._onDidChangeSemanticTokens.event;
+
+    private readonly cacheSubscription: vscode.Disposable;
+
+    constructor(private readonly connectionManager: ConnectionManager) {
+        this.cacheSubscription = followSelectedCache(connectionManager, connection => connection.typeCache, () =>
+            this._onDidChangeSemanticTokens.fire()
+        );
+    }
+
+    dispose(): void {
+        this.cacheSubscription.dispose();
+        this._onDidChangeSemanticTokens.dispose();
+    }
 
     provideDocumentSemanticTokens(
         document: vscode.TextDocument
     ): vscode.SemanticTokens {
         const builder = new vscode.SemanticTokensBuilder(legend);
 
-        const typeCache = this.getTypeCache();
+        const typeCache = this.connectionManager.getSelectedConnection()?.typeCache;
         if (!typeCache?.hasData()) {
             return builder.build();
         }
@@ -223,29 +237,10 @@ export function registerDqlSemanticTokens(
     context: vscode.ExtensionContext,
     connectionManager: ConnectionManager
 ): void {
-    const provider = new DqlSemanticTokensProvider(
-        () => connectionManager.getSelectedConnection()?.typeCache
-    );
+    const provider = new DqlSemanticTokensProvider(connectionManager);
 
-    // Register for DQL files
-    const selector: vscode.DocumentSelector = { language: 'dql' };
-
-    const disposable = vscode.languages.registerDocumentSemanticTokensProvider(
-        selector,
+    context.subscriptions.push(
         provider,
-        legend
+        vscode.languages.registerDocumentSemanticTokensProvider({ language: 'dql' }, provider, legend)
     );
-
-    context.subscriptions.push(disposable);
-
-    context.subscriptions.push(followSelectedCache(connectionManager, connection => connection.typeCache, () => {
-        // Trigger re-tokenization of open DQL documents
-        for (const editor of vscode.window.visibleTextEditors) {
-            if (editor.document.languageId === 'dql') {
-                // Force refresh by making a trivial edit and undoing it
-                // Actually, VS Code should pick up changes automatically
-                // when the provider returns different tokens
-            }
-        }
-    }));
 }

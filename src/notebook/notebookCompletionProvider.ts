@@ -329,12 +329,8 @@ export function registerNotebookCompletions(
 ): void {
     const provider = new NotebookApiCompletionProvider(reference);
 
-    // Register for dmapi language in notebooks
     const disposable = vscode.languages.registerCompletionItemProvider(
-        [
-            { language: 'dmapi' },
-            { language: 'dql' }
-        ],
+        { language: 'dmapi' },
         provider,
         '"', "'", ',' // Trigger on quote and comma
     );

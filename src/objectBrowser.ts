@@ -10,7 +10,8 @@ import {
     DocumentNodeData,
     createNodeId,
     createChildNodeId,
-    isFolderObjectId
+    isFolderObjectId,
+    compareFolderContentNodes
 } from './objectBrowserNodes';
 
 /**
@@ -182,10 +183,7 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
             const contents = await connection.bridge.getFolderContents(connection.sessionId, data.objectId, data.path);
             const items: ObjectBrowserItem[] = [];
 
-            // Sort by name
-            const sorted = contents.sort((a, b) => a.name.localeCompare(b.name));
-
-            for (const item of sorted) {
+            for (const item of contents) {
                 if (isFolderObjectId(item.objectId)) {
                     const folderData: FolderNodeData = {
                         id: createChildNodeId(data.id, item.objectId),
@@ -212,7 +210,7 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
                 }
             }
 
-            return items;
+            return items.sort((a, b) => compareFolderContentNodes(a.data, b.data));
         } catch (error) {
             this.showError('Failed to fetch folder contents', error);
             return [];

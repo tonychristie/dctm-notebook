@@ -210,6 +210,14 @@ export function createChildNodeId(parentNodeId: string, objectId: string): strin
     return `${parentNodeId}/${objectId}`;
 }
 
+export function compareFolderContentNodes(a: NodeData, b: NodeData): number {
+    const aIsFolder = a.type === 'folder';
+    if (aIsFolder !== (b.type === 'folder')) {
+        return aIsFolder ? -1 : 1;
+    }
+    return a.name.localeCompare(b.name);
+}
+
 /**
  * The object id prefix comes from the base type: 0b for dm_folder and its subtypes, 0c for dm_cabinet.
  */

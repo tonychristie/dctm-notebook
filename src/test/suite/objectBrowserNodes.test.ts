@@ -3,6 +3,8 @@ import {
     createNodeId,
     createChildNodeId,
     isFolderObjectId,
+    compareFolderContentNodes,
+    NodeData,
     NodeType
 } from '../../objectBrowserNodes';
 
@@ -63,6 +65,34 @@ suite('ObjectBrowserNodes Test Suite', () => {
 
         test('returns false for a document id', () => {
             assert.strictEqual(isFolderObjectId('0900000180000101'), false);
+        });
+    });
+
+    suite('compareFolderContentNodes', () => {
+        const folder = (name: string): NodeData => ({ id: name, name, type: 'folder' });
+        const document = (name: string): NodeData => ({ id: name, name, type: 'document' });
+
+        test('sorts a folder before a document whose name comes earlier', () => {
+            assert.ok(compareFolderContentNodes(folder('Budget'), document('Annual report')) < 0);
+            assert.ok(compareFolderContentNodes(document('Annual report'), folder('Budget')) > 0);
+        });
+
+        test('sorts two folders by name', () => {
+            assert.ok(compareFolderContentNodes(folder('Archive'), folder('Budget')) < 0);
+            assert.ok(compareFolderContentNodes(folder('Budget'), folder('Archive')) > 0);
+        });
+
+        test('sorts two documents by name', () => {
+            assert.ok(compareFolderContentNodes(document('Annual report'), document('Summary')) < 0);
+            assert.ok(compareFolderContentNodes(document('Summary'), document('Annual report')) > 0);
+        });
+
+        test('sorts a mixed list to folders by name, then documents by name', () => {
+            const storageOrder = [folder('Reports'), document('Summary'), folder('Budget'), document('Annual report')];
+
+            const sorted = storageOrder.sort(compareFolderContentNodes).map(n => n.name);
+
+            assert.deepStrictEqual(sorted, ['Budget', 'Reports', 'Annual report', 'Summary']);
         });
     });
 

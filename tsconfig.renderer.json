@@ -14,6 +14,7 @@
     "moduleResolution": "bundler"
   },
   "include": [
-    "src/notebook/renderer.ts"
+    "src/notebook/renderer.ts",
+    "src/notebook/css.d.ts"
   ]
 }

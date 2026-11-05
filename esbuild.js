@@ -49,6 +49,7 @@ async function main() {
     sourcemap: !production,
     sourcesContent: false,
     platform: 'browser',
+    loader: { '.css': 'text' },
     outfile: 'out/notebook/renderer.js',
     logLevel: 'silent',
     plugins: [

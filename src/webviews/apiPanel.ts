@@ -1,6 +1,6 @@
 import type { MethodInfo } from '../apiExecutor';
 import { escapeHtml } from '../htmlUtils';
-import { convertParameters, formatResult, formatResultWithLinks } from '../webviewLogic';
+import { convertParameters, filterMethods, formatResult, formatResultWithLinks } from '../webviewLogic';
 import { byId, onActions, readWebviewData, vscode } from './common';
 
 interface ResultMessage {
@@ -29,7 +29,7 @@ function getAllMethods(): MethodInfo[] {
 }
 
 function visibleMethods(): MethodInfo[] {
-    return selectedCategory ? METHODS[selectedCategory] : getAllMethods();
+    return filterMethods(METHODS, selectedCategory, byId<HTMLInputElement>('methodSearch').value);
 }
 
 function renderCategories(): void {
@@ -52,17 +52,8 @@ function renderMethodList(methods: MethodInfo[]): void {
     ).join('');
 }
 
-function searchMethods(query: string): void {
-    if (!query) {
-        renderMethodList(visibleMethods());
-        return;
-    }
-
-    const lower = query.toLowerCase();
-    renderMethodList(getAllMethods().filter(m =>
-        m.name.toLowerCase().includes(lower) ||
-        (m.description && m.description.toLowerCase().includes(lower))
-    ));
+function searchMethods(): void {
+    renderMethodList(visibleMethods());
 }
 
 function selectMethod(method: MethodInfo): void {
@@ -187,7 +178,7 @@ function clearForm(): void {
     byId('resultPanel').style.display = 'none';
     byId<HTMLButtonElement>('executeBtn').disabled = true;
     renderCategories();
-    renderMethodList(getAllMethods());
+    renderMethodList(visibleMethods());
 }
 
 onActions({
@@ -215,9 +206,7 @@ document.addEventListener('click', event => {
     }
 });
 
-byId<HTMLInputElement>('methodSearch').addEventListener('input', event => {
-    searchMethods((event.target as HTMLInputElement).value);
-});
+byId<HTMLInputElement>('methodSearch').addEventListener('input', searchMethods);
 
 byId('parameterInputs').addEventListener('input', updateExecuteButton);
 

@@ -1,6 +1,6 @@
 import * as assert from 'assert';
-import type { ParameterInfo } from '../../apiExecutor';
-import { convertParameters, formatResult, formatResultWithLinks, isGroupVisible, matchesFilter } from '../../webviewLogic';
+import type { MethodInfo, ParameterInfo } from '../../apiExecutor';
+import { convertParameters, filterMethods, formatResult, formatResultWithLinks, isGroupVisible, matchesFilter } from '../../webviewLogic';
 
 suite('Webview Logic Test Suite', () => {
     suite('convertParameters', () => {
@@ -56,6 +56,35 @@ suite('Webview Logic Test Suite', () => {
 
         test('an empty filter matches everything', () => {
             assert.strictEqual(matchesFilter('', 'title', ''), true);
+        });
+    });
+
+    suite('filterMethods', () => {
+        const method = (name: string, description?: string): MethodInfo =>
+            ({ name, returnType: 'void', parameters: [], description });
+        const checkout = method('checkout', 'Check out the object');
+        const save = method('save', 'Save the object');
+        const getString = method('getString', 'Read a value; see CHECKIN state');
+        const getId = method('getId');
+        const methods = {
+            'Version Control': [checkout, save],
+            'Attribute Getters': [getString, getId]
+        };
+
+        test('with search text and no category, matches name or description in every category without regard to case', () => {
+            assert.deepStrictEqual(filterMethods(methods, null, 'CHECK'), [checkout, getString]);
+        });
+
+        test('with search text and a category, matches in every category, not only the selected one', () => {
+            assert.deepStrictEqual(filterMethods(methods, 'Attribute Getters', 'check'), [checkout, getString]);
+        });
+
+        test('with empty search text and a category, returns that category', () => {
+            assert.deepStrictEqual(filterMethods(methods, 'Version Control', ''), [checkout, save]);
+        });
+
+        test('with empty search text and no category, returns all methods', () => {
+            assert.deepStrictEqual(filterMethods(methods, null, ''), [checkout, save, getString, getId]);
         });
     });
 

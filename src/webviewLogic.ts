@@ -1,4 +1,4 @@
-import type { ParameterInfo } from './apiExecutor';
+import type { MethodInfo, ParameterInfo } from './apiExecutor';
 import { escapeHtml } from './htmlUtils';
 
 export { formatValue as formatResult } from './notebook/commandParsing';
@@ -47,6 +47,17 @@ function convertValue(type: string, value: string, text: string): unknown {
 export function matchesFilter(filter: string, name: string, secondField: string): boolean {
     const lower = filter.toLowerCase();
     return !lower || name.toLowerCase().includes(lower) || secondField.toLowerCase().includes(lower);
+}
+
+export function filterMethods(
+    methods: Record<string, MethodInfo[]>,
+    category: string | null,
+    search: string
+): MethodInfo[] {
+    if (search) {
+        return Object.values(methods).flat().filter(m => matchesFilter(search, m.name, m.description ?? ''));
+    }
+    return category ? methods[category] : Object.values(methods).flat();
 }
 
 export function isGroupVisible(isInherited: boolean, showInherited: boolean, visibleCount: number): boolean {

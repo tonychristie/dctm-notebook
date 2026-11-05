@@ -90,8 +90,8 @@ export const COMMON_DFC_METHODS: Record<string, MethodInfo[]> = {
             name: 'checkin',
             returnType: 'IDfId',
             parameters: [
-                { name: 'versionLabels', type: 'boolean', required: true },
-                { name: 'versionLabel', type: 'string', required: true }
+                { name: 'keepLock', type: 'boolean', required: true },
+                { name: 'versionLabels', type: 'string', required: true }
             ],
             description: 'Checks in the object with a new version'
         },
@@ -506,50 +506,5 @@ export class ApiExecutor {
             resultType: apiResponse.resultType || 'unknown',
             executionTimeMs: apiResponse.executionTimeMs || 0
         };
-    }
-
-    /**
-     * Get available methods for a category
-     */
-    getMethodsByCategory(category: string): MethodInfo[] {
-        return COMMON_DFC_METHODS[category] || [];
-    }
-
-    /**
-     * Get all method categories
-     */
-    getCategories(): string[] {
-        return Object.keys(COMMON_DFC_METHODS);
-    }
-
-    /**
-     * Find method info by name
-     */
-    findMethod(methodName: string): MethodInfo | undefined {
-        for (const methods of Object.values(COMMON_DFC_METHODS)) {
-            const found = methods.find(m => m.name === methodName);
-            if (found) {
-                return found;
-            }
-        }
-        return undefined;
-    }
-
-    /**
-     * Get all methods as flat list
-     */
-    getAllMethods(): MethodInfo[] {
-        return Object.values(COMMON_DFC_METHODS).flat();
-    }
-
-    /**
-     * Search methods by name pattern
-     */
-    searchMethods(pattern: string): MethodInfo[] {
-        const lowerPattern = pattern.toLowerCase();
-        return this.getAllMethods().filter(m =>
-            m.name.toLowerCase().includes(lowerPattern) ||
-            (m.description && m.description.toLowerCase().includes(lowerPattern))
-        );
     }
 }

@@ -1,7 +1,46 @@
 import * as assert from 'assert';
-import { formatResult, formatResultWithLinks, isGroupVisible, matchesFilter } from '../../webviewLogic';
+import type { ParameterInfo } from '../../apiExecutor';
+import { convertParameters, formatResult, formatResultWithLinks, isGroupVisible, matchesFilter } from '../../webviewLogic';
 
 suite('Webview Logic Test Suite', () => {
+    suite('convertParameters', () => {
+        const required = (type: string): ParameterInfo[] => [{ name: 'value', type, required: true }];
+
+        test('a blank required parameter gives undefined for each type', () => {
+            for (const type of ['string', 'int', 'double', 'boolean']) {
+                assert.strictEqual(convertParameters(required(type), ['  ']), undefined, type);
+            }
+        });
+
+        test('a required int takes a whole number only', () => {
+            assert.strictEqual(convertParameters(required('int'), ['1.5']), undefined);
+            assert.strictEqual(convertParameters(required('int'), ['3abc']), undefined);
+            assert.deepStrictEqual(convertParameters(required('int'), ['-2']), [-2]);
+        });
+
+        test('a required double takes a number only', () => {
+            assert.strictEqual(convertParameters(required('double'), ['3abc']), undefined);
+            assert.deepStrictEqual(convertParameters(required('double'), ['2.5']), [2.5]);
+        });
+
+        test('a required boolean takes true or false in any case', () => {
+            assert.deepStrictEqual(convertParameters(required('boolean'), ['TRUE']), [true]);
+            assert.strictEqual(convertParameters(required('boolean'), ['yes']), undefined);
+        });
+
+        test('a blank optional parameter is sent as an empty string', () => {
+            const parameters: ParameterInfo[] = [
+                { name: 'accessorName', type: 'string', required: true },
+                { name: 'extendedPermit', type: 'string', required: false }
+            ];
+            assert.deepStrictEqual(convertParameters(parameters, ['dm_world', '']), ['dm_world', '']);
+        });
+
+        test('a method with no parameters gives an empty list', () => {
+            assert.deepStrictEqual(convertParameters([], []), []);
+        });
+    });
+
     suite('matchesFilter', () => {
         test('matches on the name without regard to case', () => {
             assert.strictEqual(matchesFilter('OBJECT', 'r_object_id', 'id'), true);

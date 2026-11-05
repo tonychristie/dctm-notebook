@@ -34,8 +34,8 @@ A VS Code notebook interface for DQL queries with REST and DFC connectivity to O
 
 ### API Method Support
 
-- **Autocomplete**: When typing API method names in DQL files or `.api` files, autocomplete suggestions appear with method signatures
-- **Hover Documentation**: Hover over a method name (e.g., `save`, `checkout`, `query`) to see the full dmAPI signature and description
+- **Autocomplete**: When typing API method names in dmAPI notebook cells or `.dmapi` files, autocomplete suggestions appear with method signatures
+- **Hover Documentation**: In the same places, hover over a method name (e.g., `save`, `checkout`, `query`) to see the full dmAPI signature and description
 
 Supported method categories:
 - `dmAPIExec` - Commands that modify state (save, destroy, link, etc.)

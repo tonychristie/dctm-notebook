@@ -1,7 +1,10 @@
 import * as assert from 'assert';
+import * as vscode from 'vscode';
 import { DqlSemanticTokensProvider } from '../../dqlSemanticTokens';
-import { TypeCache } from '../../typeCache';
+import { TypeCache, TypeInfo } from '../../typeCache';
 import { DctmBridge } from '../../dctmBridge';
+import { ConnectionManager } from '../../connectionManager';
+import { RepositoryConnection } from '../../repositoryConnection';
 
 // Testable subclass that exposes private methods
 class TestableDqlSemanticTokensProvider extends DqlSemanticTokensProvider {
@@ -30,6 +33,33 @@ class MockTypeCache extends TypeCache {
     override hasData(): boolean {
         return this.mockTypes.size > 0;
     }
+
+    protected override async fetchAll(): Promise<TypeInfo[]> {
+        return [];
+    }
+}
+
+class FakeConnectionManager {
+    private readonly selectionEmitter = new vscode.EventEmitter<RepositoryConnection | undefined>();
+    readonly onDidChangeSelection = this.selectionEmitter.event;
+    private selected: RepositoryConnection | undefined;
+
+    getSelectedConnection(): RepositoryConnection | undefined {
+        return this.selected;
+    }
+
+    select(typeCache: TypeCache | undefined): void {
+        this.selected = typeCache ? ({ typeCache } as unknown as RepositoryConnection) : undefined;
+        this.selectionEmitter.fire(this.selected);
+    }
+}
+
+function createProvider(connectionManager: FakeConnectionManager): TestableDqlSemanticTokensProvider {
+    return new TestableDqlSemanticTokensProvider(connectionManager as unknown as ConnectionManager);
+}
+
+function documentWithText(text: string): vscode.TextDocument {
+    return { getText: () => text } as vscode.TextDocument;
 }
 
 suite('DqlSemanticTokensProvider Test Suite', () => {
@@ -42,7 +72,65 @@ suite('DqlSemanticTokensProvider Test Suite', () => {
         mockTypeCache.addMockType('dm_folder');
         mockTypeCache.addMockType('dm_sysobject');
         mockTypeCache.addMockType('my_custom_type');
-        provider = new TestableDqlSemanticTokensProvider(() => mockTypeCache);
+        const connectionManager = new FakeConnectionManager();
+        connectionManager.select(mockTypeCache);
+        provider = createProvider(connectionManager);
+    });
+
+    teardown(() => {
+        provider.dispose();
+    });
+
+    suite('onDidChangeSemanticTokens', () => {
+        let connectionManager: FakeConnectionManager;
+        let followingProvider: DqlSemanticTokensProvider;
+        let fired: number;
+
+        setup(() => {
+            connectionManager = new FakeConnectionManager();
+            connectionManager.select(mockTypeCache);
+            followingProvider = createProvider(connectionManager);
+            fired = 0;
+            followingProvider.onDidChangeSemanticTokens(() => fired++);
+        });
+
+        teardown(() => {
+            followingProvider.dispose();
+        });
+
+        test('fires when the selected connection type cache refreshes', async () => {
+            await mockTypeCache.refresh();
+
+            assert.strictEqual(fired, 1);
+        });
+
+        test('fires when the selected connection changes', () => {
+            connectionManager.select(new MockTypeCache());
+
+            assert.strictEqual(fired, 1);
+        });
+
+        test('does not fire after dispose', async () => {
+            followingProvider.dispose();
+
+            await mockTypeCache.refresh();
+
+            assert.strictEqual(fired, 0);
+        });
+
+        test('uses the type cache of the connection that is currently selected', () => {
+            const document = documentWithText('select * from my_custom_type');
+            const otherCache = new MockTypeCache();
+            otherCache.addMockType('other_type');
+
+            connectionManager.select(otherCache);
+
+            assert.strictEqual(followingProvider.provideDocumentSemanticTokens(document).data.length, 0);
+
+            connectionManager.select(mockTypeCache);
+
+            assert.strictEqual(followingProvider.provideDocumentSemanticTokens(document).data.length, 5);
+        });
     });
 
     suite('isTypeContext - Should highlight (return true)', () => {

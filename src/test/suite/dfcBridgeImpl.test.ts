@@ -144,6 +144,17 @@ suite('DfcBridgeImpl Test Suite', () => {
             queries.forEach(q => assert.ok(q.includes("folder('/Temp/O''Brien')"), q));
         });
 
+        test('excludes every folder type from the document query', async () => {
+            const { client, impl } = createImpl();
+
+            await impl.getFolderContents('s1', '0b00000180000101', '/Temp');
+
+            const docQuery = dqlQueries(client).find(q => q.includes('FROM dm_sysobject'));
+            assert.ok(docQuery);
+            assert.ok(docQuery.includes('NOT TYPE(dm_folder)'), docQuery);
+            assert.ok(!docQuery.includes("r_object_type != 'dm_folder'"), docQuery);
+        });
+
         test('returns folders before documents when the document query answers first', async () => {
             const client = new FakeAxiosClient(async (call: RecordedCall) => {
                 const query = (call.body as { query: string }).query;

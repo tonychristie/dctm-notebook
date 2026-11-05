@@ -9,6 +9,9 @@
  */
 
 import type { RendererContext, OutputItem } from 'vscode-notebook-renderer';
+import { escapeHtml, isObjectId } from '../htmlUtils';
+import { formatResultWithLinks } from '../webviewLogic';
+import styles from './renderer.css';
 
 interface DqlResultData {
     columns: string[];
@@ -41,6 +44,10 @@ interface ExportData {
  * Activate the renderer
  */
 export function activate(context: RendererContext<void>): { renderOutputItem: (outputItem: OutputItem, element: HTMLElement) => void } {
+    const style = document.createElement('style');
+    style.textContent = styles;
+    document.head.appendChild(style);
+
     return {
         renderOutputItem(outputItem: OutputItem, element: HTMLElement): void {
             const data = outputItem.json() as DqlResultData | ApiResultData;
@@ -63,8 +70,6 @@ function renderDqlResult(
     data: DqlResultData,
     context: RendererContext<void>
 ): void {
-    const tableId = `dql-table-${Date.now()}`;
-
     // State
     let sortColumn: number | null = null;
     let sortDirection: 'asc' | 'desc' = 'asc';
@@ -77,167 +82,16 @@ function renderDqlResult(
     let startX = 0;
     let startWidth = 0;
 
-    // Calculate column width based on number of columns
-    // For <= 5 columns, use 20% each; for more, use fixed width with scroll
-    const numColumns = data.columns.length;
-    const columnWidth = numColumns <= 5 ? `${100 / numColumns}%` : '180px';
-    const tableWidth = numColumns <= 5 ? '100%' : 'auto';
-
-    // Create styles
-    const style = document.createElement('style');
-    style.textContent = `
-        .dql-result-container table {
-            border-collapse: collapse;
-            table-layout: fixed;
-            width: ${tableWidth};
-        }
-        .dql-result-container th {
-            text-align: left;
-            padding: 6px 12px;
-            border-bottom: 2px solid var(--vscode-panel-border);
-            font-weight: 600;
-            white-space: nowrap;
-            user-select: none;
-            position: relative;
-            min-width: 80px;
-            width: ${columnWidth};
-            max-width: 300px;
-        }
-        .dql-result-container th:hover {
-            background: var(--vscode-list-hoverBackground);
-        }
-        .dql-result-container th .sort-indicator {
-            margin-left: 4px;
-            opacity: 0.5;
-        }
-        .dql-result-container th.sorted-asc .sort-indicator::after { content: ' \\25B2'; }
-        .dql-result-container th.sorted-desc .sort-indicator::after { content: ' \\25BC'; }
-        .dql-result-container th .resize-handle {
-            position: absolute;
-            right: 0;
-            top: 0;
-            bottom: 0;
-            width: 5px;
-            cursor: col-resize;
-            background: transparent;
-        }
-        .dql-result-container th .resize-handle:hover,
-        .dql-result-container th .resize-handle.resizing {
-            background: var(--vscode-focusBorder);
-        }
-        .dql-result-container th .header-content {
-            cursor: pointer;
-            display: inline-block;
-        }
-        .dql-result-container td {
-            text-align: left;
-            padding: 4px 12px;
-            border-bottom: 1px solid var(--vscode-panel-border);
-            vertical-align: top;
-            width: ${columnWidth};
-            max-width: 300px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            cursor: pointer;
-        }
-        .dql-result-container td:hover {
-            background: var(--vscode-list-hoverBackground);
-        }
-        .dql-result-container td.selected {
-            background: var(--vscode-list-activeSelectionBackground);
-            color: var(--vscode-list-activeSelectionForeground);
-        }
-        .dql-result-container tr:hover td {
-            background: var(--vscode-list-hoverBackground);
-        }
-        .dql-result-container .null-value {
-            color: var(--vscode-descriptionForeground);
-            font-style: italic;
-        }
-        .dql-result-container .object-id {
-            color: var(--vscode-textLink-foreground);
-            text-decoration: underline;
-            cursor: pointer;
-        }
-        .dql-result-container .context-menu {
-            position: fixed;
-            background: var(--vscode-menu-background);
-            border: 1px solid var(--vscode-menu-border);
-            border-radius: 4px;
-            padding: 4px 0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-            z-index: 1000;
-            min-width: 150px;
-        }
-        .dql-result-container .context-menu-item {
-            padding: 6px 12px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .dql-result-container .context-menu-item:hover {
-            background: var(--vscode-menu-selectionBackground);
-            color: var(--vscode-menu-selectionForeground);
-        }
-        .dql-result-container .context-menu-separator {
-            height: 1px;
-            background: var(--vscode-menu-separatorBackground);
-            margin: 4px 0;
-        }
-        .dql-result-container .toolbar {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 8px;
-            align-items: center;
-        }
-        .dql-result-container .toolbar button {
-            background: var(--vscode-button-secondaryBackground);
-            color: var(--vscode-button-secondaryForeground);
-            border: none;
-            padding: 4px 8px;
-            border-radius: 2px;
-            cursor: pointer;
-            font-size: 11px;
-        }
-        .dql-result-container .toolbar button:hover {
-            background: var(--vscode-button-secondaryHoverBackground);
-        }
-        .dql-result-container .status {
-            color: var(--vscode-descriptionForeground);
-            flex-grow: 1;
-        }
-        .dql-result-container .copy-notification {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: var(--vscode-notifications-background);
-            color: var(--vscode-notifications-foreground);
-            padding: 8px 16px;
-            border-radius: 4px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-            z-index: 1001;
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-        .dql-result-container .copy-notification.show {
-            opacity: 1;
-        }
-    `;
-
     // Build container
     element.innerHTML = '';
-    element.appendChild(style);
 
     const container = document.createElement('div');
     container.className = 'dql-result-container';
-    container.style.cssText = 'font-family: var(--vscode-font-family); font-size: 12px;';
     element.appendChild(container);
 
     // Handle empty results
     if (data.rows.length === 0) {
-        container.innerHTML = `<div style="color: var(--vscode-descriptionForeground); padding: 8px;">
+        container.innerHTML = `<div class="empty-result">
             Query executed successfully. No rows returned.
             <br><small>Execution time: ${data.executionTime}ms</small>
         </div>`;
@@ -279,54 +133,36 @@ function renderDqlResult(
 
     // Table container
     const tableContainer = document.createElement('div');
-    tableContainer.style.cssText = 'overflow-x: auto; max-height: 400px; overflow-y: auto;';
+    tableContainer.className = 'table-container';
+    // Cells cannot take focus, so the container must be focusable for its keydown listener to fire.
+    tableContainer.tabIndex = 0;
     container.appendChild(tableContainer);
 
     const table = document.createElement('table');
-    table.id = tableId;
+    if (data.columns.length > 5) {
+        table.className = 'wide';
+    }
     tableContainer.appendChild(table);
 
     const thead = document.createElement('thead');
-    thead.style.cssText = 'position: sticky; top: 0; background: var(--vscode-editor-background);';
     table.appendChild(thead);
 
     const headerRow = document.createElement('tr');
-    headerRow.id = `${tableId}-header`;
     thead.appendChild(headerRow);
 
     const tbody = document.createElement('tbody');
-    tbody.id = `${tableId}-body`;
     table.appendChild(tbody);
 
     // Context menu
     const contextMenu = document.createElement('div');
-    contextMenu.id = `${tableId}-context-menu`;
     contextMenu.className = 'context-menu';
     contextMenu.style.display = 'none';
     container.appendChild(contextMenu);
 
     // Notification
     const notification = document.createElement('div');
-    notification.id = `${tableId}-notification`;
     notification.className = 'copy-notification';
     container.appendChild(notification);
-
-    // Helper functions
-    function escapeHtml(text: unknown): string {
-        if (text === null || text === undefined) {
-            return '';
-        }
-        const div = document.createElement('div');
-        div.textContent = String(text);
-        return div.innerHTML;
-    }
-
-    function isObjectId(value: unknown): boolean {
-        if (typeof value !== 'string') {
-            return false;
-        }
-        return /^[0-9a-f]{16}$/i.test(value);
-    }
 
     function showNotification(msg: string): void {
         notification.textContent = msg;
@@ -467,7 +303,7 @@ function renderDqlResult(
                 if (value === null || value === undefined) {
                     displayValue = '<span class="null-value">NULL</span>';
                 } else if (isObjectId(value) && (col === 'r_object_id' || col.endsWith('_id'))) {
-                    displayValue = `<span class="object-id" data-object-id="${escapeHtml(value)}">${escapeHtml(value)}</span>`;
+                    displayValue = `<span class="object-id" data-object-id="${escapeHtml(String(value))}">${escapeHtml(String(value))}</span>`;
                 } else {
                     displayValue = escapeHtml(String(value));
                 }
@@ -494,6 +330,9 @@ function renderDqlResult(
                 (handle as HTMLElement).classList.add('resizing');
                 document.body.style.cursor = 'col-resize';
                 document.body.style.userSelect = 'none';
+                // On document, not the table, so the drag continues when the mouse leaves the table.
+                document.addEventListener('mousemove', onResizeMove);
+                document.addEventListener('mouseup', onResizeEnd);
             };
         });
 
@@ -605,6 +444,7 @@ function renderDqlResult(
 
         container.style.minHeight = '';
         contextMenu.style.display = 'block';
+        document.addEventListener('click', onOutsideClick);
         const menuHeight = contextMenu.offsetHeight;
         const menuWidth = contextMenu.offsetWidth;
 
@@ -624,10 +464,16 @@ function renderDqlResult(
     function hideContextMenu(): void {
         contextMenu.style.display = 'none';
         container.style.minHeight = '';
+        document.removeEventListener('click', onOutsideClick);
     }
 
-    // Global event handlers
-    document.addEventListener('mousemove', (e: MouseEvent) => {
+    const onOutsideClick = (e: MouseEvent): void => {
+        if (!contextMenu.contains(e.target as Node)) {
+            hideContextMenu();
+        }
+    };
+
+    const onResizeMove = (e: MouseEvent): void => {
         if (!resizing) {
             return;
         }
@@ -636,14 +482,14 @@ function renderDqlResult(
         resizing.th.style.width = newWidth + 'px';
         resizing.th.style.minWidth = newWidth + 'px';
         resizing.th.style.maxWidth = newWidth + 'px';
-        // Update td cells in this column
-        const tds = document.querySelectorAll(`#${tableId} td:nth-child(${resizing.colIdx + 1})`);
-        tds.forEach(td => {
+        table.querySelectorAll(`td:nth-child(${resizing.colIdx + 1})`).forEach(td => {
             (td as HTMLElement).style.maxWidth = newWidth + 'px';
         });
-    });
+    };
 
-    document.addEventListener('mouseup', () => {
+    const onResizeEnd = (): void => {
+        document.removeEventListener('mousemove', onResizeMove);
+        document.removeEventListener('mouseup', onResizeEnd);
         if (!resizing) {
             return;
         }
@@ -654,17 +500,11 @@ function renderDqlResult(
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         resizing = null;
-    });
+    };
 
-    document.addEventListener('click', (e: MouseEvent) => {
-        if (!(e.target as HTMLElement).closest('.context-menu')) {
-            hideContextMenu();
-        }
-    });
-
-    document.addEventListener('keydown', (e: KeyboardEvent) => {
-        if (e.ctrlKey && e.key === 'c' && selectedCell) {
-            const td = document.querySelector(`#${tableId} td[data-row="${selectedCell.row}"][data-col="${selectedCell.col}"]`) as HTMLElement | null;
+    tableContainer.addEventListener('keydown', (e: KeyboardEvent) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedCell) {
+            const td = tbody.querySelector(`td[data-row="${selectedCell.row}"][data-col="${selectedCell.col}"]`) as HTMLElement | null;
             if (td) {
                 navigator.clipboard.writeText(td.getAttribute('data-value') || '').then(() => {
                     showNotification('Cell copied');
@@ -685,20 +525,6 @@ function renderApiResult(
     data: ApiResultData,
     context: RendererContext<void>
 ): void {
-    // Helper to escape HTML
-    function escapeHtml(text: string): string {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    // Helper to format result with clickable object IDs
-    function formatResultWithLinks(text: string): string {
-        return text.replace(/\b([0-9a-f]{16})\b/gi, (match) => {
-            return `<span class="object-id" data-object-id="${escapeHtml(match)}">${escapeHtml(match)}</span>`;
-        });
-    }
-
     // Helper to dump an object
     function dumpObject(objectId: string): void {
         if (context.postMessage) {
@@ -706,40 +532,8 @@ function renderApiResult(
         }
     }
 
-    // Create styles
-    const style = document.createElement('style');
-    style.textContent = `
-        .api-result-container {
-            font-family: var(--vscode-font-family);
-            font-size: 12px;
-        }
-        .api-result-container .object-id {
-            color: var(--vscode-textLink-foreground);
-            text-decoration: underline;
-            cursor: pointer;
-        }
-        .api-result-container .object-id:hover {
-            color: var(--vscode-textLink-activeForeground);
-        }
-        .api-result-container .result-meta {
-            margin-bottom: 8px;
-            color: var(--vscode-descriptionForeground);
-        }
-        .api-result-container .result-content {
-            background: var(--vscode-textCodeBlock-background);
-            padding: 8px;
-            border-radius: 4px;
-            font-family: var(--vscode-editor-font-family);
-        }
-        .api-result-container .result-content pre {
-            margin: 0;
-            white-space: pre-wrap;
-        }
-    `;
-
     // Build container
     element.innerHTML = '';
-    element.appendChild(style);
 
     const container = document.createElement('div');
     container.className = 'api-result-container';
@@ -755,7 +549,7 @@ function renderApiResult(
     const content = document.createElement('div');
     content.className = 'result-content';
     const pre = document.createElement('pre');
-    pre.innerHTML = formatResultWithLinks(escapeHtml(data.result));
+    pre.innerHTML = formatResultWithLinks(data.result);
     content.appendChild(pre);
     container.appendChild(content);
 

@@ -231,7 +231,7 @@ export class DctmNotebookController {
                     connection
                 );
             } else {
-                result = await this.apiExecutor.execute(parseApiCommand(command), connection);
+                result = await this.apiExecutor.execute(parseApiCommand(cleanCommand), connection);
             }
 
             const output = this.formatApiOutput(result, outputFormat);

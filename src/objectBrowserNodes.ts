@@ -202,3 +202,18 @@ export class ObjectBrowserItem extends vscode.TreeItem {
 export function createNodeId(connectionName: string, type: NodeType, identifier: string): string {
     return `${connectionName}::${type}::${identifier}`;
 }
+
+/**
+ * An object linked into several folders appears once under each, so its id carries the parent chain.
+ */
+export function createChildNodeId(parentNodeId: string, objectId: string): string {
+    return `${parentNodeId}/${objectId}`;
+}
+
+/**
+ * The object id prefix comes from the base type: 0b for dm_folder and its subtypes, 0c for dm_cabinet.
+ */
+export function isFolderObjectId(objectId: string): boolean {
+    const prefix = objectId.substring(0, 2).toLowerCase();
+    return prefix === '0b' || prefix === '0c';
+}

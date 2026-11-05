@@ -40,7 +40,7 @@ export class DfcBridgeImpl extends BridgeImplBase {
 
         const quotedPath = quoteDqlString(folderPath);
         const folderQuery = `SELECT r_object_id, object_name FROM dm_folder WHERE folder(${quotedPath}) ORDER BY object_name`;
-        const docQuery = `SELECT r_object_id, object_name, r_object_type, a_content_type FROM dm_sysobject WHERE folder(${quotedPath}) AND r_object_type != 'dm_folder' ORDER BY object_name`;
+        const docQuery = `SELECT r_object_id, object_name, r_object_type, a_content_type FROM dm_sysobject WHERE folder(${quotedPath}) AND NOT TYPE(dm_folder) ORDER BY object_name`;
 
         const [folderResults, docResults] = await Promise.all([
             this.executeDql(sessionId, folderQuery),

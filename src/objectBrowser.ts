@@ -8,7 +8,9 @@ import {
     CabinetNodeData,
     FolderNodeData,
     DocumentNodeData,
-    createNodeId
+    createNodeId,
+    createChildNodeId,
+    isFolderObjectId
 } from './objectBrowserNodes';
 
 /**
@@ -184,11 +186,9 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
             const sorted = contents.sort((a, b) => a.name.localeCompare(b.name));
 
             for (const item of sorted) {
-                const isFolder = item.type === 'dm_folder' || item.type === 'dm_cabinet';
-
-                if (isFolder) {
+                if (isFolderObjectId(item.objectId)) {
                     const folderData: FolderNodeData = {
-                        id: createNodeId(data.connectionName, 'folder', item.objectId),
+                        id: createChildNodeId(data.id, item.objectId),
                         name: item.name,
                         type: 'folder',
                         objectId: item.objectId,
@@ -199,7 +199,7 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
                     items.push(new ObjectBrowserItem(folderData, vscode.TreeItemCollapsibleState.Collapsed));
                 } else {
                     const docData: DocumentNodeData = {
-                        id: createNodeId(data.connectionName, 'document', item.objectId),
+                        id: createChildNodeId(data.id, item.objectId),
                         name: item.name,
                         type: 'document',
                         objectId: item.objectId,

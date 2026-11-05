@@ -8,12 +8,10 @@ import { webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml'
  * Message types from webview to extension
  */
 interface WebviewMessage {
-    type: 'execute' | 'getMethodInfo' | 'searchMethods' | 'getCategories' | 'dumpObject';
+    type: 'execute' | 'dumpObject';
     objectId?: string;
     method?: string;
     args?: unknown[];
-    searchQuery?: string;
-    category?: string;
 }
 
 /**
@@ -150,18 +148,6 @@ export class ApiPanel {
                 );
                 break;
 
-            case 'getMethodInfo':
-                this.sendMethodInfo(message.method!);
-                break;
-
-            case 'searchMethods':
-                this.sendSearchResults(message.searchQuery!);
-                break;
-
-            case 'getCategories':
-                this.sendCategories();
-                break;
-
             case 'dumpObject':
                 if (message.objectId) {
                     vscode.commands.executeCommand('dctm.dumpObject', message.objectId, this.connectionName);
@@ -209,40 +195,6 @@ export class ApiPanel {
                 error: error instanceof Error ? error.message : String(error)
             });
         }
-    }
-
-    /**
-     * Send method info to webview
-     */
-    private sendMethodInfo(methodName: string): void {
-        const methodInfo = this.apiExecutor.findMethod(methodName);
-        this.panel.webview.postMessage({
-            type: 'methodInfo',
-            method: methodInfo
-        });
-    }
-
-    /**
-     * Send search results to webview
-     */
-    private sendSearchResults(query: string): void {
-        const results = this.apiExecutor.searchMethods(query);
-        this.panel.webview.postMessage({
-            type: 'searchResults',
-            results
-        });
-    }
-
-    /**
-     * Send categories to webview
-     */
-    private sendCategories(): void {
-        const categories = this.apiExecutor.getCategories();
-        this.panel.webview.postMessage({
-            type: 'categories',
-            categories,
-            methods: COMMON_DFC_METHODS
-        });
     }
 
     /**

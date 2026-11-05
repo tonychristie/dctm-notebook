@@ -1,6 +1,48 @@
+import type { ParameterInfo } from './apiExecutor';
 import { escapeHtml } from './htmlUtils';
 
 export { formatValue as formatResult } from './notebook/commandParsing';
+
+export function convertParameters(parameters: ParameterInfo[], values: string[]): unknown[] | undefined {
+    const args: unknown[] = [];
+    for (const [i, parameter] of parameters.entries()) {
+        const value = values[i];
+        const text = value.trim();
+        if (!text) {
+            if (parameter.required) {
+                return undefined;
+            }
+            args.push('');
+            continue;
+        }
+        const converted = convertValue(parameter.type, value, text);
+        if (converted === undefined) {
+            return undefined;
+        }
+        args.push(converted);
+    }
+    return args;
+}
+
+function convertValue(type: string, value: string, text: string): unknown {
+    switch (type) {
+        case 'int':
+            return /^-?\d+$/.test(text) ? Number(text) : undefined;
+        case 'double': {
+            const number = Number(text);
+            return Number.isFinite(number) ? number : undefined;
+        }
+        case 'boolean': {
+            const lower = text.toLowerCase();
+            if (lower === 'true' || lower === 'false') {
+                return lower === 'true';
+            }
+            return undefined;
+        }
+        default:
+            return value;
+    }
+}
 
 export function matchesFilter(filter: string, name: string, secondField: string): boolean {
     const lower = filter.toLowerCase();

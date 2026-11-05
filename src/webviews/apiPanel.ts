@@ -1,6 +1,6 @@
 import type { MethodInfo } from '../apiExecutor';
 import { escapeHtml } from '../htmlUtils';
-import { formatResult, formatResultWithLinks } from '../webviewLogic';
+import { convertParameters, formatResult, formatResultWithLinks } from '../webviewLogic';
 import { byId, onActions, readWebviewData, vscode } from './common';
 
 interface ResultMessage {
@@ -69,7 +69,7 @@ function selectMethod(method: MethodInfo): void {
     selectedMethod = method;
     renderMethodList(visibleMethods());
     renderParameters(method);
-    byId<HTMLButtonElement>('executeBtn').disabled = false;
+    updateExecuteButton();
 }
 
 function renderParameters(method: MethodInfo): void {
@@ -90,33 +90,26 @@ function renderParameters(method: MethodInfo): void {
     ).join('');
 }
 
-function getParameterValues(): unknown[] {
-    if (!selectedMethod || !selectedMethod.parameters) {
-        return [];
+function getParameterValues(): unknown[] | undefined {
+    if (!selectedMethod) {
+        return undefined;
     }
 
-    return selectedMethod.parameters.map((p, i) => {
-        const value = byId<HTMLInputElement>(`param${i}`).value;
-        if (p.type === 'int') {
-            return parseInt(value) || 0;
-        }
-        if (p.type === 'double') {
-            return parseFloat(value) || 0.0;
-        }
-        if (p.type === 'boolean') {
-            return value.toLowerCase() === 'true';
-        }
-        return value;
-    });
+    const values = selectedMethod.parameters.map((_, i) => byId<HTMLInputElement>(`param${i}`).value);
+    return convertParameters(selectedMethod.parameters, values);
+}
+
+function updateExecuteButton(): void {
+    byId<HTMLButtonElement>('executeBtn').disabled = getParameterValues() === undefined;
 }
 
 function executeMethod(): void {
-    if (!selectedMethod) {
+    const args = getParameterValues();
+    if (!selectedMethod || !args) {
         return;
     }
 
     const objectId = byId<HTMLInputElement>('objectId').value.trim();
-    const args = getParameterValues();
 
     vscode.postMessage({
         type: 'execute',
@@ -226,6 +219,8 @@ byId<HTMLInputElement>('methodSearch').addEventListener('input', event => {
     searchMethods((event.target as HTMLInputElement).value);
 });
 
+byId('parameterInputs').addEventListener('input', updateExecuteButton);
+
 window.addEventListener('message', event => {
     const message = event.data;
     switch (message.type) {
@@ -237,11 +232,6 @@ window.addEventListener('message', event => {
             break;
         case 'result':
             showResult(message);
-            break;
-        case 'methodInfo':
-            if (message.method) {
-                selectMethod(message.method);
-            }
             break;
     }
 });

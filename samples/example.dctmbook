@@ -19,7 +19,7 @@
     {
       "kind": "code",
       "language": "dmapi",
-      "content": "-- Get docbase configuration\ndmAPIGet(\"getdocbaseconfig,session\")"
+      "content": "-- Get docbase configuration\ndmAPIGet(\"dump,session,docbaseconfig\")"
     },
     {
       "kind": "code",

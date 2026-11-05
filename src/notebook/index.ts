@@ -205,7 +205,7 @@ function registerNotebookCommands(
     const insertApiCell = vscode.commands.registerCommand('dctm.notebook.insertApiCell', () =>
         insertCell(
             vscode.NotebookCellKind.Code,
-            '-- Enter your API command here\n-- Example: dmAPIGet("getdocbaseconfig,session")\n',
+            '-- Enter your API command here\n-- Example: dmAPIGet("dump,session,docbaseconfig")\n',
             'dmapi'
         )
     );

@@ -204,6 +204,16 @@ suite('DctmBridge Test Suite', () => {
             assert.strictEqual(dfcClient.callsTo('post', '/api/v1/dql').length, 1);
             assert.strictEqual(restClient.callsTo('get', '/api/v1/cabinets').length, 0);
         });
+
+        test('executeDmApi with a value posts the value to /api/v1/dmapi', async () => {
+            const bridge = createBridge();
+            const { dfcClient, dfcSession } = await connectBoth(bridge);
+
+            await bridge.executeDmApi(dfcSession, 'set', 'set,c,0900000180001234,title', 'Smith, John');
+
+            const [call] = dfcClient.callsTo('post', '/api/v1/dmapi');
+            assert.strictEqual((call.body as { value?: string }).value, 'Smith, John');
+        });
     });
 
     suite('bridge change with an open session', () => {

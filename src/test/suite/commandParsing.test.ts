@@ -78,7 +78,32 @@ suite('Command Parsing Test Suite', () => {
         test('recognises dmAPIGet, dmAPIExec and dmAPISet', () => {
             assert.deepStrictEqual(parseDmApiCommand('dmAPIGet("getservermap,session")'), { callType: 'get', args: 'getservermap,session' });
             assert.deepStrictEqual(parseDmApiCommand('dmAPIExec("save,c,0900000180001234")'), { callType: 'exec', args: 'save,c,0900000180001234' });
+            assert.deepStrictEqual(parseDmApiCommand('dmAPISet("set,c,l,object_name", "NewName")'), { callType: 'set', args: 'set,c,l,object_name', value: 'NewName' });
+        });
+
+        test('returns a dmAPISet value with its commas', () => {
+            assert.deepStrictEqual(
+                parseDmApiCommand('dmAPISet("set,c,l,title", "Smith, John")'),
+                { callType: 'set', args: 'set,c,l,title', value: 'Smith, John' }
+            );
+        });
+
+        test('closes each argument with the quote that opened it', () => {
+            assert.strictEqual(parseDmApiCommand(`dmAPISet("set,c,l,title", "O'Brien")`)?.value, "O'Brien");
+            assert.strictEqual(parseDmApiCommand(`dmAPISet('set,c,l,title', 'say "hi"')`)?.value, 'say "hi"');
+        });
+
+        test('returns an empty second argument as an empty string', () => {
+            assert.deepStrictEqual(parseDmApiCommand('dmAPISet("set,c,l,title", "")'), { callType: 'set', args: 'set,c,l,title', value: '' });
+        });
+
+        test('returns dmAPISet with one argument as a set call with no value', () => {
             assert.deepStrictEqual(parseDmApiCommand('dmAPISet("set,c,l,object_name")'), { callType: 'set', args: 'set,c,l,object_name' });
+        });
+
+        test('does not take a second argument for dmAPIGet or dmAPIExec', () => {
+            assert.strictEqual(parseDmApiCommand('dmAPIGet("get,c,l,title", "x")'), null);
+            assert.strictEqual(parseDmApiCommand('dmAPIExec("save,c,l", "x")'), null);
         });
 
         test('matches in any case', () => {

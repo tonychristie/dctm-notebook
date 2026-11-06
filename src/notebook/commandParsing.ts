@@ -7,6 +7,7 @@ export type DmApiCallType = 'get' | 'exec' | 'set';
 export interface DmApiCommand {
     callType: DmApiCallType;
     args: string;
+    value?: string;
 }
 
 export function stripComments(code: string, includeBlockComments: boolean = false): string {
@@ -53,14 +54,16 @@ export function stripComments(code: string, includeBlockComments: boolean = fals
 }
 
 export function parseDmApiCommand(command: string): DmApiCommand | null {
-    const match = command.match(/^dmAPI(Get|Exec|Set)\s*\(\s*["'](.+?)["']\s*\)$/i);
+    const match = command.match(/^dmAPI(Get|Exec|Set)\s*\(\s*(["'])(.+?)\2(?:\s*,\s*(["'])(.*?)\4)?\s*\)$/i);
     if (!match) {
         return null;
     }
-    return {
-        callType: match[1].toLowerCase() as DmApiCallType,
-        args: match[2]
-    };
+    const callType = match[1].toLowerCase() as DmApiCallType;
+    const value = match[5];
+    if (value === undefined) {
+        return { callType, args: match[3] };
+    }
+    return callType === 'set' ? { callType, args: match[3], value } : null;
 }
 
 export function parseApiCommand(command: string): ApiMethodRequest {

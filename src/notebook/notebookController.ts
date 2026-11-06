@@ -228,6 +228,7 @@ export class DctmNotebookController {
                 result = await this.executeDmApiCommand(
                     dmApiCommand.callType,
                     dmApiCommand.args,
+                    dmApiCommand.value,
                     connection
                 );
             } else {
@@ -256,11 +257,13 @@ export class DctmNotebookController {
      *
      * @param apiType The type of dmAPI call: 'get', 'exec', or 'set'
      * @param commandString The full command string from inside the quotes
+     * @param value The second argument of dmAPISet, sent unchanged
      * @param connection The active connection to use for execution
      */
     private async executeDmApiCommand(
         apiType: 'get' | 'exec' | 'set',
         commandString: string,
+        value: string | undefined,
         connection: RepositoryConnection
     ): Promise<ApiMethodResponse> {
         const bridge = connection.bridge;
@@ -273,7 +276,7 @@ export class DctmNotebookController {
             );
         }
 
-        const result = await bridge.executeDmApi(connection.sessionId, apiType, commandString);
+        const result = await bridge.executeDmApi(connection.sessionId, apiType, commandString, value);
 
         return {
             result: result.result,

@@ -80,9 +80,10 @@ export abstract class BridgeImplBase implements IUnifiedBridge {
         sessionId: string,
         apiType: 'get' | 'exec' | 'set',
         command: string,
+        value?: string,
         timeoutMs?: number
     ): Promise<DmApiResult> {
-        const response = await this.client.post('/api/v1/dmapi', { sessionId, apiType, command }, this.requestConfig(timeoutMs));
+        const response = await this.client.post('/api/v1/dmapi', { sessionId, apiType, command, value }, this.requestConfig(timeoutMs));
         return response.data;
     }
 

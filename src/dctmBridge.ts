@@ -270,7 +270,7 @@ export class DctmBridge {
      *
      * @param sessionId Active session ID
      * @param apiType Type of API call: 'get', 'exec', or 'set'
-     * @param command The dmAPI command string (e.g., "getservermap,session")
+     * @param command The dmAPI command string (e.g., "getservermap,session,MyRepo")
      * @param value The value for a set call, sent unchanged
      * @returns The API response with result and execution time
      */

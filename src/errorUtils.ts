@@ -5,10 +5,9 @@ import { isAxiosError } from 'axios';
  * The Java bridge returns errors in this format for all 4xx/5xx responses.
  */
 export interface BridgeErrorResponse {
-    status: number;
-    code?: string;
+    code: string;
     message: string;
-    details?: string;
+    details?: string | null;
 }
 
 /**
@@ -16,16 +15,13 @@ export interface BridgeErrorResponse {
  * Preserves the error code, details, and HTTP status for programmatic access.
  */
 export class BridgeError extends Error {
-    readonly code?: string;
-    readonly details?: string;
+    readonly code: string;
+    readonly details?: string | null;
     readonly httpStatus: number;
 
-    constructor(response: BridgeErrorResponse) {
+    constructor(response: BridgeErrorResponse, httpStatus: number) {
         // Format: [CODE] Message\n\nDetails: ...
-        let fullMessage = response.message;
-        if (response.code) {
-            fullMessage = `[${response.code}] ${fullMessage}`;
-        }
+        let fullMessage = `[${response.code}] ${response.message}`;
         if (response.details) {
             fullMessage += `\n\nDetails: ${response.details}`;
         }
@@ -34,7 +30,7 @@ export class BridgeError extends Error {
         this.name = 'BridgeError';
         this.code = response.code;
         this.details = response.details;
-        this.httpStatus = response.status;
+        this.httpStatus = httpStatus;
     }
 }
 
@@ -46,7 +42,7 @@ function isBridgeErrorResponse(data: unknown): data is BridgeErrorResponse {
         return false;
     }
     const obj = data as Record<string, unknown>;
-    return typeof obj.message === 'string' && typeof obj.status === 'number';
+    return typeof obj.code === 'string' && typeof obj.message === 'string';
 }
 
 /**
@@ -63,12 +59,12 @@ export function extractBridgeError(error: unknown): Error {
 
         if (isBridgeErrorResponse(data)) {
             console.error('Bridge error:', {
-                status: data.status,
+                status: error.response.status,
                 code: data.code,
                 message: data.message,
                 details: data.details
             });
-            return new BridgeError(data);
+            return new BridgeError(data, error.response.status);
         }
 
         // Response data exists but doesn't match expected structure

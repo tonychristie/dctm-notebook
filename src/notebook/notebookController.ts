@@ -13,6 +13,11 @@ import {
     stripComments
 } from './commandParsing';
 
+// A constructed Error carries a stack, and a name of 'Error' adds an 'Error: ' prefix in the renderer.
+export function errorOutput(message: string): vscode.NotebookCellOutput {
+    return new vscode.NotebookCellOutput([vscode.NotebookCellOutputItem.error({ name: '', message })]);
+}
+
 /**
  * Notebook controller for executing DQL queries and API commands
  *
@@ -79,11 +84,7 @@ export class DctmNotebookController {
                 cell.notebook.metadata
             );
             if (!connection) {
-                execution.replaceOutput([
-                    new vscode.NotebookCellOutput([
-                        vscode.NotebookCellOutputItem.error(new Error(error))
-                    ])
-                ]);
+                execution.replaceOutput([errorOutput(error)]);
                 execution.end(false, Date.now());
                 return;
             }
@@ -105,24 +106,12 @@ export class DctmNotebookController {
             } else if (language === 'dmapi') {
                 await this.executeApi(content, execution, outputFormat, connection);
             } else {
-                execution.replaceOutput([
-                    new vscode.NotebookCellOutput([
-                        vscode.NotebookCellOutputItem.error(
-                            new Error(`Unsupported language: ${language}`)
-                        )
-                    ])
-                ]);
+                execution.replaceOutput([errorOutput(`Unsupported language: ${language}`)]);
                 execution.end(false, Date.now());
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            execution.replaceOutput([
-                new vscode.NotebookCellOutput([
-                    vscode.NotebookCellOutputItem.error(
-                        new Error(errorMessage)
-                    )
-                ])
-            ]);
+            execution.replaceOutput([errorOutput(errorMessage)]);
             execution.end(false, Date.now());
         }
     }
@@ -156,13 +145,7 @@ export class DctmNotebookController {
             execution.end(true, Date.now());
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            execution.replaceOutput([
-                new vscode.NotebookCellOutput([
-                    vscode.NotebookCellOutputItem.error(
-                        new Error(`DQL Error: ${errorMessage}`)
-                    )
-                ])
-            ]);
+            execution.replaceOutput([errorOutput(errorMessage)]);
             execution.end(false, Date.now());
         }
     }
@@ -241,13 +224,7 @@ export class DctmNotebookController {
             execution.end(true, Date.now());
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            execution.replaceOutput([
-                new vscode.NotebookCellOutput([
-                    vscode.NotebookCellOutputItem.error(
-                        new Error(`API Error: ${errorMessage}`)
-                    )
-                ])
-            ]);
+            execution.replaceOutput([errorOutput(errorMessage)]);
             execution.end(false, Date.now());
         }
     }

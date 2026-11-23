@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { describeConnection } from './connectionForm';
 import { DctmBridge, DfcConnectParams } from './dctmBridge';
 import { RepositoryConnection } from './repositoryConnection';
 
@@ -9,7 +10,6 @@ export interface DocumentumConnection {
     // DFC backend properties (used when type is 'dfc')
     docbroker?: string;
     port?: number;
-    dfcProfile?: string;
     // REST backend properties (used when type is 'rest')
     endpoint?: string;
     // Common properties
@@ -17,16 +17,12 @@ export interface DocumentumConnection {
     username?: string;
 }
 
-export interface DfcProfile {
-    javaHome?: string;
-    dfcPath: string;
-    dfcProperties?: string;
-}
-
 export interface Credentials {
     username: string;
     password: string;
 }
+
+export type StorageScope = 'user' | 'workspace';
 
 type ConnectionAction = 'connect' | 'add' | 'switchUser' | 'disconnect';
 
@@ -56,12 +52,15 @@ function buildConnectParams(
         };
 }
 
-export function describeConnection(connection: DocumentumConnection): string {
-    return connection.type === 'rest'
-        ? connection.endpoint || 'REST'
-        : connection.docbroker
-            ? `${connection.docbroker}:${connection.port || 1489}`
-            : 'DFC';
+function sameConnection(a: DocumentumConnection, b: DocumentumConnection): boolean {
+    const left = a as unknown as Record<string, unknown>;
+    const right = b as unknown as Record<string, unknown>;
+    const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+    return [...keys].every(key => left[key] === right[key]);
+}
+
+export function openNewConnectionForm(): Thenable<unknown> {
+    return vscode.commands.executeCommand('dctm.manageConnections', { newConnection: true });
 }
 
 export function followSelectedCache(
@@ -101,8 +100,20 @@ export class ConnectionManager implements vscode.Disposable {
     private readonly openConnectionsEmitter = new vscode.EventEmitter<void>();
     readonly onDidChangeOpenConnections: vscode.Event<void> = this.openConnectionsEmitter.event;
 
+    private readonly connectionsEmitter = new vscode.EventEmitter<void>();
+    readonly onDidChangeConnections: vscode.Event<void> = this.connectionsEmitter.event;
+
+    private knownConnections: DocumentumConnection[];
+    private readonly configurationListener: vscode.Disposable;
+
     constructor(dctmBridge: DctmBridge = new DctmBridge()) {
         this.dctmBridge = dctmBridge;
+        this.knownConnections = this.getConnections();
+        this.configurationListener = vscode.workspace.onDidChangeConfiguration(event => {
+            if (event.affectsConfiguration('documentum.connections')) {
+                void this.updateConnections(this.getConnections());
+            }
+        });
     }
 
     getConnections(): DocumentumConnection[] {
@@ -110,9 +121,61 @@ export class ConnectionManager implements vscode.Disposable {
         return config.get<DocumentumConnection[]>('connections', []);
     }
 
-    getDfcProfiles(): Record<string, DfcProfile> {
-        const config = vscode.workspace.getConfiguration('documentum');
-        return config.get<Record<string, DfcProfile>>('dfc.profiles', {});
+    storageScope(): StorageScope {
+        const inspected = vscode.workspace.getConfiguration('documentum').inspect('connections');
+        return inspected?.workspaceValue !== undefined ? 'workspace' : 'user';
+    }
+
+    storedConnections(): DocumentumConnection[] {
+        const inspected = vscode.workspace.getConfiguration('documentum')
+            .inspect<DocumentumConnection[]>('connections');
+        const stored = this.storageScope() === 'workspace' ? inspected?.workspaceValue : inspected?.globalValue;
+        return stored ?? [];
+    }
+
+    async saveConnections(connections: DocumentumConnection[]): Promise<void> {
+        const target = this.storageScope() === 'workspace'
+            ? vscode.ConfigurationTarget.Workspace
+            : vscode.ConfigurationTarget.Global;
+        await vscode.workspace.getConfiguration('documentum').update('connections', connections, target);
+    }
+
+    async updateConnections(connections: DocumentumConnection[]): Promise<void> {
+        const previous = this.knownConnections;
+        this.knownConnections = connections;
+
+        const changed = previous
+            .filter(old => {
+                const current = connections.find(c => c.name === old.name);
+                return !current || !sameConnection(old, current);
+            })
+            .map(old => old.name);
+
+        for (const name of changed) {
+            this.credentials.delete(name);
+            const open = this.openConnections.get(name);
+            if (open) {
+                await this.close(open);
+                vscode.window.showInformationMessage(
+                    `Connection "${name}" was changed in settings and has been disconnected. ` +
+                    'Connect again to use the new settings.'
+                );
+            }
+        }
+
+        this.connectionsEmitter.fire();
+    }
+
+    async testConnection(config: DocumentumConnection, credentials: Credentials): Promise<void> {
+        await this.dctmBridge.ensureRunning(config.type);
+        const sessionId = await this.dctmBridge.connect(
+            buildConnectParams(config, credentials.username, credentials.password)
+        );
+        await this.dctmBridge.disconnect(sessionId);
+    }
+
+    requestCredentials(config: DocumentumConnection): Promise<Credentials | undefined> {
+        return this.promptCredentials(config);
     }
 
     getSelectedConnection(): RepositoryConnection | undefined {
@@ -143,12 +206,6 @@ export class ConnectionManager implements vscode.Disposable {
             throw new Error(`Connection "${name}" not found`);
         }
 
-        const profiles = this.getDfcProfiles();
-        const profileName = config.dfcProfile;
-        if (profileName && !profiles[profileName]) {
-            throw new Error(`DFC profile "${profileName}" not found. Configure it in settings.`);
-        }
-
         const credentials = this.credentials.get(name) ?? await this.promptCredentials(config);
         if (!credentials) {
             return undefined;
@@ -161,10 +218,7 @@ export class ConnectionManager implements vscode.Disposable {
                 title: `Connecting to ${config.name}...`,
                 cancellable: false
             }, async () => {
-                await this.dctmBridge.ensureRunning(
-                    profileName ? profiles[profileName] : undefined,
-                    config.type
-                );
+                await this.dctmBridge.ensureRunning(config.type);
                 return this.dctmBridge.connect(
                     buildConnectParams(config, credentials.username, credentials.password)
                 );
@@ -230,13 +284,10 @@ export class ConnectionManager implements vscode.Disposable {
         if (connections.length === 0) {
             const action = await vscode.window.showWarningMessage(
                 'No Documentum connections configured. Would you like to add one?',
-                'Open Settings'
+                'Manage Connections'
             );
-            if (action === 'Open Settings') {
-                vscode.commands.executeCommand(
-                    'workbench.action.openSettings',
-                    'documentum.connections'
-                );
+            if (action === 'Manage Connections') {
+                void openNewConnectionForm();
             }
             return undefined;
         }
@@ -330,7 +381,7 @@ export class ConnectionManager implements vscode.Disposable {
         }));
 
         items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
-        items.push({ label: '$(add) Add New Connection...', description: 'Open settings', action: 'add' });
+        items.push({ label: '$(add) Add New Connection...', description: 'Open connection manager', action: 'add' });
 
         if (selected) {
             items.push({
@@ -353,7 +404,7 @@ export class ConnectionManager implements vscode.Disposable {
 
         switch (choice?.action) {
             case 'add':
-                vscode.commands.executeCommand('workbench.action.openSettings', 'documentum.connections');
+                void openNewConnectionForm();
                 break;
             case 'switchUser':
                 await this.switchUser(choice.connectionName);
@@ -368,8 +419,10 @@ export class ConnectionManager implements vscode.Disposable {
     }
 
     dispose(): void {
+        this.configurationListener.dispose();
         this.selectionEmitter.dispose();
         this.openConnectionsEmitter.dispose();
+        this.connectionsEmitter.dispose();
     }
 }
 

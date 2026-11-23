@@ -60,6 +60,7 @@ async function main() {
   const webviewsCtx = await esbuild.context({
     entryPoints: [
       'src/webviews/apiPanel.ts',
+      'src/webviews/connectionsPanel.ts',
       'src/webviews/objectDumpPanel.ts',
       'src/webviews/typeDumpPanel.ts',
       'src/webviews/userDumpPanel.ts',

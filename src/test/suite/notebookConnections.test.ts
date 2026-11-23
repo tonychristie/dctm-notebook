@@ -1,24 +1,19 @@
 import * as assert from 'assert';
-import {
-    ConnectionManager,
-    Credentials,
-    DfcProfile,
-    DocumentumConnection,
-    describeConnection
-} from '../../connectionManager';
+import { ConnectionManager, Credentials, DocumentumConnection } from '../../connectionManager';
+import { describeConnection } from '../../connectionForm';
 import { DctmBridge, DfcConnectParams } from '../../dctmBridge';
 import { RepositoryConnection } from '../../repositoryConnection';
 import { resolveNotebookConnection } from '../../notebook/notebookConnection';
 
 class FakeBridge {
-    ensureRunningCalls: { profile?: DfcProfile; connectionType?: 'dfc' | 'rest' }[] = [];
+    ensureRunningCalls: ('dfc' | 'rest')[] = [];
     connectCalls: DfcConnectParams[] = [];
     disconnectCalls: string[] = [];
     failConnect = false;
     failDisconnect = false;
 
-    async ensureRunning(profile?: DfcProfile, connectionType?: 'dfc' | 'rest'): Promise<void> {
-        this.ensureRunningCalls.push({ profile, connectionType });
+    async ensureRunning(connectionType: 'dfc' | 'rest'): Promise<void> {
+        this.ensureRunningCalls.push(connectionType);
     }
 
     async connect(params: DfcConnectParams): Promise<string> {
@@ -53,20 +48,19 @@ class TestConnectionManager extends ConnectionManager {
     prompts: { name: string; askUsername: boolean }[] = [];
     answers: (Credentials | undefined)[] = [];
 
-    constructor(
-        bridge: FakeBridge,
-        private connections: DocumentumConnection[],
-        private profiles: Record<string, DfcProfile> = {}
-    ) {
+    constructor(bridge: FakeBridge, private connections: DocumentumConnection[]) {
         super(bridge as unknown as DctmBridge);
+        void this.updateConnections(connections);
     }
 
+    // The base constructor reads the list before this.connections is assigned.
     getConnections(): DocumentumConnection[] {
-        return this.connections;
+        return this.connections ?? [];
     }
 
-    getDfcProfiles(): Record<string, DfcProfile> {
-        return this.profiles;
+    async changeConnections(connections: DocumentumConnection[]): Promise<void> {
+        this.connections = connections;
+        await this.updateConnections(connections);
     }
 
     protected async promptCredentials(
@@ -90,8 +84,7 @@ const dfcConnection: DocumentumConnection = {
     type: 'dfc',
     docbroker: 'broker',
     port: 1500,
-    repository: 'repo',
-    dfcProfile: 'dfc22'
+    repository: 'repo'
 };
 
 const defaultsConnection: DocumentumConnection = {
@@ -100,25 +93,22 @@ const defaultsConnection: DocumentumConnection = {
     repository: 'repo'
 };
 
-const profile: DfcProfile = { dfcPath: '/opt/dfc' };
-
 suite('Connection Manager Test Suite', () => {
     let bridge: FakeBridge;
     let manager: TestConnectionManager;
     let selectionEvents: (string | undefined)[];
     let openConnectionsEvents: number;
+    let connectionsEvents: number;
 
     setup(() => {
         bridge = new FakeBridge();
-        manager = new TestConnectionManager(
-            bridge,
-            [restConnection, dfcConnection, defaultsConnection],
-            { dfc22: profile }
-        );
+        manager = new TestConnectionManager(bridge, [restConnection, dfcConnection, defaultsConnection]);
         selectionEvents = [];
         openConnectionsEvents = 0;
+        connectionsEvents = 0;
         manager.onDidChangeSelection(connection => selectionEvents.push(connection?.name));
         manager.onDidChangeOpenConnections(() => openConnectionsEvents++);
+        manager.onDidChangeConnections(() => connectionsEvents++);
     });
 
     teardown(() => {
@@ -131,21 +121,11 @@ suite('Connection Manager Test Suite', () => {
             assert.strictEqual(bridge.connectCalls.length, 0);
         });
 
-        test('rejects for a missing DFC profile', async () => {
-            const noProfiles = new TestConnectionManager(bridge, [dfcConnection]);
-
-            await assert.rejects(noProfiles.openConnection('Dfc'));
-            assert.strictEqual(bridge.ensureRunningCalls.length, 0);
-        });
-
         test('ensures the bridge for the connection type is running', async () => {
             await manager.openConnection('Rest');
             await manager.openConnection('Dfc');
 
-            assert.deepStrictEqual(bridge.ensureRunningCalls, [
-                { profile: undefined, connectionType: 'rest' },
-                { profile, connectionType: 'dfc' }
-            ]);
+            assert.deepStrictEqual(bridge.ensureRunningCalls, ['rest', 'dfc']);
         });
 
         test('passes REST parameters to connect', async () => {
@@ -340,6 +320,65 @@ suite('Connection Manager Test Suite', () => {
         });
     });
 
+    suite('settings change', () => {
+        test('closes removed and changed open connections, leaves an unchanged one open and fires the event', async () => {
+            await manager.openConnection('Rest');
+            await manager.openConnection('Dfc');
+            const defaults = await manager.openConnection('Defaults');
+            const restSession = manager.getOpenConnection('Rest')?.sessionId;
+            const dfcSession = manager.getOpenConnection('Dfc')?.sessionId;
+
+            await manager.changeConnections([{ ...dfcConnection, docbroker: 'other' }, defaultsConnection]);
+
+            assert.deepStrictEqual(bridge.disconnectCalls.sort(), [restSession, dfcSession].sort());
+            assert.strictEqual(manager.getOpenConnection('Rest'), undefined);
+            assert.strictEqual(manager.getOpenConnection('Dfc'), undefined);
+            assert.strictEqual(manager.getOpenConnection('Defaults'), defaults);
+            assert.strictEqual(connectionsEvents, 1);
+        });
+
+        test('clears the credentials of a changed connection that is not open, and keeps those of an unchanged one', async () => {
+            await manager.openConnection('Rest');
+            await manager.openConnection('Dfc');
+            await manager.disconnectAll();
+
+            await manager.changeConnections([{ ...restConnection, username: 'other' }, dfcConnection, defaultsConnection]);
+            await manager.openConnection('Rest');
+            await manager.openConnection('Dfc');
+
+            assert.deepStrictEqual(manager.prompts.map(p => p.name), ['Rest', 'Dfc', 'Rest']);
+        });
+    });
+
+    suite('testConnection', () => {
+        test('connects with the given values and disconnects, leaving no open connection', async () => {
+            await manager.testConnection(dfcConnection, { username: 'tester', password: 'secret' });
+
+            assert.deepStrictEqual(bridge.ensureRunningCalls, ['dfc']);
+            assert.deepStrictEqual(bridge.connectCalls, [{
+                docbroker: 'broker',
+                port: 1500,
+                repository: 'repo',
+                username: 'tester',
+                password: 'secret'
+            }]);
+            assert.deepStrictEqual(bridge.disconnectCalls, ['session-1']);
+            assert.strictEqual(manager.getOpenConnection('Dfc'), undefined);
+            assert.deepStrictEqual(selectionEvents, []);
+            assert.strictEqual(openConnectionsEvents, 0);
+        });
+
+        test('rejects with the bridge error and does not disconnect when connect fails', async () => {
+            bridge.failConnect = true;
+
+            await assert.rejects(
+                manager.testConnection(restConnection, { username: 'tester', password: 'secret' }),
+                /authentication failed/
+            );
+            assert.deepStrictEqual(bridge.disconnectCalls, []);
+        });
+    });
+
     suite('describeConnection', () => {
         test('returns the endpoint for a REST connection', () => {
             assert.strictEqual(describeConnection(restConnection), 'http://dctm:8080/dctm-rest');
@@ -370,7 +409,7 @@ suite('Notebook Connection Resolution Test Suite', () => {
 
     setup(async () => {
         bridge = new FakeBridge();
-        manager = new TestConnectionManager(bridge, [restConnection, dfcConnection], { dfc22: profile });
+        manager = new TestConnectionManager(bridge, [restConnection, dfcConnection]);
         await manager.connect('Dfc');
         selected = manager.getSelectedConnection();
         assert.ok(selected);

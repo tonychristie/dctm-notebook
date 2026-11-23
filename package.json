@@ -116,6 +116,12 @@
         "category": "Documentum"
       },
       {
+        "command": "dctm.manageConnections",
+        "title": "Manage Connections",
+        "category": "Documentum",
+        "icon": "$(gear)"
+      },
+      {
         "command": "dctm.refreshObjectBrowser",
         "title": "Refresh Object Browser",
         "category": "Documentum",
@@ -360,7 +366,7 @@
     "viewsWelcome": [
       {
         "view": "documentumExplorer",
-        "contents": "No Documentum connections configured.\n[Add Connection](command:workbench.action.openSettings?%22documentum.connections%22)"
+        "contents": "No Documentum connections configured.\n[Add Connection](command:dctm.manageConnections?%7B%22newConnection%22%3Atrue%7D)"
       },
       {
         "view": "documentumTypeBrowser",
@@ -381,7 +387,7 @@
         "documentum.connections": {
           "type": "array",
           "default": [],
-          "description": "List of Documentum connection configurations",
+          "description": "Documentum connections. Use the Documentum: Manage Connections command to add, edit or delete them.",
           "items": {
             "type": "object",
             "properties": {
@@ -396,24 +402,20 @@
                   "rest"
                 ],
                 "default": "dfc",
-                "description": "Connection type (DFC primary, REST secondary)"
-              },
-              "dfcProfile": {
-                "type": "string",
-                "description": "DFC profile name (for DFC connections)"
+                "description": "dfc connects through the DFC Bridge and needs docbroker and port. rest connects through the REST Bridge and needs endpoint."
               },
               "endpoint": {
                 "type": "string",
-                "description": "REST API endpoint URL (for REST connections)"
+                "description": "REST only, required. REST API endpoint URL."
               },
               "docbroker": {
                 "type": "string",
-                "description": "Docbroker hostname (for DFC connections)"
+                "description": "DFC only, required. Docbroker host name or IP address."
               },
               "port": {
                 "type": "number",
                 "default": 1489,
-                "description": "Docbroker port (for DFC connections)"
+                "description": "DFC only, required. Docbroker port."
               },
               "repository": {
                 "type": "string",
@@ -428,36 +430,59 @@
               "name",
               "type",
               "repository"
-            ]
-          }
-        },
-        "documentum.defaultConnection": {
-          "type": "string",
-          "default": "",
-          "description": "Name of the default connection to use"
-        },
-        "documentum.dfc.profiles": {
-          "type": "object",
-          "default": {},
-          "description": "DFC profile configurations",
-          "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "javaHome": {
-                "type": "string",
-                "description": "Path to Java installation"
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "dfc"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "docbroker"
+                  ]
+                }
               },
-              "dfcPath": {
-                "type": "string",
-                "description": "Path to DFC installation directory"
-              },
-              "dfcProperties": {
-                "type": "string",
-                "description": "Path to dfc.properties file"
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "rest"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "endpoint"
+                  ]
+                }
               }
-            },
-            "required": [
-              "dfcPath"
+            ],
+            "defaultSnippets": [
+              {
+                "label": "DFC connection",
+                "description": "A connection through the DFC Bridge",
+                "body": {
+                  "name": "${1:name}",
+                  "type": "dfc",
+                  "repository": "${2:repository}",
+                  "docbroker": "${3:docbroker}",
+                  "port": 1489
+                }
+              },
+              {
+                "label": "REST connection",
+                "description": "A connection through the REST Bridge",
+                "body": {
+                  "name": "${1:name}",
+                  "type": "rest",
+                  "repository": "${2:repository}",
+                  "endpoint": "${3:http://host:8080/dctm-rest}"
+                }
+              }
             ]
           }
         },
@@ -507,6 +532,11 @@
           "command": "dctm.refreshObjectBrowser",
           "when": "view == documentumExplorer",
           "group": "navigation@2"
+        },
+        {
+          "command": "dctm.manageConnections",
+          "when": "view == documentumExplorer",
+          "group": "navigation@3"
         },
         {
           "command": "dctm.refreshTypeBrowser",

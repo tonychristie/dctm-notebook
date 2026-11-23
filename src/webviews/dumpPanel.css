@@ -1,6 +1,6 @@
 @import '@vscode/codicons/dist/codicon.css';
 
-body {
+.dump-content {
     font-family: var(--vscode-font-family);
     font-size: 13px;
     padding: 0;
@@ -9,7 +9,7 @@ body {
     background: var(--vscode-editor-background);
 }
 
-.loader {
+.dump-content .loader {
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -17,7 +17,7 @@ body {
     height: 100vh;
 }
 
-.spinner {
+.dump-content .spinner {
     width: 40px;
     height: 40px;
     border: 3px solid var(--vscode-editor-foreground);
@@ -31,23 +31,23 @@ body {
     to { transform: rotate(360deg); }
 }
 
-.error-page {
+.dump-content .error-page {
     padding: 20px;
 }
 
-.error {
+.dump-content .error {
     background: var(--vscode-inputValidation-errorBackground);
     border: 1px solid var(--vscode-inputValidation-errorBorder);
     padding: 16px;
     border-radius: 4px;
 }
 
-.error-title {
+.dump-content .error-title {
     font-weight: bold;
     margin-bottom: 8px;
 }
 
-.error button {
+.dump-content .error button {
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
     border: none;
@@ -57,11 +57,11 @@ body {
     margin-top: 16px;
 }
 
-.error button:hover {
+.dump-content .error button:hover {
     background: var(--vscode-button-hoverBackground);
 }
 
-.header {
+.dump-content .header {
     background: var(--vscode-sideBar-background);
     padding: 12px 16px;
     border-bottom: 1px solid var(--vscode-panel-border);
@@ -70,7 +70,7 @@ body {
     z-index: 100;
 }
 
-.header-title {
+.dump-content .header-title {
     font-size: 16px;
     font-weight: 600;
     margin-bottom: 8px;
@@ -79,37 +79,37 @@ body {
     gap: 8px;
 }
 
-.header-title .codicon {
+.dump-content .header-title .codicon {
     font-size: 18px;
 }
 
-.header-info {
+.dump-content .header-info {
     color: var(--vscode-descriptionForeground);
     font-size: 12px;
     margin-bottom: 8px;
 }
 
-.header-info a {
+.dump-content .header-info a {
     color: var(--vscode-textLink-foreground);
     cursor: pointer;
     text-decoration: none;
 }
 
-.header-info a:hover {
+.dump-content .header-info a:hover {
     text-decoration: underline;
 }
 
-.header-info .object-id {
+.dump-content .header-info .object-id {
     color: var(--vscode-textLink-foreground);
 }
 
-.header-badges {
+.dump-content .header-badges {
     display: flex;
     gap: 8px;
     margin-bottom: 8px;
 }
 
-.badge {
+.dump-content .badge {
     background: var(--vscode-badge-background);
     color: var(--vscode-badge-foreground);
     padding: 2px 6px;
@@ -117,22 +117,22 @@ body {
     font-size: 10px;
 }
 
-.badge.private {
+.dump-content .badge.private {
     background: var(--vscode-editorWarning-foreground);
 }
 
-.badge.dynamic {
+.dump-content .badge.dynamic {
     background: var(--vscode-editorInfo-foreground);
 }
 
-.header-actions {
+.dump-content .header-actions {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
     align-items: center;
 }
 
-.header-actions button {
+.dump-content .header-actions button {
     background: var(--vscode-button-secondaryBackground);
     color: var(--vscode-button-secondaryForeground);
     border: none;
@@ -142,54 +142,54 @@ body {
     font-size: 11px;
 }
 
-.header-actions button:hover:not(:disabled) {
+.dump-content .header-actions button:hover:not(:disabled) {
     background: var(--vscode-button-secondaryHoverBackground);
 }
 
-.header-actions button:disabled {
+.dump-content .header-actions button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
 }
 
-.header-actions button.primary {
+.dump-content .header-actions button.primary {
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
 }
 
-.header-actions button.primary:hover {
+.dump-content .header-actions button.primary:hover {
     background: var(--vscode-button-hoverBackground);
 }
 
-.nav-buttons {
+.dump-content .nav-buttons {
     display: inline-flex;
     gap: 4px;
     padding-right: 12px;
     border-right: 1px solid var(--vscode-panel-border);
 }
 
-.nav-buttons button {
+.dump-content .nav-buttons button {
     padding: 4px 8px;
     min-width: 28px;
 }
 
-.toggle-container {
+.dump-content .toggle-container {
     display: flex;
     align-items: center;
     gap: 6px;
     font-size: 12px;
 }
 
-.toggle-container input[type="checkbox"] {
+.dump-content .toggle-container input[type="checkbox"] {
     width: 14px;
     height: 14px;
     cursor: pointer;
 }
 
-.filter-bar {
+.dump-content .filter-bar {
     margin-top: 8px;
 }
 
-.filter-bar input {
+.dump-content .filter-bar input {
     width: 100%;
     padding: 6px 10px;
     background: var(--vscode-input-background);
@@ -200,22 +200,22 @@ body {
     box-sizing: border-box;
 }
 
-.filter-bar input:focus {
+.dump-content .filter-bar input:focus {
     outline: 1px solid var(--vscode-focusBorder);
 }
 
-.content {
+.dump-content .content {
     padding: 16px;
 }
 
-.group,
-.groups-section,
-.members-section,
-.child-types-section {
+.dump-content .group,
+.dump-content .groups-section,
+.dump-content .members-section,
+.dump-content .child-types-section {
     margin-bottom: 24px;
 }
 
-.group-header {
+.dump-content .group-header {
     font-weight: 600;
     font-size: 12px;
     text-transform: uppercase;
@@ -229,11 +229,11 @@ body {
     user-select: none;
 }
 
-.group-header:hover {
+.dump-content .group-header:hover {
     color: var(--vscode-foreground);
 }
 
-.group-header .count {
+.dump-content .group-header .count {
     background: var(--vscode-badge-background);
     color: var(--vscode-badge-foreground);
     padding: 2px 6px;
@@ -242,33 +242,33 @@ body {
     margin-left: 8px;
 }
 
-.group-header .toggle {
+.dump-content .group-header .toggle {
     margin-right: 8px;
 }
 
-.group-content {
+.dump-content .group-content {
     display: block;
 }
 
-.group-content.collapsed {
+.dump-content .group-content.collapsed {
     display: none;
 }
 
-.group-tags,
-.member-tags,
-.child-types {
+.dump-content .group-tags,
+.dump-content .member-tags,
+.dump-content .child-types {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
 }
 
-.member-tags {
+.dump-content .member-tags {
     margin-bottom: 8px;
 }
 
-.group-tag,
-.member-tag,
-.child-type {
+.dump-content .group-tag,
+.dump-content .member-tag,
+.dump-content .child-type {
     background: var(--vscode-badge-background);
     color: var(--vscode-badge-foreground);
     padding: 4px 8px;
@@ -277,53 +277,53 @@ body {
     cursor: pointer;
 }
 
-.group-tag:hover,
-.member-tag:hover,
-.child-type:hover {
+.dump-content .group-tag:hover,
+.dump-content .member-tag:hover,
+.dump-content .child-type:hover {
     background: var(--vscode-button-secondaryHoverBackground);
 }
 
-.member-tag.user {
+.dump-content .member-tag.user {
     background: var(--vscode-editor-selectionBackground);
 }
 
-.member-tag.group {
+.dump-content .member-tag.group {
     background: var(--vscode-editor-inactiveSelectionBackground);
 }
 
-.subsection-label {
+.dump-content .subsection-label {
     font-size: 11px;
     color: var(--vscode-descriptionForeground);
     margin-bottom: 6px;
     margin-top: 12px;
 }
 
-.subsection-label:first-child {
+.dump-content .subsection-label:first-child {
     margin-top: 0;
 }
 
-.no-groups,
-.no-members {
+.dump-content .no-groups,
+.dump-content .no-members {
     color: var(--vscode-descriptionForeground);
     font-style: italic;
 }
 
-.attribute {
+.dump-content .attribute {
     display: flex;
     padding: 6px 0;
     border-bottom: 1px solid var(--vscode-panel-border);
     align-items: flex-start;
 }
 
-.attribute:hover {
+.dump-content .attribute:hover {
     background: var(--vscode-list-hoverBackground);
 }
 
-.attribute.hidden {
+.dump-content .attribute.hidden {
     display: none;
 }
 
-.attr-name {
+.dump-content .attr-name {
     width: 200px;
     flex-shrink: 0;
     font-weight: 500;
@@ -334,15 +334,15 @@ body {
     white-space: nowrap;
 }
 
-.attr-name[data-action] {
+.dump-content .attr-name[data-action] {
     cursor: pointer;
 }
 
-.attr-name[data-action]:hover {
+.dump-content .attr-name[data-action]:hover {
     text-decoration: underline;
 }
 
-.attr-type {
+.dump-content .attr-type {
     width: 100px;
     flex-shrink: 0;
     color: var(--vscode-descriptionForeground);
@@ -350,43 +350,43 @@ body {
     padding-right: 12px;
 }
 
-.attr-value {
+.dump-content .attr-value {
     flex-grow: 1;
     word-break: break-word;
     cursor: pointer;
 }
 
-.attr-value:hover {
+.dump-content .attr-value:hover {
     text-decoration: underline;
 }
 
 /* The Object Dump puts these classes on a span inside .attr-value. */
-.attr-value.null,
-.attr-value .null {
+.dump-content .attr-value.null,
+.dump-content .attr-value .null {
     color: var(--vscode-descriptionForeground);
     font-style: italic;
 }
 
-.attr-value.object-id,
-.attr-value .object-id {
+.dump-content .attr-value.object-id,
+.dump-content .attr-value .object-id {
     color: var(--vscode-textLink-foreground);
     cursor: pointer;
 }
 
-.attr-value.object-id:hover,
-.attr-value .object-id:hover {
+.dump-content .attr-value.object-id:hover,
+.dump-content .attr-value .object-id:hover {
     text-decoration: underline;
     color: var(--vscode-textLink-activeForeground);
 }
 
-.attr-details {
+.dump-content .attr-details {
     flex-grow: 1;
     display: flex;
     gap: 8px;
     font-size: 11px;
 }
 
-.attr-badge {
+.dump-content .attr-badge {
     background: var(--vscode-badge-background);
     color: var(--vscode-badge-foreground);
     padding: 2px 6px;
@@ -394,28 +394,28 @@ body {
     font-size: 10px;
 }
 
-.attr-badge.repeating {
+.dump-content .attr-badge.repeating {
     background: var(--vscode-editorWarning-foreground);
 }
 
-.repeating-values {
+.dump-content .repeating-values {
     display: flex;
     flex-direction: column;
     gap: 2px;
 }
 
-.repeating-value {
+.dump-content .repeating-value {
     display: flex;
     gap: 8px;
 }
 
-.repeating-index {
+.dump-content .repeating-index {
     color: var(--vscode-descriptionForeground);
     font-size: 10px;
     min-width: 24px;
 }
 
-.copy-notification {
+.dump-content .copy-notification {
     position: fixed;
     bottom: 20px;
     right: 20px;
@@ -429,6 +429,6 @@ body {
     transition: opacity 0.2s;
 }
 
-.copy-notification.show {
+.dump-content .copy-notification.show {
     opacity: 1;
 }

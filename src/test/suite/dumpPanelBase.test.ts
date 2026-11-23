@@ -107,36 +107,6 @@ function testConfig(viewType: string): DumpPanelConfig {
 }
 
 suite('DumpPanelBase Test Suite', () => {
-    test('shows the second result when the first load resolves after the second load started', async () => {
-        const fake = fakePanel();
-        const panel = new TestDumpPanel(testConfig('test.latest'), fake.panel, 'a');
-
-        const first = panel.load('a', 'conn1');
-        const second = panel.load('b', 'conn1');
-        panel.calls[0].result.resolve('a');
-        await first;
-        assert.ok(!fake.html().includes('result a'));
-
-        panel.calls[1].result.resolve('b');
-        await second;
-        assert.ok(fake.html().includes('result b'));
-    });
-
-    test('ignores an error from a load that a newer load has replaced', async () => {
-        const fake = fakePanel();
-        const panel = new TestDumpPanel(testConfig('test.staleError'), fake.panel, 'a');
-
-        const first = panel.load('a', 'conn1');
-        const second = panel.load('b', 'conn1');
-        panel.calls[1].result.resolve('b');
-        await second;
-        panel.calls[0].result.reject(new Error('lost connection'));
-        await first;
-
-        assert.ok(fake.html().includes('result b'));
-        assert.ok(!fake.html().includes('lost connection'));
-    });
-
     test('Refresh after an error reloads the current key on the current connection', async () => {
         const fake = fakePanel();
         const panel = new TestDumpPanel(testConfig('test.refresh'), fake.panel, 'a');

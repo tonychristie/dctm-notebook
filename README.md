@@ -55,6 +55,31 @@ A REST connection:
 ]
 ```
 
+## Connection workspace
+
+Click a connection in the Documentum Explorer to open its workspace, an editor tab titled with the connection name. When the connection is not open, it connects first and asks for the password. "Documentum: Open Workspace" in the Command Palette does the same for a connection you pick. Each connection has one workspace; clicking the connection again shows it. Several workspaces can be open at the same time, one per connection.
+
+The header shows the connection name, the repository and the user. Below it are the tabs.
+
+### Cabinets tab
+
+- A tree of the repository's cabinets, folders and documents. Folders are listed before documents, each by name. A folder's contents load when you first expand it.
+- Click a cabinet or folder to expand it. Click a document to show it in the Dump tab.
+- Refresh reloads the cabinet list.
+- Right-click an item for Dump, Execute API Method and, on a cabinet or folder, Refresh. A document also has Checkout, Checkin and Cancel Checkout.
+
+### Dump tab
+
+- Enter an object ID in the box and press Enter or click Dump. An object ID is 16 hexadecimal characters.
+- The dump shows the object's attributes in groups, with a filter, Refresh, Copy Object ID, Collapse All and Expand All.
+- Click an object ID value to show that object in the same tab. Back and Forward move through the objects shown.
+
+### Disconnects and reloads
+
+- When the connection closes, the workspace stays open with a "Disconnected" banner, and its tabs are disabled. Click Connect in the banner to connect again. The Dump tab keeps its dump and history; click Refresh for current data.
+- When the connection is deleted or renamed in Manage Connections, its workspace closes.
+- Workspaces are restored after a window reload. Passwords are not stored, so a restored workspace opens disconnected.
+
 ## Features
 
 ### DQL Editor

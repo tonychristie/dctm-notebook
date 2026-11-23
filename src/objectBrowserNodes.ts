@@ -97,8 +97,13 @@ export class ObjectBrowserItem extends vscode.TreeItem {
         this.iconPath = this.getIcon();
         this.description = this.getDescription();
 
-        // Set command for clickable items
-        if (data.type === 'document') {
+        if (data.type === 'connection') {
+            this.command = {
+                command: 'dctm.openWorkspace',
+                title: 'Open Workspace',
+                arguments: [data.connectionName]
+            };
+        } else if (data.type === 'document') {
             this.command = {
                 command: 'dctm.showObjectProperties',
                 title: 'Show Properties',
@@ -158,25 +163,7 @@ export class ObjectBrowserItem extends vscode.TreeItem {
     }
 
     private getDocumentIcon(): vscode.ThemeIcon {
-        const docData = this.data as DocumentNodeData;
-        const format = docData.format?.toLowerCase() ?? '';
-
-        // Format pattern to icon mapping
-        const iconMappings: Array<{ patterns: string[]; icon: string }> = [
-            { patterns: ['pdf'], icon: 'file-pdf' },
-            { patterns: ['word', 'doc', 'docx', 'text', 'txt', 'excel', 'xls', 'xlsx'], icon: 'file-text' },
-            { patterns: ['image', 'jpg', 'jpeg', 'png', 'gif', 'bmp'], icon: 'file-media' },
-            { patterns: ['xml', 'html'], icon: 'file-code' },
-            { patterns: ['zip', 'rar', 'tar'], icon: 'file-zip' }
-        ];
-
-        for (const { patterns, icon } of iconMappings) {
-            if (patterns.some(p => format.includes(p) || format === p)) {
-                return new vscode.ThemeIcon(icon);
-            }
-        }
-
-        return new vscode.ThemeIcon('file');
+        return new vscode.ThemeIcon(documentIconName((this.data as DocumentNodeData).format));
     }
 
     private getDescription(): string | undefined {
@@ -194,6 +181,20 @@ export class ObjectBrowserItem extends vscode.TreeItem {
                 return undefined;
         }
     }
+}
+
+const documentIconMappings: Array<{ patterns: string[]; icon: string }> = [
+    { patterns: ['pdf'], icon: 'file-pdf' },
+    { patterns: ['word', 'doc', 'docx', 'text', 'txt', 'excel', 'xls', 'xlsx'], icon: 'file-text' },
+    { patterns: ['image', 'jpg', 'jpeg', 'png', 'gif', 'bmp'], icon: 'file-media' },
+    { patterns: ['xml', 'html'], icon: 'file-code' },
+    { patterns: ['zip', 'rar', 'tar'], icon: 'file-zip' }
+];
+
+export function documentIconName(format: string | undefined): string {
+    const lowerFormat = format?.toLowerCase() ?? '';
+    const mapping = documentIconMappings.find(({ patterns }) => patterns.some(p => lowerFormat.includes(p)));
+    return mapping?.icon ?? 'file';
 }
 
 /**

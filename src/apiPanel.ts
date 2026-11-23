@@ -14,30 +14,22 @@ interface WebviewMessage {
     args?: unknown[];
 }
 
-/**
- * Extract objectId from various argument types (string, ObjectBrowserItem, or node data)
- */
+// An Explorer tree item holds its fields under data; a workspace webview context holds them at the top level.
+function itemField(arg: unknown, field: 'objectId' | 'connectionName'): string | undefined {
+    if (!arg || typeof arg !== 'object') {
+        return undefined;
+    }
+    const item = arg as Record<string, unknown> & { data?: Record<string, unknown> };
+    const value = item.data && typeof item.data === 'object' ? item.data[field] : item[field];
+    return typeof value === 'string' ? value : undefined;
+}
+
 export function extractObjectId(arg: unknown): string | undefined {
-    if (typeof arg === 'string') {
-        return arg;
-    }
-    if (arg && typeof arg === 'object') {
-        const item = arg as { data?: { objectId?: string } };
-        if (item.data && typeof item.data.objectId === 'string') {
-            return item.data.objectId;
-        }
-    }
-    return undefined;
+    return typeof arg === 'string' ? arg : itemField(arg, 'objectId');
 }
 
 export function extractConnectionName(arg: unknown): string | undefined {
-    if (arg && typeof arg === 'object') {
-        const item = arg as { data?: { connectionName?: string } };
-        if (item.data && typeof item.data.connectionName === 'string') {
-            return item.data.connectionName;
-        }
-    }
-    return undefined;
+    return itemField(arg, 'connectionName');
 }
 
 /**

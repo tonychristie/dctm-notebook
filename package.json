@@ -19,7 +19,9 @@
     "content management",
     "ecm"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onWebviewPanel:dctmConnectionWorkspace"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -113,6 +115,21 @@
       {
         "command": "dctm.showConnections",
         "title": "Show Connections",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.openWorkspace",
+        "title": "Open Workspace",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.workspace.dump",
+        "title": "Dump",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.workspace.refreshFolder",
+        "title": "Refresh",
         "category": "Documentum"
       },
       {
@@ -666,6 +683,38 @@
           "group": "2_actions"
         }
       ],
+      "webview/context": [
+        {
+          "command": "dctm.workspace.dump",
+          "when": "webviewId == 'dctmConnectionWorkspace' && webviewSection =~ /^(cabinet|folder|document)$/",
+          "group": "1_dump"
+        },
+        {
+          "command": "dctm.executeApiOnObject",
+          "when": "webviewId == 'dctmConnectionWorkspace' && webviewSection =~ /^(cabinet|folder|document)$/",
+          "group": "2_api"
+        },
+        {
+          "command": "dctm.workspace.refreshFolder",
+          "when": "webviewId == 'dctmConnectionWorkspace' && webviewSection =~ /^(cabinet|folder)$/",
+          "group": "3_refresh"
+        },
+        {
+          "command": "dctm.checkout",
+          "when": "webviewId == 'dctmConnectionWorkspace' && webviewSection == 'document'",
+          "group": "4_version@1"
+        },
+        {
+          "command": "dctm.checkin",
+          "when": "webviewId == 'dctmConnectionWorkspace' && webviewSection == 'document'",
+          "group": "4_version@2"
+        },
+        {
+          "command": "dctm.cancelCheckout",
+          "when": "webviewId == 'dctmConnectionWorkspace' && webviewSection == 'document'",
+          "group": "4_version@3"
+        }
+      ],
       "notebook/cell/title": [
         {
           "command": "dctm.notebook.toggleOutputFormat",
@@ -686,6 +735,14 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "dctm.workspace.dump",
+          "when": "false"
+        },
+        {
+          "command": "dctm.workspace.refreshFolder",
+          "when": "false"
+        },
         {
           "command": "dctm.notebook.bindConnection",
           "when": "notebookType == dctmbook && !dctm.notebookBound"

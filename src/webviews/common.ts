@@ -1,5 +1,7 @@
 interface VsCodeApi {
     postMessage(message: unknown): void;
+    getState(): unknown;
+    setState(state: unknown): void;
 }
 
 declare function acquireVsCodeApi(): VsCodeApi;
@@ -12,10 +14,10 @@ export function readWebviewData<T>(): T {
 
 export type ActionHandler = (el: HTMLElement) => void;
 
-export function onActions(handlers: Record<string, ActionHandler>): void {
-    document.addEventListener('click', event => {
+export function onActions(handlers: Record<string, ActionHandler>, root: Document | HTMLElement = document): void {
+    root.addEventListener('click', event => {
         const el = (event.target as Element).closest<HTMLElement>('[data-action]');
-        const handler = el ? handlers[el.dataset.action ?? ''] : undefined;
+        const handler = el && root.contains(el) ? handlers[el.dataset.action ?? ''] : undefined;
         if (el && handler) {
             handler(el);
         }

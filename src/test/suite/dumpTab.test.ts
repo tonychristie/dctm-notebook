@@ -43,7 +43,7 @@ function harness(resolveAtOnce = true): Harness {
             const result = deferred<string>();
             calls.push({ target, refresh, result });
             if (resolveAtOnce) {
-                result.resolve(`result ${target.objectId}`);
+                result.resolve(`result ${target.kind === 'object' ? target.objectId : target.name}`);
             }
             return result.promise;
         }
@@ -155,6 +155,65 @@ suite('DumpTab Test Suite', () => {
         assert.strictEqual(posted[0].html, 'result 090000018000000b');
         assert.strictEqual(posted[0].objectId, objectB.objectId);
         assert.strictEqual(posted[0].canGoBack, true);
+    });
+
+    test('the history holds object, type, user and group entries in the order shown', async () => {
+        const { tab, calls, last } = harness();
+        await tab.show(objectA);
+        await tab.handleMessage({ command: 'openType', typeName: 'dm_document' });
+        await tab.handleMessage({ command: 'openUser', userName: 'jsmith' });
+        await tab.handleMessage({ command: 'openGroup', groupName: 'editors' });
+
+        await tab.back();
+        await tab.back();
+        await tab.back();
+
+        assert.deepStrictEqual(calls.map(call => call.target), [
+            objectA,
+            { kind: 'type', name: 'dm_document' },
+            { kind: 'user', name: 'jsmith' },
+            { kind: 'group', name: 'editors' },
+            { kind: 'user', name: 'jsmith' },
+            { kind: 'type', name: 'dm_document' },
+            objectA
+        ]);
+        assert.strictEqual(last().kind, 'object');
+        assert.strictEqual(last().canGoBack, false);
+        assert.strictEqual(last().canGoForward, true);
+    });
+
+    test('Back from a group dump reached from a user dump shows the user dump', async () => {
+        const { tab, calls, last } = harness();
+        await tab.handleMessage({ command: 'openUser', userName: 'jsmith' });
+        await tab.handleMessage({ command: 'openGroup', groupName: 'editors' });
+
+        await tab.back();
+
+        assert.deepStrictEqual(calls[calls.length - 1].target, { kind: 'user', name: 'jsmith' });
+        assert.strictEqual(last().kind, 'user');
+        assert.strictEqual(last().html, 'result jsmith');
+        assert.strictEqual(last().objectId, '');
+    });
+
+    test('a type, user or group refresh reloads from the server', async () => {
+        const { tab, calls } = harness();
+        await tab.handleMessage({ command: 'openGroup', groupName: 'editors' });
+
+        await tab.refresh();
+
+        assert.deepStrictEqual(calls[1].target, { kind: 'group', name: 'editors' });
+        assert.strictEqual(calls[1].refresh, true);
+    });
+
+    test('a failed type dump names the type in its error', async () => {
+        const { tab, calls, last } = harness(false);
+
+        const load = tab.handleMessage({ command: 'openType', typeName: 'custom_type' });
+        calls[0].result.reject(new Error('Type not found'));
+        await load;
+
+        assert.ok(last().html.includes('Failed to load type: custom_type'));
+        assert.ok(last().html.includes('Type not found'));
     });
 
     test('a closed connection shows the Not connected error', async () => {

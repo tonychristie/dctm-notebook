@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { escapeHtml, isObjectId } from '../../htmlUtils';
+import { escapeHtml, isObjectId, isObjectIdLink } from '../../htmlUtils';
 
 suite('HTML Utils Test Suite', () => {
     suite('escapeHtml', () => {
@@ -31,6 +31,16 @@ suite('HTML Utils Test Suite', () => {
         test('rejects other characters', () => {
             assert.strictEqual(isObjectId('090000018000123g'), false);
             assert.strictEqual(isObjectId(' 900000180001234'), false);
+        });
+    });
+
+    suite('isObjectIdLink', () => {
+        test('accepts an object ID', () => {
+            assert.strictEqual(isObjectIdLink('0900000180001234'), true);
+        });
+
+        test('rejects the null ID', () => {
+            assert.strictEqual(isObjectIdLink('0000000000000000'), false);
         });
 
         test('rejects non-strings', () => {

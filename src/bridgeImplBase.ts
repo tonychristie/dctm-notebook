@@ -13,6 +13,8 @@ import {
 
 export type ConnectionType = 'dfc' | 'rest';
 
+const DQL_PAGE_SIZE = 1000;
+
 export interface DqlResult {
     columns: string[];
     rows: Record<string, unknown>[];
@@ -44,18 +46,23 @@ export abstract class BridgeImplBase implements IUnifiedBridge {
     abstract getParentGroups(sessionId: string, groupName: string): Promise<GroupInfo[]>;
     abstract getTypeDetails(sessionId: string, typeName: string): Promise<TypeInfo>;
 
+    // The bridges return at most maxRows rows per request, 100 when it is not sent, and set hasMore when rows are left.
     async executeDql(sessionId: string, query: string, timeoutMs?: number): Promise<DqlResult> {
-        const response = await this.client.post('/api/v1/dql', { sessionId, query }, this.requestConfig(timeoutMs));
-
-        const columns = (response.data.columns || []).map(
-            (col: { name: string }) => col.name
-        );
-
-        return {
-            columns,
-            rows: response.data.rows || [],
-            rowCount: response.data.rowCount || 0
+        const config = this.requestConfig(timeoutMs);
+        const fetchPage = async (startRow: number) => {
+            const body = { sessionId, query, maxRows: DQL_PAGE_SIZE, startRow };
+            return (await this.client.post('/api/v1/dql', body, config)).data;
         };
+
+        let page = await fetchPage(0);
+        const columns: string[] = (page.columns || []).map((col: { name: string }) => col.name);
+        const rows: Record<string, unknown>[] = [...(page.rows || [])];
+        while (page.hasMore) {
+            page = await fetchPage(rows.length);
+            rows.push(...(page.rows || []));
+        }
+
+        return { columns, rows, rowCount: rows.length };
     }
 
     async executeApi(

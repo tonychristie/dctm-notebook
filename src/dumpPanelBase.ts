@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
 import { RepositoryConnection } from './repositoryConnection';
-import { WebviewEntry, webviewAssets, webviewData, webviewResourceRoots, webviewStylesheet } from './webviewHtml';
+import { WebviewEntry, webviewAssets, webviewResourceRoots, webviewStylesheet } from './webviewHtml';
 import { errorFragment, loadingFragment } from './dumps/objectDump';
 
 export interface DumpPanelConfig {
@@ -117,7 +117,7 @@ export abstract class DumpPanelBase<TKey extends string, TData> {
                 return;
             }
             this.onLatestResponse(data, refresh);
-            this.panel.webview.html = this.page(this.renderContent(data), webviewData(this.pageData(data)));
+            this.panel.webview.html = this.page(this.renderContent(data));
         } catch (error) {
             if (request !== this.latestRequest) {
                 return;
@@ -130,10 +130,6 @@ export abstract class DumpPanelBase<TKey extends string, TData> {
     protected abstract fetch(connection: RepositoryConnection, key: TKey, refresh: boolean): Promise<TData>;
 
     protected abstract renderContent(data: TData): string;
-
-    protected pageData(_data: TData): unknown {
-        return {};
-    }
 
     protected abstract handleMessage(message: DumpPanelMessage): Promise<void>;
 
@@ -154,7 +150,7 @@ export abstract class DumpPanelBase<TKey extends string, TData> {
         }
     }
 
-    private page(body: string, bodyAttributes = ''): string {
+    private page(body: string): string {
         const assets = webviewAssets(this.panel.webview, this.extensionUri, this.config.entry);
         return `<!DOCTYPE html>
         <html>
@@ -164,7 +160,7 @@ export abstract class DumpPanelBase<TKey extends string, TData> {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             ${webviewStylesheet(this.panel.webview, this.extensionUri, 'dumpPanel')}
         </head>
-        <body class="dump-content" ${bodyAttributes}>
+        <body class="dump-content">
             ${body}
             ${assets.script}
         </body>

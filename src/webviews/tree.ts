@@ -11,6 +11,8 @@ export interface TreeNode {
 export interface TreeOptions<T extends TreeNode> {
     loadChildren(node: T): Promise<T[]>;
     open(node: T): void;
+    // When true, clicking or pressing Enter on an expandable node opens it, and only its twistie expands it.
+    openExpandable?: boolean;
 }
 
 interface TreeEntry<T> {
@@ -200,7 +202,7 @@ export class Tree<T extends TreeNode> {
     }
 
     private activate(entry: TreeEntry<T>): void {
-        if (entry.node.expandable) {
+        if (entry.node.expandable && !this.options.openExpandable) {
             this.toggle(entry);
         } else {
             this.options.open(entry.node);
@@ -224,7 +226,11 @@ export class Tree<T extends TreeNode> {
         const entry = this.entryFor(event.target);
         if (entry) {
             this.focus(entry.item);
-            this.activate(entry);
+            if (entry.node.expandable && (event.target as Element).closest('.twistie')) {
+                this.toggle(entry);
+            } else {
+                this.activate(entry);
+            }
         }
     }
 

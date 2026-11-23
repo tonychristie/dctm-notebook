@@ -14,10 +14,13 @@ export function readWebviewData<T>(): T {
 
 export type ActionHandler = (el: HTMLElement) => void;
 
-export function onActions(handlers: Record<string, ActionHandler>, root: Document | HTMLElement = document): void {
+export type ActionHandlers = Record<string, ActionHandler> | ((action: string) => ActionHandler | undefined);
+
+export function onActions(handlers: ActionHandlers, root: Document | HTMLElement = document): void {
+    const lookup = typeof handlers === 'function' ? handlers : (action: string) => handlers[action];
     root.addEventListener('click', event => {
         const el = (event.target as Element).closest<HTMLElement>('[data-action]');
-        const handler = el && root.contains(el) ? handlers[el.dataset.action ?? ''] : undefined;
+        const handler = el && root.contains(el) ? lookup(el.dataset.action ?? '') : undefined;
         if (el && handler) {
             handler(el);
         }

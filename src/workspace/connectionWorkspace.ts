@@ -5,10 +5,12 @@ import { RepositoryConnection } from '../repositoryConnection';
 import { webviewAssets, webviewResourceRoots, webviewStylesheet } from '../webviewHtml';
 import { CabinetsRequest, CabinetsTab } from './cabinetsTab';
 import { DumpTab, DumpTabRequest, DumpTarget } from './dumpTab';
+import { ENTITY_TABS, EntityRequest, EntityTab, EntityTabName, isEntityTabName } from './entityTab';
+import { isEntityKind, openEntityQuery } from './entityQuery';
 
 export const WORKSPACE_VIEW_TYPE = 'dctmConnectionWorkspace';
 
-export type WorkspaceTab = 'cabinets' | 'dump';
+export type WorkspaceTab = 'cabinets' | EntityTabName | 'dump';
 
 export interface WorkspacePageState {
     connectionName: string;
@@ -30,7 +32,8 @@ type PageMessage =
     | { command: 'selectTab'; selected: WorkspaceTab }
     | { command: 'connect' }
     | ({ tab: 'dump' } & DumpTabRequest)
-    | ({ tab: 'cabinets' } & CabinetsRequest);
+    | ({ tab: 'cabinets' } & CabinetsRequest)
+    | ({ tab: EntityTabName } & EntityRequest);
 
 export type WorkspaceConnections = Pick<
     ConnectionManager,
@@ -40,12 +43,13 @@ export type WorkspaceConnections = Pick<
 export type PanelFactory = (title: string) => vscode.WebviewPanel;
 
 export function isWorkspaceTab(value: unknown): value is WorkspaceTab {
-    return value === 'cabinets' || value === 'dump';
+    return value === 'cabinets' || value === 'dump' || isEntityTabName(value);
 }
 
 export class ConnectionWorkspace {
     readonly dump: DumpTab;
     readonly cabinets: CabinetsTab;
+    readonly entities: Record<EntityTabName, EntityTab>;
     private activeTab: WorkspaceTab;
     private connection: RepositoryConnection | undefined;
     private generation = 0;
@@ -68,6 +72,10 @@ export class ConnectionWorkspace {
         const post = (message: object) => void this.panel.webview.postMessage(message);
         this.dump = new DumpTab(connectionName, connections, post);
         this.cabinets = new CabinetsTab(connectionName, connections, post, target => this.showDump(target));
+        const entityTab = (tab: EntityTabName) =>
+            new EntityTab(connectionName, connections, ENTITY_TABS[tab], post, target => this.showDump(target));
+        this.entities = { types: entityTab('types'), users: entityTab('users'), groups: entityTab('groups') };
+        this.watchCaches();
 
         panel.title = connectionName;
         panel.webview.html = this.html(extensionUri);
@@ -77,6 +85,7 @@ export class ConnectionWorkspace {
             connections.onDidChangeConnections(() => this.onConnectionsChanged())
         );
         panel.onDidDispose(() => {
+            Object.values(this.entities).forEach(tab => tab.dispose());
             this.disposables.forEach(d => d.dispose());
             this.disposables.length = 0;
             onDispose();
@@ -97,8 +106,10 @@ export class ConnectionWorkspace {
         if ('tab' in message) {
             if (message.tab === 'dump') {
                 await this.dump.handleMessage(message);
-            } else {
+            } else if (message.tab === 'cabinets') {
                 await this.cabinets.handleMessage(message);
+            } else {
+                await this.entities[message.tab].handleMessage(message);
             }
             return;
         }
@@ -126,7 +137,12 @@ export class ConnectionWorkspace {
         if (connection) {
             this.generation++;
         }
+        this.watchCaches();
         this.postState();
+    }
+
+    private watchCaches(): void {
+        Object.values(this.entities).forEach(tab => tab.watch(this.connection));
     }
 
     private onConnectionsChanged(): void {
@@ -175,6 +191,9 @@ export class ConnectionWorkspace {
         </div>
         <div class="ws-tabs" role="tablist">
             <button role="tab" id="tab-cabinets" data-tab="cabinets" aria-controls="panel-cabinets">Cabinets</button>
+            <button role="tab" id="tab-types" data-tab="types" aria-controls="panel-types">Types</button>
+            <button role="tab" id="tab-users" data-tab="users" aria-controls="panel-users">Users</button>
+            <button role="tab" id="tab-groups" data-tab="groups" aria-controls="panel-groups">Groups</button>
             <button role="tab" id="tab-dump" data-tab="dump" aria-controls="panel-dump">Dump</button>
         </div>
         <div class="ws-panels">
@@ -186,6 +205,9 @@ export class ConnectionWorkspace {
                 </div>
                 <div class="tree-container" id="cabinetsTree" aria-label="Cabinets"></div>
             </section>
+            ${entityPanel('types', 'Types')}
+            ${entityPanel('users', 'Users')}
+            ${entityPanel('groups', 'Groups')}
             <section class="ws-panel dump-tab" role="tabpanel" id="panel-dump" aria-labelledby="tab-dump" hidden>
                 <div class="dump-tab-header">
                     <button data-action="goBack" id="dumpBack" title="Back" disabled>
@@ -207,6 +229,21 @@ export class ConnectionWorkspace {
 </body>
 </html>`;
     }
+}
+
+function entityPanel(tab: EntityTabName, label: string): string {
+    const plural = ENTITY_TABS[tab].plural;
+    return `<section class="ws-panel entity-tab" role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}" hidden>
+                <div class="tab-toolbar">
+                    <input type="search" class="entity-search" id="${tab}Search" placeholder="Search ${plural}"
+                        aria-label="Search ${plural}" spellcheck="false">
+                    <button data-action="refreshEntities" title="Reload the ${plural}">
+                        <span class="codicon codicon-refresh"></span> Refresh
+                    </button>
+                    <span class="entity-count" aria-live="polite"></span>
+                </div>
+                <div class="tree-container" aria-label="${label}"></div>
+            </section>`;
 }
 
 function createWorkspacePanel(extensionUri: vscode.Uri): PanelFactory {
@@ -278,9 +315,11 @@ export class ConnectionWorkspaces implements vscode.Disposable {
 }
 
 interface WorkspaceItemContext {
+    webviewSection?: string;
     connectionName?: string;
     objectId?: string;
     nodeId?: string;
+    name?: string;
 }
 
 export function registerConnectionWorkspace(
@@ -304,8 +343,19 @@ export function registerConnectionWorkspace(
             }
         }),
         vscode.commands.registerCommand('dctm.workspace.dump', async (item?: WorkspaceItemContext) => {
-            if (item?.connectionName && item.objectId) {
+            if (!item?.connectionName) {
+                return;
+            }
+            if (isEntityKind(item.webviewSection) && item.name) {
+                await workspaces.showDump(item.connectionName, { kind: item.webviewSection, name: item.name });
+            } else if (item.objectId) {
                 await workspaces.showDump(item.connectionName, { kind: 'object', objectId: item.objectId });
+            }
+        }),
+        vscode.commands.registerCommand('dctm.workspace.generateQuery', async (item?: WorkspaceItemContext) => {
+            if (item?.connectionName && isEntityKind(item.webviewSection) && item.name) {
+                const connection = connectionManager.getOpenConnection(item.connectionName);
+                await openEntityQuery(connection, item.connectionName, item.webviewSection, item.name);
             }
         }),
         vscode.commands.registerCommand('dctm.workspace.refreshFolder', (item?: WorkspaceItemContext) => {

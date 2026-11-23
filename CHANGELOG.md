@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - The Explorer now updates when connection settings change. An open connection whose settings change is disconnected.
+- DQL results are no longer cut at 100 rows. Queries in notebooks and DQL files, and the user, cabinet and folder lists, return every row.
+- The null object ID `0000000000000000` shows as a plain value in dumps, notebook results and API results, not as a link that fails to load.
 
 ### Changed
 - Renamed `DfcBridge` to `DctmBridge` to better reflect its role as a unified interface to Documentum (both DFC and REST)
@@ -24,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Connection workspace: one editor tab per connection, opened by clicking the connection in the Explorer or with "Documentum: Open Workspace". It has a Cabinets tab to browse cabinets, folders and documents, and a Dump tab with Back, Forward and an object ID box.
+- Types, Users and Groups tabs in the connection workspace, with search, Refresh, and Dump and Generate DQL Query on the context menu. Type, user and group dumps show in the Dump tab and share its history with object dumps.
 - "Documentum: Manage Connections" panel to add, edit, duplicate, delete and test connections without editing `settings.json`
 - Completion snippets for a DFC and a REST connection in `documentum.connections`, and a problem marker for a DFC connection without `docbroker` or a REST connection without `endpoint`
 - New `bridgeTypes.ts` with shared type definitions (`ObjectInfo`, `UserInfo`, `GroupInfo`, etc.)

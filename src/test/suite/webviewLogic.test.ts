@@ -113,6 +113,10 @@ suite('Webview Logic Test Suite', () => {
             );
         });
 
+        test('leaves the null ID as plain text', () => {
+            assert.strictEqual(formatResultWithLinks('folder 0000000000000000'), 'folder 0000000000000000');
+        });
+
         test('leaves shorter and longer hex strings alone', () => {
             const text = '090000018000123 09000001800012345 x0900000180001234';
             assert.strictEqual(formatResultWithLinks(text), text);

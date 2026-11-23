@@ -133,6 +133,11 @@
         "category": "Documentum"
       },
       {
+        "command": "dctm.workspace.generateQuery",
+        "title": "Generate DQL Query",
+        "category": "Documentum"
+      },
+      {
         "command": "dctm.manageConnections",
         "title": "Manage Connections",
         "category": "Documentum",
@@ -686,8 +691,13 @@
       "webview/context": [
         {
           "command": "dctm.workspace.dump",
-          "when": "webviewId == 'dctmConnectionWorkspace' && webviewSection =~ /^(cabinet|folder|document)$/",
+          "when": "webviewId == 'dctmConnectionWorkspace' && webviewSection =~ /^(cabinet|folder|document|type|user|group)$/",
           "group": "1_dump"
+        },
+        {
+          "command": "dctm.workspace.generateQuery",
+          "when": "webviewId == 'dctmConnectionWorkspace' && webviewSection =~ /^(type|user|group)$/",
+          "group": "2_query"
         },
         {
           "command": "dctm.executeApiOnObject",
@@ -741,6 +751,10 @@
         },
         {
           "command": "dctm.workspace.refreshFolder",
+          "when": "false"
+        },
+        {
+          "command": "dctm.workspace.generateQuery",
           "when": "false"
         },
         {

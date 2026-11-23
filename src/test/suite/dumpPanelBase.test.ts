@@ -94,10 +94,6 @@ class TestDumpPanel extends DumpPanelBase<string, string> {
         return `<p>result ${data}</p>`;
     }
 
-    protected pageData(data: string): unknown {
-        return { data };
-    }
-
     protected async handleMessage(): Promise<void> {
     }
 }

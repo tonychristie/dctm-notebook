@@ -1,8 +1,9 @@
 import { byId, vscode } from './common';
 import { CabinetsTabView } from './workspace/cabinetsTab';
 import { DumpContent, DumpTabView } from './workspace/dumpTab';
+import { EntitiesResult, EntityTabName, EntityTabView } from './workspace/entityTab';
 
-type WorkspaceTab = 'cabinets' | 'dump';
+type WorkspaceTab = 'cabinets' | EntityTabName | 'dump';
 
 interface WorkspaceState {
     connectionName: string;
@@ -17,10 +18,21 @@ const post = (message: object) => vscode.postMessage(message);
 const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
 const cabinets = new CabinetsTabView(byId('panel-cabinets'), post);
 const dump = new DumpTabView(byId('panel-dump'), post);
+const entityTab = (tab: EntityTabName) => new EntityTabView(tab, byId(`panel-${tab}`), post, () => connectionName);
+const entities: Record<EntityTabName, EntityTabView> = {
+    types: entityTab('types'),
+    users: entityTab('users'),
+    groups: entityTab('groups')
+};
 
 let connectionName = '';
 let activeTab: WorkspaceTab = 'cabinets';
+let connected = false;
 let loadedGeneration = 0;
+
+function isEntityTab(tab: WorkspaceTab): tab is EntityTabName {
+    return tab in entities;
+}
 
 function saveState(): void {
     vscode.setState({ connectionName, activeTab });
@@ -34,11 +46,15 @@ function showTab(tab: WorkspaceTab): void {
         button.tabIndex = selected ? 0 : -1;
         byId(button.getAttribute('aria-controls') ?? '').hidden = !selected;
     }
+    if (connected && isEntityTab(tab)) {
+        entities[tab].ensureLoaded();
+    }
     saveState();
 }
 
 function applyState(state: WorkspaceState): void {
     connectionName = state.connectionName;
+    connected = state.connected;
     byId('wsName').textContent = state.connectionName;
     byId('wsInfo').textContent = state.username
         ? `${state.repository} as ${state.username}`
@@ -53,12 +69,13 @@ function applyState(state: WorkspaceState): void {
         panel.classList.toggle('disabled', !state.connected);
     });
 
-    showTab(state.activeTab);
-
     if (state.connected && state.generation !== loadedGeneration) {
         loadedGeneration = state.generation;
         cabinets.load();
+        Object.values(entities).forEach(view => view.reset());
     }
+
+    showTab(state.activeTab);
 }
 
 for (const button of tabs) {
@@ -89,6 +106,11 @@ window.addEventListener('message', event => {
         case 'refreshNode':
             cabinets.refreshNode(message.nodeId);
             break;
+        case 'entities': {
+            const result = message as EntitiesResult;
+            entities[result.tab].onResult(result);
+            break;
+        }
     }
 });
 

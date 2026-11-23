@@ -1,4 +1,4 @@
-import { escapeHtml, isObjectId } from '../htmlUtils';
+import { escapeHtml, isObjectIdLink } from '../htmlUtils';
 import { RepositoryConnection } from '../repositoryConnection';
 import {
     ObjectAttributeEntry,
@@ -124,14 +124,14 @@ export function renderObjectDump(dump: ObjectDump, leadingActions = ''): string 
 
 function renderAttribute(attr: ObjectAttributeEntry): string {
     const valueStr = formatAttributeValue(attr.value, attr.isRepeating);
-    const valueIsObjId = isObjectId(attr.value);
+    const valueIsObjId = isObjectIdLink(attr.value);
     const valueClass = attr.value === null ? 'null' : (valueIsObjId ? 'object-id' : '');
 
     let valueHtml: string;
     if (attr.isRepeating && Array.isArray(attr.value)) {
         valueHtml = `<div class="repeating-values">
             ${(attr.value as unknown[]).map((v, i) => {
-                const itemIsObjId = isObjectId(v);
+                const itemIsObjId = isObjectIdLink(v);
                 const itemClass = v === null ? 'null' : (itemIsObjId ? 'object-id' : '');
                 const action = itemIsObjId ? 'dumpObject' : 'copyValue';
                 return `<div class="repeating-value">

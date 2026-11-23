@@ -61,6 +61,24 @@ suite('BridgeImplBase Test Suite', () => {
             assert.strictEqual(client.callsTo('post', '/api/v1/dql')[0].timeout, 5000);
         });
 
+        test('executeDql requests the next page until hasMore is false and returns every row', async () => {
+            const pages: Record<number, unknown> = {
+                0: { columns: [{ name: 'user_name' }], rows: [{ user_name: 'a' }, { user_name: 'b' }], hasMore: true },
+                2: { columns: [{ name: 'user_name' }], rows: [{ user_name: 'c' }], hasMore: false }
+            };
+            const client = new FakeAxiosClient(call => pages[(call.body as { startRow: number }).startRow]);
+
+            const result = await new DfcBridgeImpl(client.asAxios()).executeDql('s1', 'SELECT user_name FROM dm_user', 5000);
+
+            assert.deepStrictEqual(result.rows, [{ user_name: 'a' }, { user_name: 'b' }, { user_name: 'c' }]);
+            assert.strictEqual(result.rowCount, 3);
+            assert.deepStrictEqual(result.columns, ['user_name']);
+            const calls = client.callsTo('post', '/api/v1/dql');
+            assert.deepStrictEqual(calls.map(c => (c.body as { startRow: number }).startRow), [0, 2]);
+            assert.ok(calls.every(c => (c.body as { maxRows: number }).maxRows > 100));
+            assert.ok(calls.every(c => c.timeout === 5000));
+        });
+
         test('executeDql without a timeout leaves the client default', async () => {
             const client = new FakeAxiosClient(() => ({}));
 

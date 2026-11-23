@@ -36,6 +36,8 @@ export interface MethodInfo {
     returnType: string;
     parameters: ParameterInfo[];
     description?: string;
+    /** Runs on the session, not on an object */
+    session?: boolean;
 }
 
 /**
@@ -51,6 +53,71 @@ export interface ParameterInfo {
  * Common DFC methods organized by category
  */
 export const COMMON_DFC_METHODS: Record<string, MethodInfo[]> = {
+    'Session': [
+        {
+            name: 'getSessionId',
+            returnType: 'string',
+            parameters: [],
+            description: 'Returns the ID of the session',
+            session: true
+        },
+        {
+            name: 'getLoginTicket',
+            returnType: 'string',
+            parameters: [],
+            description: 'Returns a login ticket for the session user',
+            session: true
+        },
+        {
+            name: 'getLoginUserName',
+            returnType: 'string',
+            parameters: [],
+            description: 'Returns the name of the user logged in to the session',
+            session: true
+        },
+        {
+            name: 'getDocbaseName',
+            returnType: 'string',
+            parameters: [],
+            description: 'Returns the name of the repository',
+            session: true
+        },
+        {
+            name: 'getDocbaseId',
+            returnType: 'string',
+            parameters: [],
+            description: 'Returns the ID of the repository',
+            session: true
+        },
+        {
+            name: 'getDocbaseOwnerName',
+            returnType: 'string',
+            parameters: [],
+            description: 'Returns the name of the repository owner',
+            session: true
+        },
+        {
+            name: 'getServerVersion',
+            returnType: 'string',
+            parameters: [],
+            description: 'Returns the version of the Content Server',
+            session: true
+        },
+        {
+            name: 'getDBMSName',
+            returnType: 'string',
+            parameters: [],
+            description: 'Returns the name of the database used by the repository',
+            session: true
+        },
+        {
+            name: 'isConnected',
+            returnType: 'boolean',
+            parameters: [],
+            description: 'Returns true if the session is connected',
+            session: true
+        }
+    ],
     'Object Lifecycle': [
         {
             name: 'save',
@@ -477,6 +544,10 @@ export const COMMON_DFC_METHODS: Record<string, MethodInfo[]> = {
         }
     ]
 };
+
+export function isSessionMethod(method: string): boolean {
+    return Object.values(COMMON_DFC_METHODS).some(methods => methods.some(m => m.name === method && m.session));
+}
 
 /**
  * Executor for DFC API method calls

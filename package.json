@@ -185,12 +185,6 @@
         "icon": "$(refresh)"
       },
       {
-        "command": "dctm.openApiPanel",
-        "title": "Open API Panel",
-        "category": "Documentum",
-        "icon": "$(terminal)"
-      },
-      {
         "command": "dctm.executeApiOnObject",
         "title": "Execute API Method",
         "category": "Documentum"
@@ -545,11 +539,6 @@
         }
       ],
       "view/title": [
-        {
-          "command": "dctm.openApiPanel",
-          "when": "view == documentumExplorer",
-          "group": "navigation@1"
-        },
         {
           "command": "dctm.refreshObjectBrowser",
           "when": "view == documentumExplorer",

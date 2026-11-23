@@ -8,11 +8,11 @@ import { DqlExecutor } from '../dqlExecutor';
 import { ApiExecutor } from '../apiExecutor';
 import { ApiMethodReference } from '../apiMethodReference';
 import { ObjectDumpPanel } from '../objectDumpPanel';
-import { extractObjectId } from '../apiPanel';
+import { extractObjectId } from '../workspace/objectCommands';
 import { isObjectId } from '../htmlUtils';
 import { exportToExcel, exportToJson } from './exporter';
 import { getOutputFormat, nextOutputFormat } from './commandParsing';
-import { boundConnectionName, resolveNotebookConnection } from './notebookConnection';
+import { bindNotebook, boundConnectionName, resolveNotebookConnection } from './notebookConnection';
 
 export { DctmNotebookSerializer } from './notebookSerializer';
 export { DctmNotebookController } from './notebookController';
@@ -337,17 +337,7 @@ function registerNotebookCommands(
                 return;
             }
 
-            // Update notebook metadata
-            const edit = new vscode.WorkspaceEdit();
-            const newMetadata = {
-                ...editor.notebook.metadata,
-                connection: selected.connectionName
-            };
-            edit.set(editor.notebook.uri, [
-                vscode.NotebookEdit.updateNotebookMetadata(newMetadata)
-            ]);
-
-            await vscode.workspace.applyEdit(edit);
+            await bindNotebook(editor.notebook, selected.connectionName);
 
             vscode.window.showInformationMessage(`Notebook bound to "${selected.connectionName}".`);
         }

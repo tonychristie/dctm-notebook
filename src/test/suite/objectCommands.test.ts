@@ -1,7 +1,7 @@
 import * as assert from 'assert';
-import { extractConnectionName, extractObjectId } from '../../apiPanel';
+import { extractConnectionName, extractObjectId } from '../../workspace/objectCommands';
 
-suite('ApiPanel Test Suite', () => {
+suite('Object Commands Test Suite', () => {
     suite('extractObjectId', () => {
         test('returns a string argument as it is', () => {
             assert.strictEqual(extractObjectId('0900000180001234'), '0900000180001234');

@@ -61,6 +61,11 @@ Click a connection in the Documentum Explorer to open its workspace, an editor t
 
 The header shows the connection name, the repository and the user. Below it are the tabs.
 
+The header also has two notebook buttons:
+
+- **New DQL notebook** opens a new notebook with one empty DQL cell, bound to the workspace's connection.
+- **Open notebook** asks for a `.dctmbook` file. A notebook with no binding is bound to the workspace's connection and opened. A notebook bound to this connection is opened. A notebook bound to another connection asks whether to bind it to this one: Bind binds it and opens it, Open as is opens it with its binding unchanged.
+
 ### Cabinets tab
 
 - A tree of the repository's cabinets, folders and documents. Folders are listed before documents, each by name. A folder's contents load when you first expand it.
@@ -82,6 +87,12 @@ The header shows the connection name, the repository and the user. Below it are 
 - An object dump shows the object's attributes in groups, with a filter, Refresh, Copy Object ID, Collapse All and Expand All.
 - Type, user and group dumps show the same content as their separate panels, including Generate DQL.
 - Click an object ID value, a supertype or child type, a user's group, a group's parent group or a group member to show it in the same tab. Back and Forward move through everything shown, objects, types, users and groups in one history.
+
+### API tab
+
+- Executes API methods on the workspace's connection. See [Using the API tab](#using-the-api-tab).
+- Execute API Method on a cabinet, folder or document in the Cabinets tab shows the API tab with the object ID filled in.
+- Click an object ID in a result to show it in the Dump tab.
 
 ### Disconnects and reloads
 
@@ -113,24 +124,25 @@ Supported method categories:
 - `dmAPIGet` - Commands that return values (connect, query, create, etc.)
 - `dmAPISet` - Commands that set values (set, append, insert, etc.)
 
-### API Execution Panel
+### API Execution
 
-- **Method Browser**: Browse and search available DFC API methods
+- **Method Browser**: Browse and search available DFC API methods in the workspace's API tab
 - **Execute Methods**: Execute API methods on repository objects
 - **Quick Actions**: Checkout, Checkin, Cancel Checkout from context menus
 
-## Using the API Panel
+## Using the API tab
 
-The API Panel allows you to execute DFC methods on repository objects interactively.
+The API tab of a connection workspace executes DFC methods on repository objects interactively, on the workspace's connection. Each workspace has its own API tab and its own execution history.
 
-### Opening the API Panel
+### Opening the API tab
 
-1. **From Command Palette**: Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac), type "Documentum: Open API Panel"
-2. **From Object Browser**: Right-click any object and select "Execute API Method" - the object ID is pre-filled
+1. **From the workspace**: Click the API tab.
+2. **From the Cabinets tab**: Right-click a cabinet, folder or document and select "Execute API Method". The API tab shows with the object ID filled in.
+3. **From the Explorer**: Right-click a cabinet, folder or document and select "Execute API Method". The workspace of the item's connection opens on the API tab, with the object ID filled in.
 
 ### Executing Methods
 
-1. **Enter Object ID** (optional): If you're executing methods on a specific object, enter its `r_object_id`. Leave empty for session-level operations like `getSessionId`.
+1. **Enter Object ID** (optional): If you're executing methods on a specific object, enter its `r_object_id`. Leave empty for session-level operations like `getSessionId`. The methods in the Session category always run on the session, even when the box holds an object ID.
 
 2. **Select a Method**:
    - Browse methods by category (Object Operations, Query, Version Control, etc.)
@@ -144,16 +156,16 @@ The API Panel allows you to execute DFC methods on repository objects interactiv
 
 #### Check Out a Document
 
-1. In Object Browser, right-click a document
+1. In the workspace's Cabinets tab, right-click a document
 2. Select "Checkout" from the context menu
-3. Or use API Panel:
-   - Enter the document's `r_object_id`
+3. Or use the API tab:
+   - Right-click the document and select "Execute API Method"
    - Select `checkout` method
    - Click Execute
 
 #### Query Object Properties
 
-1. Open API Panel
+1. Open the workspace's API tab
 2. Enter object ID (e.g., `0900000180001234`)
 3. Select `getString` method
 4. Enter attribute name (e.g., `object_name`)
@@ -161,7 +173,7 @@ The API Panel allows you to execute DFC methods on repository objects interactiv
 
 #### Get Session Information
 
-1. Open API Panel
+1. Open the workspace's API tab
 2. Leave Object ID empty
 3. Select `getSessionId` method
 4. Click Execute to see current session ID
@@ -170,6 +182,7 @@ The API Panel allows you to execute DFC methods on repository objects interactiv
 
 | Category | Description | Example Methods |
 |----------|-------------|-----------------|
+| Session | Session and repository information; runs on the session, never on the object ID | `getSessionId`, `getLoginTicket`, `getDocbaseName`, `getServerVersion` |
 | Object Operations | Basic object manipulation | `save`, `destroy`, `fetch`, `revert` |
 | Query | Execute queries and get values | `query`, `next`, `getString`, `getInt` |
 | Version Control | Document versioning | `checkout`, `checkin`, `cancelCheckout` |

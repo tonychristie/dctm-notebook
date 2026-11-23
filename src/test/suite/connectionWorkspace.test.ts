@@ -87,7 +87,15 @@ class FakeConnections implements WorkspaceConnections {
     }
 
     openNow(name: string): RepositoryConnection {
-        const connection = { name, username: 'dmadmin', sessionId: `session-${name}` } as RepositoryConnection;
+        const cache = { onRefresh: new vscode.EventEmitter<void>().event };
+        const connection = {
+            name,
+            username: 'dmadmin',
+            sessionId: `session-${name}`,
+            typeCache: cache,
+            userCache: cache,
+            groupCache: cache
+        } as unknown as RepositoryConnection;
         this.open.set(name, connection);
         this.openEmitter.fire();
         return connection;
@@ -215,6 +223,17 @@ suite('ConnectionWorkspace Test Suite', () => {
         assert.ok(panels[0].posted.some(message => JSON.stringify(message) === '{"type":"selectTab","tab":"dump"}'));
         await panels[0].send({ command: 'ready' });
         assert.strictEqual(lastState(panels[0])?.activeTab, 'dump');
+    });
+
+    test('opening a user from the Users tab shows its dump in the Dump tab', async () => {
+        const { workspaces, panels } = harness();
+        workspaces.show('conn1');
+
+        await panels[0].send({ tab: 'users', command: 'open', name: 'jsmith' });
+
+        assert.ok(panels[0].posted.some(message => JSON.stringify(message) === '{"type":"selectTab","tab":"dump"}'));
+        const dump = panels[0].posted.filter(message => (message as { type?: string }).type === 'dump').pop();
+        assert.strictEqual((dump as { kind?: string }).kind, 'user');
     });
 
     test('a restored panel for a configured connection becomes its workspace', () => {

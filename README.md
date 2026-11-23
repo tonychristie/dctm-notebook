@@ -68,11 +68,20 @@ The header shows the connection name, the repository and the user. Below it are 
 - Refresh reloads the cabinet list.
 - Right-click an item for Dump, Execute API Method and, on a cabinet or folder, Refresh. A document also has Checkout, Checkin and Cancel Checkout.
 
+### Types, Users and Groups tabs
+
+- Types shows the type tree, each type under its supertype. Users and Groups list the user and group names.
+- A tab loads its list the first time you show it. Refresh reloads the list and shows how many were loaded. If the list cannot load, the tab shows the error with Retry.
+- Type in the search box to show the names that contain the text, in any case. In Types, a search shows the matching types as a flat list; clear the box to see the tree again. The number of items shown is next to the Refresh button.
+- Click a type, user or group to show it in the Dump tab. In Types, click the arrow to expand a type.
+- Right-click an item for Dump and Generate DQL Query. Generate DQL Query opens the query in a new DQL document.
+
 ### Dump tab
 
 - Enter an object ID in the box and press Enter or click Dump. An object ID is 16 hexadecimal characters.
-- The dump shows the object's attributes in groups, with a filter, Refresh, Copy Object ID, Collapse All and Expand All.
-- Click an object ID value to show that object in the same tab. Back and Forward move through the objects shown.
+- An object dump shows the object's attributes in groups, with a filter, Refresh, Copy Object ID, Collapse All and Expand All.
+- Type, user and group dumps show the same content as their separate panels, including Generate DQL.
+- Click an object ID value, a supertype or child type, a user's group, a group's parent group or a group member to show it in the same tab. Back and Forward move through everything shown, objects, types, users and groups in one history.
 
 ### Disconnects and reloads
 

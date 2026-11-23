@@ -142,7 +142,32 @@ button {
 }
 
 .tab-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     padding: 8px 16px;
+}
+
+.entity-tab {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.entity-tab[hidden] {
+    display: none;
+}
+
+.entity-tab .tree-container {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+.entity-count {
+    color: var(--vscode-descriptionForeground);
+    font-size: 12px;
+    margin-left: 4px;
 }
 
 .tree-container {
@@ -229,6 +254,7 @@ button {
     border-bottom: 1px solid var(--vscode-panel-border);
 }
 
+.tab-toolbar input,
 .dump-tab-header input {
     flex: 1;
     max-width: 240px;
@@ -240,6 +266,7 @@ button {
     font-family: var(--vscode-editor-font-family);
 }
 
+.tab-toolbar input:focus,
 .dump-tab-header input:focus {
     outline: 1px solid var(--vscode-focusBorder);
 }

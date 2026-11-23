@@ -3,8 +3,14 @@ import { isObjectId } from '../htmlUtils';
 import { NavigationHistory } from '../navigationHistory';
 import { RepositoryConnection } from '../repositoryConnection';
 import { errorFragment, fetchObjectDump, loadingFragment, renderObjectDump } from '../dumps/objectDump';
+import { fetchTypeDump, renderTypeDump } from '../dumps/typeDump';
+import { fetchUserDump, renderUserDump } from '../dumps/userDump';
+import { fetchGroupDump, renderGroupDump } from '../dumps/groupDump';
+import { EntityKind, openEntityQuery } from './entityQuery';
 
-export type DumpTarget = { kind: 'object'; objectId: string };
+export type DumpTarget =
+    | { kind: 'object'; objectId: string }
+    | { kind: EntityKind; name: string };
 
 export type DumpRenderer = (connection: RepositoryConnection, target: DumpTarget, refresh: boolean) => Promise<string>;
 
@@ -14,6 +20,7 @@ export interface OpenConnections {
 
 export interface DumpContentMessage {
     type: 'dump';
+    kind: DumpTarget['kind'];
     html: string;
     objectId: string;
     canGoBack: boolean;
@@ -22,6 +29,10 @@ export interface DumpContentMessage {
 
 export type DumpTabRequest =
     | { command: 'dumpObject'; objectId?: string }
+    | { command: 'openType'; typeName?: string }
+    | { command: 'openUser'; userName?: string }
+    | { command: 'openGroup'; groupName?: string }
+    | { command: 'generateDql' }
     | { command: 'refresh' }
     | { command: 'goBack' }
     | { command: 'goForward' }
@@ -29,8 +40,21 @@ export type DumpTabRequest =
 
 export const INVALID_OBJECT_ID_MESSAGE = 'Invalid object ID format. Expected 16 hexadecimal characters.';
 
-export async function renderDumpTarget(connection: RepositoryConnection, target: DumpTarget): Promise<string> {
-    return renderObjectDump(await fetchObjectDump(connection, target.objectId));
+export async function renderDumpTarget(connection: RepositoryConnection, target: DumpTarget, refresh: boolean): Promise<string> {
+    switch (target.kind) {
+        case 'object':
+            return renderObjectDump(await fetchObjectDump(connection, target.objectId));
+        case 'type':
+            return renderTypeDump(await fetchTypeDump(connection, target.name, refresh));
+        case 'user':
+            return renderUserDump(await fetchUserDump(connection, target.name, refresh));
+        case 'group':
+            return renderGroupDump(await fetchGroupDump(connection, target.name, refresh));
+    }
+}
+
+function targetKey(target: DumpTarget): string {
+    return target.kind === 'object' ? target.objectId : target.name;
 }
 
 export class DumpTab {
@@ -88,6 +112,18 @@ export class DumpTab {
                 await this.show({ kind: 'object', objectId });
                 break;
             }
+            case 'openType':
+                await this.showEntity('type', message.typeName);
+                break;
+            case 'openUser':
+                await this.showEntity('user', message.userName);
+                break;
+            case 'openGroup':
+                await this.showEntity('group', message.groupName);
+                break;
+            case 'generateDql':
+                await this.generateQuery();
+                break;
             case 'refresh':
                 await this.refresh();
                 break;
@@ -104,9 +140,23 @@ export class DumpTab {
         }
     }
 
+    private async showEntity(kind: EntityKind, name: string | undefined): Promise<void> {
+        if (name) {
+            await this.show({ kind, name });
+        }
+    }
+
+    private async generateQuery(): Promise<void> {
+        const target = this.history.current();
+        if (target && target.kind !== 'object') {
+            const connection = this.connections.getOpenConnection(this.connectionName);
+            await openEntityQuery(connection, this.connectionName, target.kind, target.name);
+        }
+    }
+
     private async load(target: DumpTarget, addToHistory: boolean, refresh: boolean): Promise<void> {
         const request = ++this.latestRequest;
-        this.postContent(target, loadingFragment('object'));
+        this.postContent(target, loadingFragment(target.kind));
 
         let html: string;
         try {
@@ -116,7 +166,7 @@ export class DumpTab {
             }
             html = await this.render(connection, target, refresh);
         } catch (error) {
-            html = errorFragment('object', target.objectId, error instanceof Error ? error.message : String(error));
+            html = errorFragment(target.kind, targetKey(target), error instanceof Error ? error.message : String(error));
         }
 
         if (request !== this.latestRequest) {
@@ -131,8 +181,9 @@ export class DumpTab {
     private postContent(target: DumpTarget, html: string): void {
         this.content = {
             type: 'dump',
+            kind: target.kind,
             html,
-            objectId: target.objectId,
+            objectId: target.kind === 'object' ? target.objectId : '',
             canGoBack: this.history.canGoBack(),
             canGoForward: this.history.canGoForward()
         };

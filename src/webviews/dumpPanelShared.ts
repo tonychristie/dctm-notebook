@@ -1,4 +1,4 @@
-import { ActionHandler } from './common';
+import { ActionHandler, onActions } from './common';
 import { isGroupVisible, matchesFilter } from '../webviewLogic';
 
 const EXPANDED = '▼';
@@ -49,12 +49,35 @@ export function applyAttributeFilter(
     });
 }
 
-// Listens on the root, so a filter box in content that is replaced later still works.
-export function onFilterInput(handler: (value: string) => void, root: Document | HTMLElement = document): void {
+export interface DumpMessage {
+    command: string;
+    [field: string]: string | undefined;
+}
+
+export interface DumpActions {
+    handlers: Record<string, ActionHandler>;
+    filterField: 'type' | 'value';
+}
+
+// The filter box and the Show inherited box are read at each event, as the dump content is replaced on each load.
+function applyDumpFilter(root: Document | HTMLElement, actions: DumpActions): void {
+    const filter = root.querySelector<HTMLInputElement>('#filter')?.value ?? '';
+    const showInherited = root.querySelector<HTMLInputElement>('#showInherited')?.checked ?? true;
+    applyAttributeFilter(filter, actions.filterField, showInherited, root);
+}
+
+export function registerDumpActions(root: Document | HTMLElement, current: () => DumpActions | undefined): void {
+    onActions(action => current()?.handlers[action], root);
     root.addEventListener('input', event => {
-        const target = event.target as HTMLInputElement;
-        if (target.id === 'filter') {
-            handler(target.value);
+        const actions = current();
+        if (actions && (event.target as HTMLElement).id === 'filter') {
+            applyDumpFilter(root, actions);
+        }
+    });
+    root.addEventListener('change', event => {
+        const actions = current();
+        if (actions && (event.target as HTMLElement).id === 'showInherited') {
+            applyDumpFilter(root, actions);
         }
     });
 }

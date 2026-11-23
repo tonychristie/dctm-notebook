@@ -1,11 +1,4 @@
-import { ActionHandler, onActions } from './common';
-import { applyAttributeFilter, groupActions, onFilterInput } from './dumpPanelShared';
-
-export interface ObjectDumpMessage {
-    command: 'refresh' | 'copyValue' | 'dumpObject' | 'goBack' | 'goForward';
-    value?: string;
-    objectId?: string;
-}
+import { DumpActions, DumpMessage, groupActions, registerDumpActions } from './dumpPanelShared';
 
 function showNotification(root: ParentNode, message: string): void {
     const notification = root.querySelector('.copy-notification');
@@ -17,22 +10,25 @@ function showNotification(root: ParentNode, message: string): void {
     setTimeout(() => notification.classList.remove('show'), 2000);
 }
 
-export function registerObjectDumpActions(
-    root: Document | HTMLElement,
-    send: (message: ObjectDumpMessage) => void
-): void {
-    const handlers: Record<string, ActionHandler> = {
-        ...groupActions,
-        refresh: () => send({ command: 'refresh' }),
-        copyObjectId: el => send({ command: 'copyValue', value: el.dataset.value }),
-        goBack: () => send({ command: 'goBack' }),
-        goForward: () => send({ command: 'goForward' }),
-        copyValue: el => {
-            send({ command: 'copyValue', value: el.dataset.value });
-            showNotification(root, 'Copied to clipboard');
-        },
-        dumpObject: el => send({ command: 'dumpObject', objectId: el.dataset.value })
+export function objectDumpActions(root: ParentNode, send: (message: DumpMessage) => void): DumpActions {
+    return {
+        filterField: 'value',
+        handlers: {
+            ...groupActions,
+            refresh: () => send({ command: 'refresh' }),
+            copyObjectId: el => send({ command: 'copyValue', value: el.dataset.value }),
+            goBack: () => send({ command: 'goBack' }),
+            goForward: () => send({ command: 'goForward' }),
+            copyValue: el => {
+                send({ command: 'copyValue', value: el.dataset.value });
+                showNotification(root, 'Copied to clipboard');
+            },
+            dumpObject: el => send({ command: 'dumpObject', objectId: el.dataset.value })
+        }
     };
-    onActions(handlers, root);
-    onFilterInput(value => applyAttributeFilter(value, 'value', true, root), root);
+}
+
+export function registerObjectDumpActions(root: Document | HTMLElement, send: (message: DumpMessage) => void): void {
+    const actions = objectDumpActions(root, send);
+    registerDumpActions(root, () => actions);
 }

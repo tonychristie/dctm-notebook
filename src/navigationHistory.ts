@@ -24,6 +24,10 @@ export class NavigationHistory<T> {
         return this.entries[this.index];
     }
 
+    current(): T | undefined {
+        return this.entries[this.index];
+    }
+
     canGoBack(): boolean {
         return this.index > 0;
     }

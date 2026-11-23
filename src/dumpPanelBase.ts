@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
-import { escapeHtml } from './htmlUtils';
 import { RepositoryConnection } from './repositoryConnection';
-import { WebviewEntry, dumpPanelStylesheet, webviewAssets, webviewData, webviewResourceRoots } from './webviewHtml';
+import { WebviewEntry, webviewAssets, webviewData, webviewResourceRoots, webviewStylesheet } from './webviewHtml';
+import { errorFragment, loadingFragment } from './dumps/objectDump';
 
 export interface DumpPanelConfig {
     viewType: string;
@@ -131,7 +131,9 @@ export abstract class DumpPanelBase<TKey extends string, TData> {
 
     protected abstract renderContent(data: TData): string;
 
-    protected abstract pageData(data: TData): unknown;
+    protected pageData(_data: TData): unknown {
+        return {};
+    }
 
     protected abstract handleMessage(message: DumpPanelMessage): Promise<void>;
 
@@ -160,9 +162,9 @@ export abstract class DumpPanelBase<TKey extends string, TData> {
             <meta charset="UTF-8">
             ${assets.csp}
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            ${dumpPanelStylesheet(this.panel.webview, this.extensionUri)}
+            ${webviewStylesheet(this.panel.webview, this.extensionUri, 'dumpPanel')}
         </head>
-        <body ${bodyAttributes}>
+        <body class="dump-content" ${bodyAttributes}>
             ${body}
             ${assets.script}
         </body>
@@ -170,20 +172,11 @@ export abstract class DumpPanelBase<TKey extends string, TData> {
     }
 
     private loadingHtml(): string {
-        return this.page(`<div class="loader">
-                <div class="spinner"></div>
-                <div>Loading ${this.config.noun}...</div>
-            </div>`);
+        return this.page(loadingFragment(this.config.noun));
     }
 
     private errorHtml(key: TKey, error: string): string {
-        return this.page(`<div class="error-page">
-                <div class="error">
-                    <div class="error-title">Failed to load ${this.config.noun}: ${escapeHtml(key)}</div>
-                    <div>${escapeHtml(error)}</div>
-                    <button data-action="refresh">Retry</button>
-                </div>
-            </div>`);
+        return this.page(errorFragment(this.config.noun, key, error));
     }
 
     public dispose(): void {

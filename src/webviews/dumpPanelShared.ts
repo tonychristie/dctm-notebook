@@ -12,6 +12,10 @@ function setCollapsed(content: Element, collapsed: boolean): void {
     }
 }
 
+function dumpRoot(el: Element): ParentNode {
+    return el.closest('.dump-content') ?? document;
+}
+
 export const groupActions: Record<string, ActionHandler> = {
     toggleGroup: header => {
         const content = header.nextElementSibling;
@@ -19,17 +23,22 @@ export const groupActions: Record<string, ActionHandler> = {
             setCollapsed(content, !content.classList.contains('collapsed'));
         }
     },
-    collapseAll: () => document.querySelectorAll('.group-content').forEach(el => setCollapsed(el, true)),
-    expandAll: () => document.querySelectorAll('.group-content').forEach(el => setCollapsed(el, false))
+    collapseAll: el => dumpRoot(el).querySelectorAll('.group-content').forEach(content => setCollapsed(content, true)),
+    expandAll: el => dumpRoot(el).querySelectorAll('.group-content').forEach(content => setCollapsed(content, false))
 };
 
-export function applyAttributeFilter(filter: string, secondField: 'type' | 'value', showInherited: boolean = true): void {
-    document.querySelectorAll<HTMLElement>('.attribute').forEach(el => {
+export function applyAttributeFilter(
+    filter: string,
+    secondField: 'type' | 'value',
+    showInherited: boolean = true,
+    root: ParentNode = document
+): void {
+    root.querySelectorAll<HTMLElement>('.attribute').forEach(el => {
         const matches = matchesFilter(filter, el.dataset.name ?? '', el.dataset[secondField] ?? '');
         el.classList.toggle('hidden', !matches);
     });
 
-    document.querySelectorAll<HTMLElement>('.group[data-group]').forEach(group => {
+    root.querySelectorAll<HTMLElement>('.group[data-group]').forEach(group => {
         const visibleCount = group.querySelectorAll('.attribute:not(.hidden)').length;
         const countEl = group.querySelector('.group-header .count');
         if (countEl) {
@@ -40,8 +49,12 @@ export function applyAttributeFilter(filter: string, secondField: 'type' | 'valu
     });
 }
 
-export function onFilterInput(handler: (value: string) => void): void {
-    document.getElementById('filter')?.addEventListener('input', event => {
-        handler((event.target as HTMLInputElement).value);
+// Listens on the root, so a filter box in content that is replaced later still works.
+export function onFilterInput(handler: (value: string) => void, root: Document | HTMLElement = document): void {
+    root.addEventListener('input', event => {
+        const target = event.target as HTMLInputElement;
+        if (target.id === 'filter') {
+            handler(target.value);
+        }
     });
 }

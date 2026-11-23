@@ -41,6 +41,15 @@ suite('Navigation History Test Suite', () => {
             assert.strictEqual(history.canGoForward(), true);
         });
 
+        test('current follows the position in the history', () => {
+            assert.strictEqual(new NavigationHistory<string>().current(), undefined);
+            assert.strictEqual(history.current(), 'c');
+
+            history.back();
+
+            assert.strictEqual(history.current(), 'b');
+        });
+
         test('discards forward entries when an entry is added after moving back', () => {
             history.back();
             history.back();

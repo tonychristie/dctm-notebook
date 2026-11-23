@@ -13,6 +13,7 @@ import { registerDqlSemanticTokens } from './dqlSemanticTokens';
 import { registerApiMethodReference } from './apiMethodReference';
 import { registerNotebook } from './notebook';
 import { registerObjectDumpView } from './objectDumpView';
+import { registerConnectionWorkspace } from './workspace/connectionWorkspace';
 
 let connectionManager: ConnectionManager;
 let dqlExecutor: DqlExecutor;
@@ -103,6 +104,7 @@ export function activate(context: vscode.ExtensionContext) {
     }));
 
     registerObjectBrowser(context, connectionManager);
+    registerConnectionWorkspace(context, connectionManager);
     registerApiPanel(context, apiExecutor, connectionManager);
     registerConnectionsPanel(context, connectionManager);
     registerTypeBrowser(context, connectionManager);

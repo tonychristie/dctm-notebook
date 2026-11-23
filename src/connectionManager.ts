@@ -261,10 +261,10 @@ export class ConnectionManager implements vscode.Disposable {
         return { username, password };
     }
 
-    async connect(name?: string): Promise<void> {
+    async connect(name?: string): Promise<RepositoryConnection | undefined> {
         const target = name ?? await this.pickConnection();
         if (!target) {
-            return;
+            return undefined;
         }
 
         try {
@@ -272,9 +272,11 @@ export class ConnectionManager implements vscode.Disposable {
             if (connection) {
                 this.select(connection.name);
             }
+            return connection;
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             vscode.window.showErrorMessage(`Connection failed: ${message}`);
+            return undefined;
         }
     }
 

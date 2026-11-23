@@ -44,13 +44,13 @@ suite('DctmBridge Test Suite', () => {
 
     suite('ensureRunning', () => {
         test('creates the REST client on the REST port', async () => {
-            await createBridge().ensureRunning(undefined, 'rest');
+            await createBridge().ensureRunning('rest');
 
             assert.deepStrictEqual(baseUrls, ['http://localhost:9877']);
         });
 
         test('creates the DFC client on the DFC port', async () => {
-            await createBridge().ensureRunning(undefined, 'dfc');
+            await createBridge().ensureRunning('dfc');
 
             assert.deepStrictEqual(baseUrls, ['http://localhost:9876']);
         });
@@ -58,8 +58,8 @@ suite('DctmBridge Test Suite', () => {
         test('reuses an existing client whose health check passes', async () => {
             const bridge = createBridge();
 
-            await bridge.ensureRunning(undefined, 'dfc');
-            await bridge.ensureRunning(undefined, 'dfc');
+            await bridge.ensureRunning('dfc');
+            await bridge.ensureRunning('dfc');
 
             assert.strictEqual(baseUrls.length, 1);
             assert.strictEqual(clients[0].callsTo('get', '/health').length, 2);
@@ -67,10 +67,10 @@ suite('DctmBridge Test Suite', () => {
 
         test('builds a new client when the configured port changes, even when the old client is healthy', async () => {
             const bridge = createBridge();
-            await bridge.ensureRunning(undefined, 'dfc');
+            await bridge.ensureRunning('dfc');
 
             await setBridgeSetting('port', 9999);
-            await bridge.ensureRunning(undefined, 'dfc');
+            await bridge.ensureRunning('dfc');
 
             assert.deepStrictEqual(baseUrls, ['http://localhost:9876', 'http://localhost:9999']);
         });
@@ -80,7 +80,7 @@ suite('DctmBridge Test Suite', () => {
                 throw new Error('connection refused');
             });
 
-            await assert.rejects(bridge.ensureRunning(undefined, 'rest'));
+            await assert.rejects(bridge.ensureRunning('rest'));
         });
     });
 
@@ -91,7 +91,7 @@ suite('DctmBridge Test Suite', () => {
 
         test('posts a REST body with endpoint and no docbroker or port', async () => {
             const bridge = createBridge();
-            await bridge.ensureRunning(undefined, 'rest');
+            await bridge.ensureRunning('rest');
 
             await bridge.connect({
                 endpoint: 'http://dctm:8080/dctm-rest',
@@ -112,7 +112,7 @@ suite('DctmBridge Test Suite', () => {
 
         test('posts a DFC body with docbroker and port', async () => {
             const bridge = createBridge();
-            await bridge.ensureRunning(undefined, 'dfc');
+            await bridge.ensureRunning('dfc');
 
             await bridge.connect({ docbroker: 'broker', port: 1500, repository: 'repo', username: 'user', password: 'pass' });
 
@@ -127,7 +127,7 @@ suite('DctmBridge Test Suite', () => {
 
         test('defaults the DFC docbroker to empty and the port to 1489', async () => {
             const bridge = createBridge();
-            await bridge.ensureRunning(undefined, 'dfc');
+            await bridge.ensureRunning('dfc');
 
             await bridge.connect({ repository: 'repo', username: 'user', password: 'pass' });
 
@@ -139,8 +139,8 @@ suite('DctmBridge Test Suite', () => {
 
     suite('session routing', () => {
         async function connectBoth(bridge: DctmBridge) {
-            await bridge.ensureRunning(undefined, 'rest');
-            await bridge.ensureRunning(undefined, 'dfc');
+            await bridge.ensureRunning('rest');
+            await bridge.ensureRunning('dfc');
             const restSession = await bridge.connect({
                 endpoint: 'http://dctm:8080/dctm-rest',
                 repository: 'repo',
@@ -219,11 +219,11 @@ suite('DctmBridge Test Suite', () => {
     suite('bridge change with an open session', () => {
         test('every call on the session goes to the client it was created with', async () => {
             const bridge = createBridge();
-            await bridge.ensureRunning(undefined, 'dfc');
+            await bridge.ensureRunning('dfc');
             const session = await bridge.connect({ repository: 'repo', username: 'user', password: 'pass' });
 
             await setBridgeSetting('port', 9999);
-            await bridge.ensureRunning(undefined, 'dfc');
+            await bridge.ensureRunning('dfc');
 
             await bridge.executeDql(session, 'SELECT 1 FROM dm_server_config');
             await bridge.executeApi(session, '', 'getSessionId', {});
@@ -241,10 +241,10 @@ suite('DctmBridge Test Suite', () => {
 
         test('a new connection goes to the new client', async () => {
             const bridge = createBridge();
-            await bridge.ensureRunning(undefined, 'dfc');
+            await bridge.ensureRunning('dfc');
 
             await setBridgeSetting('port', 9999);
-            await bridge.ensureRunning(undefined, 'dfc');
+            await bridge.ensureRunning('dfc');
             await bridge.connect({ repository: 'repo', username: 'user', password: 'pass' });
 
             assert.strictEqual(clients[0].callsTo('post', '/api/v1/connect').length, 0);
@@ -254,7 +254,7 @@ suite('DctmBridge Test Suite', () => {
 
     suite('query timeout', () => {
         async function connectDfc(bridge: DctmBridge) {
-            await bridge.ensureRunning(undefined, 'dfc');
+            await bridge.ensureRunning('dfc');
             const session = await bridge.connect({ repository: 'repo', username: 'user', password: 'pass' });
             return { client: clients[0], session };
         }

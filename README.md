@@ -18,6 +18,43 @@ A VS Code notebook interface for DQL queries with REST and DFC connectivity to O
 3. Click the `...` menu and select "Install from VSIX..."
 4. Select the downloaded file
 
+## Getting connected
+
+1. **Start the bridge**: the DFC Bridge for DFC connections, the REST Bridge for REST connections. If it is not on `localhost:9876` (DFC) or `localhost:9877` (REST), set `documentum.bridge.host`, `documentum.bridge.port` and `documentum.bridge.restPort`.
+2. **Add a connection**: run "Documentum: Manage Connections", or click "Add Connection" in the Documentum Explorer. Use Test Connection to check it.
+3. **Connect**: click the plug button on the connection in the Explorer, or click the Documentum status bar item. Enter the password when asked. Passwords are not stored and are asked for on each connect.
+4. **Notebooks**: a notebook uses the selected connection, or the connection it is bound to with "Bind to Connection" in the notebook toolbar.
+
+### Connection fields
+
+Connections are stored in `documentum.connections` in the user or workspace `settings.json`.
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `name` | DFC and REST | Yes | | Connection name, unique among the connections |
+| `type` | DFC and REST | Yes | `dfc` | `dfc` connects through the DFC Bridge, `rest` through the REST Bridge |
+| `repository` | DFC and REST | Yes | | Repository name |
+| `username` | DFC and REST | No | | When empty, the username is asked for on connect |
+| `docbroker` | DFC | Yes | | Docbroker host name or IP address |
+| `port` | DFC | Yes | `1489` | Docbroker port |
+| `endpoint` | REST | Yes | | REST API endpoint URL |
+
+A DFC connection:
+
+```json
+"documentum.connections": [
+  { "name": "dctm_242", "type": "dfc", "repository": "dctm_242", "docbroker": "127.0.0.1", "port": 1489 }
+]
+```
+
+A REST connection:
+
+```json
+"documentum.connections": [
+  { "name": "dctm_242_rest", "type": "rest", "repository": "dctm_242", "endpoint": "http://127.0.0.1:8080/dctm-rest" }
+]
+```
+
 ## Features
 
 ### DQL Editor
@@ -287,8 +324,6 @@ For users who prefer minimal colour variation, this palette uses font styles as 
 This extension contributes the following settings:
 
 * `documentum.connections`: List of Documentum connection configurations
-* `documentum.defaultConnection`: Name of the default connection
-* `documentum.dfc.profiles`: DFC profile configurations
 * `documentum.bridge.host`: Hostname or IP address where the bridge services are running (default: localhost)
 * `documentum.bridge.port`: Port for DFC Bridge microservice (default: 9876)
 * `documentum.bridge.restPort`: Port for REST Bridge microservice (default: 9877)

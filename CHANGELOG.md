@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- `documentum.defaultConnection` and `documentum.dfc.profiles` settings, and the `dfcProfile` field of a connection. None of them had any effect.
+
+### Fixed
+- The Explorer now updates when connection settings change. An open connection whose settings change is disconnected.
+
 ### Changed
 - Renamed `DfcBridge` to `DctmBridge` to better reflect its role as a unified interface to Documentum (both DFC and REST)
 - Refactored bridge architecture to use polymorphism instead of if/else branching:
@@ -17,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Explorer, Users browser, and Groups browser now use REST endpoints instead of DQL when connected via REST. This improves compatibility with REST-only Documentum setups where DQL may not be available.
 
 ### Added
+- "Documentum: Manage Connections" panel to add, edit, duplicate, delete and test connections without editing `settings.json`
+- Completion snippets for a DFC and a REST connection in `documentum.connections`, and a problem marker for a DFC connection without `docbroker` or a REST connection without `endpoint`
 - New `bridgeTypes.ts` with shared type definitions (`ObjectInfo`, `UserInfo`, `GroupInfo`, etc.)
 - New `dfcBridgeImpl.ts` with pure DFC/DQL implementation of `IUnifiedBridge`
 - New `restBridgeImpl.ts` with pure REST implementation of `IUnifiedBridge`

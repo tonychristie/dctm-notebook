@@ -4,6 +4,7 @@ import { escapeHtml } from './htmlUtils';
 
 export type WebviewEntry =
     | 'apiPanel'
+    | 'connectionsPanel'
     | 'objectDumpPanel'
     | 'typeDumpPanel'
     | 'userDumpPanel'

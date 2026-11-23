@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { DfcProfile } from './connectionManager';
 import { extractBridgeError } from './errorUtils';
 import {
     ObjectInfo,
@@ -75,7 +74,6 @@ export function createBridgeClient(baseUrl: string): AxiosInstance {
  *
  * This allows:
  * - DFC operations from TypeScript without Java bindings
- * - Multiple DFC profiles (different DFC versions per environment)
  * - REST-only connections without DFC
  * - Process isolation between extension and backend
  * - Adding new connection types by implementing IUnifiedBridge
@@ -141,10 +139,9 @@ export class DctmBridge {
      * Each connection type maintains its own client, so DFC and REST
      * connections can coexist simultaneously.
      *
-     * @param profile Optional DFC profile configuration
-     * @param connectionType The connection type ('dfc' or 'rest'), defaults to 'dfc'
+     * @param connectionType The connection type ('dfc' or 'rest')
      */
-    async ensureRunning(profile?: DfcProfile, connectionType: ConnectionType = 'dfc'): Promise<void> {
+    async ensureRunning(connectionType: ConnectionType): Promise<void> {
         const config = this.getConfig();
         const baseUrl = this.getBaseUrlForType(connectionType);
 
@@ -176,7 +173,7 @@ export class DctmBridge {
         const bridgeName = connectionType === 'rest' ? 'REST Bridge' : 'DFC Bridge';
         const port = connectionType === 'rest' ? config.restPort : config.port;
         throw new Error(
-            `${bridgeName} not running on port ${port}. ` +
+            `${bridgeName} not running at ${config.host}:${port}. ` +
             `Please start the bridge manually.`
         );
     }

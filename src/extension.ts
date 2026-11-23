@@ -5,6 +5,7 @@ import { ResultsPanel } from './resultsPanel';
 import { registerObjectBrowser } from './objectBrowser';
 import { ApiExecutor } from './apiExecutor';
 import { registerApiPanel } from './apiPanel';
+import { registerConnectionsPanel } from './connectionsPanel';
 import { registerTypeBrowser } from './typeBrowser';
 import { registerUserBrowser } from './userBrowser';
 import { registerGroupBrowser } from './groupBrowser';
@@ -103,6 +104,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     registerObjectBrowser(context, connectionManager);
     registerApiPanel(context, apiExecutor, connectionManager);
+    registerConnectionsPanel(context, connectionManager);
     registerTypeBrowser(context, connectionManager);
     registerDqlSemanticTokens(context, connectionManager);
     registerUserBrowser(context, connectionManager);

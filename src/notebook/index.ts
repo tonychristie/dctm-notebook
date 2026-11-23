@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import { DctmNotebookSerializer } from './notebookSerializer';
 import { DctmNotebookController } from './notebookController';
 import { registerNotebookCompletions } from './notebookCompletionProvider';
-import { ConnectionManager, describeConnection } from '../connectionManager';
+import { ConnectionManager, openNewConnectionForm } from '../connectionManager';
+import { describeConnection } from '../connectionForm';
 import { DqlExecutor } from '../dqlExecutor';
 import { ApiExecutor } from '../apiExecutor';
 import { ApiMethodReference } from '../apiMethodReference';
@@ -307,9 +308,13 @@ function registerNotebookCommands(
 
             const connections = connectionManager.getConnections();
             if (connections.length === 0) {
-                vscode.window.showWarningMessage(
-                    'No connections configured. Add connections in settings first.'
+                const action = await vscode.window.showWarningMessage(
+                    'No connections configured.',
+                    'Manage Connections'
                 );
+                if (action === 'Manage Connections') {
+                    void openNewConnectionForm();
+                }
                 return;
             }
 

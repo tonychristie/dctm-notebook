@@ -33,14 +33,17 @@ export class ObjectBrowserProvider implements vscode.TreeDataProvider<ObjectBrow
 
     private connectionManager: ConnectionManager;
     private readonly openConnectionsSubscription: vscode.Disposable;
+    private readonly connectionsSubscription: vscode.Disposable;
 
     constructor(connectionManager: ConnectionManager) {
         this.connectionManager = connectionManager;
         this.openConnectionsSubscription = connectionManager.onDidChangeOpenConnections(() => this.refresh());
+        this.connectionsSubscription = connectionManager.onDidChangeConnections(() => this.refresh());
     }
 
     dispose(): void {
         this.openConnectionsSubscription.dispose();
+        this.connectionsSubscription.dispose();
         this._onDidChangeTreeData.dispose();
     }
 

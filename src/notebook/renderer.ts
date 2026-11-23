@@ -9,7 +9,7 @@
  */
 
 import type { RendererContext, OutputItem } from 'vscode-notebook-renderer';
-import { escapeHtml, isObjectId } from '../htmlUtils';
+import { escapeHtml, isObjectIdLink } from '../htmlUtils';
 import { formatResultWithLinks } from '../webviewLogic';
 import styles from './renderer.css';
 
@@ -302,7 +302,7 @@ function renderDqlResult(
                 let displayValue: string;
                 if (value === null || value === undefined) {
                     displayValue = '<span class="null-value">NULL</span>';
-                } else if (isObjectId(value) && (col === 'r_object_id' || col.endsWith('_id'))) {
+                } else if (isObjectIdLink(value) && (col === 'r_object_id' || col.endsWith('_id'))) {
                     displayValue = `<span class="object-id" data-object-id="${escapeHtml(String(value))}">${escapeHtml(String(value))}</span>`;
                 } else {
                     displayValue = escapeHtml(String(value));

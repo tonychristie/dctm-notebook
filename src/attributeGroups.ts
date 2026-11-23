@@ -1,5 +1,5 @@
 import { BridgeAttributeValue } from './bridgeTypes';
-import { isObjectId } from './htmlUtils';
+import { isObjectIdLink } from './htmlUtils';
 
 export type TypeAttributeGroup = 'custom' | 'standard' | 'system' | 'application' | 'internal';
 export type ObjectAttributeGroup = TypeAttributeGroup;
@@ -177,7 +177,7 @@ export interface AttributeValueDisplay {
 export function describeAttributeValue(value: unknown): AttributeValueDisplay {
     const text = value === null || value === undefined ? 'null' : String(value);
     const isEmpty = value === null || value === undefined || text === '';
-    return { text, isEmpty, isObjectId: !isEmpty && isObjectId(text) };
+    return { text, isEmpty, isObjectId: !isEmpty && isObjectIdLink(text) };
 }
 
 export function formatTypeDisplay(attr: { dataType: string; length: number }): string {

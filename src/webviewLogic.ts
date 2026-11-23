@@ -1,5 +1,5 @@
 import type { MethodInfo, ParameterInfo } from './apiExecutor';
-import { escapeHtml } from './htmlUtils';
+import { escapeHtml, isObjectIdLink } from './htmlUtils';
 
 export { formatValue as formatResult } from './notebook/commandParsing';
 
@@ -68,7 +68,8 @@ export function isGroupVisible(isInherited: boolean, showInherited: boolean, vis
 }
 
 export function formatResultWithLinks(text: string): string {
-    return escapeHtml(text).replace(/\b([0-9a-f]{16})\b/gi, match =>
-        `<span class="object-id" data-object-id="${escapeHtml(match)}">${escapeHtml(match)}</span>`
+    return escapeHtml(text).replace(/\b([0-9a-f]{16})\b/gi, match => isObjectIdLink(match)
+        ? `<span class="object-id" data-object-id="${escapeHtml(match)}">${escapeHtml(match)}</span>`
+        : match
     );
 }

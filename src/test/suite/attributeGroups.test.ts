@@ -190,6 +190,13 @@ suite('Attribute Groups Test Suite', () => {
         test('marks other values as plain', () => {
             assert.deepStrictEqual(describeAttributeValue(0), { text: '0', isEmpty: false, isObjectId: false });
         });
+
+        test('marks the null ID as plain', () => {
+            assert.deepStrictEqual(
+                describeAttributeValue('0000000000000000'),
+                { text: '0000000000000000', isEmpty: false, isObjectId: false }
+            );
+        });
     });
 
     suite('formatTypeDisplay', () => {

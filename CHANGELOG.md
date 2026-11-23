@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - The Explorer now updates when connection settings change. An open connection whose settings change is disconnected.
 - DQL results are no longer cut at 100 rows. Queries in notebooks and DQL files, and the user, cabinet and folder lists, return every row.
+- The null object ID `0000000000000000` shows as a plain value in dumps, notebook results and API results, not as a link that fails to load.
 
 ### Changed
 - Renamed `DfcBridge` to `DctmBridge` to better reflect its role as a unified interface to Documentum (both DFC and REST)

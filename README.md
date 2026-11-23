@@ -142,7 +142,7 @@ The API tab of a connection workspace executes DFC methods on repository objects
 
 ### Executing Methods
 
-1. **Enter Object ID** (optional): If you're executing methods on a specific object, enter its `r_object_id`. Leave empty for session-level operations like `getSessionId`.
+1. **Enter Object ID** (optional): If you're executing methods on a specific object, enter its `r_object_id`. Leave empty for session-level operations like `getSessionId`. The methods in the Session category always run on the session, even when the box holds an object ID.
 
 2. **Select a Method**:
    - Browse methods by category (Object Operations, Query, Version Control, etc.)
@@ -182,6 +182,7 @@ The API tab of a connection workspace executes DFC methods on repository objects
 
 | Category | Description | Example Methods |
 |----------|-------------|-----------------|
+| Session | Session and repository information; runs on the session, never on the object ID | `getSessionId`, `getLoginTicket`, `getDocbaseName`, `getServerVersion` |
 | Object Operations | Basic object manipulation | `save`, `destroy`, `fetch`, `revert` |
 | Query | Execute queries and get values | `query`, `next`, `getString`, `getInt` |
 | Version Control | Document versioning | `checkout`, `checkin`, `cancelCheckout` |

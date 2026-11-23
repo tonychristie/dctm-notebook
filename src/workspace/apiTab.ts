@@ -1,4 +1,4 @@
-import { ApiMethodRequest, ApiMethodResponse } from '../apiExecutor';
+import { ApiMethodRequest, ApiMethodResponse, isSessionMethod } from '../apiExecutor';
 import { RepositoryConnection } from '../repositoryConnection';
 import { formatResult } from '../webviewLogic';
 import { DumpTarget, OpenConnections } from './dumpTab';
@@ -81,7 +81,9 @@ export class ApiTab {
             if (!connection) {
                 throw new Error(`Not connected to ${this.connectionName}`);
             }
-            const response = await this.executor.execute({ objectId, method, args }, connection);
+            // The bridge runs a request with no object ID on the session.
+            const target = isSessionMethod(method) ? undefined : objectId;
+            const response = await this.executor.execute({ objectId: target, method, args }, connection);
             this.addToHistory(method, formatResult(response.result).substring(0, 100), true);
             this.post({
                 type: 'apiResult',

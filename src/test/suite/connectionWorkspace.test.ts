@@ -288,6 +288,17 @@ suite('ConnectionWorkspace Test Suite', () => {
         assert.strictEqual(result.executionTimeMs, 5);
     });
 
+    test('a session method runs on the session even with an object ID in the box', async () => {
+        const { workspaces, connections, panels, apiExecutor } = harness();
+        connections.openNow('conn1');
+        workspaces.show('conn1');
+
+        await panels[0].send({ tab: 'api', command: 'execute', objectId: '0900000180000001', method: 'getLoginTicket' });
+        await panels[0].send({ tab: 'api', command: 'execute', objectId: '0900000180000001', method: 'getObjectName' });
+
+        assert.deepStrictEqual(apiExecutor.calls.map(call => call.request.objectId), [undefined, '0900000180000001']);
+    });
+
     test('the API history survives a page reload', async () => {
         const { workspaces, connections, panels } = harness();
         connections.openNow('conn1');

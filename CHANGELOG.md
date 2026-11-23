@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Connection workspace: one editor tab per connection, opened by clicking the connection in the Explorer or with "Documentum: Open Workspace". It has a Cabinets tab to browse cabinets, folders and documents, and a Dump tab with Back, Forward and an object ID box.
 - Types, Users and Groups tabs in the connection workspace, with search, Refresh, and Dump and Generate DQL Query on the context menu. Type, user and group dumps show in the Dump tab and share its history with object dumps.
 - API tab in the connection workspace, to execute API methods on the workspace's connection. Execute API Method on a cabinet, folder or document shows it with the object ID filled in.
+- Session methods in the API tab: `getSessionId`, `getLoginTicket`, `getLoginUserName`, `getDocbaseName`, `getDocbaseId`, `getDocbaseOwnerName`, `getServerVersion`, `getDBMSName` and `isConnected`. They run on the session, so the README's Get Session Information example works.
 - New DQL notebook and Open notebook buttons in the connection workspace header. Both open a notebook bound to the workspace's connection.
 - "Documentum: Manage Connections" panel to add, edit, duplicate, delete and test connections without editing `settings.json`
 - Completion snippets for a DFC and a REST connection in `documentum.connections`, and a problem marker for a DFC connection without `docbroker` or a REST connection without `endpoint`

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - `documentum.defaultConnection` and `documentum.dfc.profiles` settings, and the `dfcProfile` field of a connection. None of them had any effect.
+- The standalone API panel and the "Documentum: Open API Panel" command. The API tab of the connection workspace replaces them.
 
 ### Fixed
 - The Explorer now updates when connection settings change. An open connection whose settings change is disconnected.
@@ -27,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Connection workspace: one editor tab per connection, opened by clicking the connection in the Explorer or with "Documentum: Open Workspace". It has a Cabinets tab to browse cabinets, folders and documents, and a Dump tab with Back, Forward and an object ID box.
 - Types, Users and Groups tabs in the connection workspace, with search, Refresh, and Dump and Generate DQL Query on the context menu. Type, user and group dumps show in the Dump tab and share its history with object dumps.
+- API tab in the connection workspace, to execute API methods on the workspace's connection. Execute API Method on a cabinet, folder or document shows it with the object ID filled in.
+- New DQL notebook and Open notebook buttons in the connection workspace header. Both open a notebook bound to the workspace's connection.
 - "Documentum: Manage Connections" panel to add, edit, duplicate, delete and test connections without editing `settings.json`
 - Completion snippets for a DFC and a REST connection in `documentum.connections`, and a problem marker for a DFC connection without `docbroker` or a REST connection without `endpoint`
 - New `bridgeTypes.ts` with shared type definitions (`ObjectInfo`, `UserInfo`, `GroupInfo`, etc.)

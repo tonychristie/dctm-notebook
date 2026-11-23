@@ -1,16 +1,19 @@
 import * as vscode from 'vscode';
+import { COMMON_DFC_METHODS, MethodInfo } from '../apiExecutor';
 import { ConnectionManager } from '../connectionManager';
-import { extractConnectionName } from '../apiPanel';
+import { bindNotebook, boundConnectionName, openNotebookAction } from '../notebook/notebookConnection';
 import { RepositoryConnection } from '../repositoryConnection';
 import { webviewAssets, webviewResourceRoots, webviewStylesheet } from '../webviewHtml';
+import { ApiExecute, ApiRequest, ApiTab } from './apiTab';
 import { CabinetsRequest, CabinetsTab } from './cabinetsTab';
 import { DumpTab, DumpTabRequest, DumpTarget } from './dumpTab';
 import { ENTITY_TABS, EntityRequest, EntityTab, EntityTabName, isEntityTabName } from './entityTab';
 import { isEntityKind, openEntityQuery } from './entityQuery';
+import { extractConnectionName } from './objectCommands';
 
 export const WORKSPACE_VIEW_TYPE = 'dctmConnectionWorkspace';
 
-export type WorkspaceTab = 'cabinets' | EntityTabName | 'dump';
+export type WorkspaceTab = 'cabinets' | EntityTabName | 'dump' | 'api';
 
 export interface WorkspacePageState {
     connectionName: string;
@@ -25,14 +28,18 @@ export interface WorkspaceStateMessage {
     connected: boolean;
     generation: number;
     activeTab: WorkspaceTab;
+    apiMethods: Record<string, MethodInfo[]>;
 }
 
 type PageMessage =
     | { command: 'ready' }
     | { command: 'selectTab'; selected: WorkspaceTab }
     | { command: 'connect' }
+    | { command: 'newNotebook' }
+    | { command: 'openNotebook' }
     | ({ tab: 'dump' } & DumpTabRequest)
     | ({ tab: 'cabinets' } & CabinetsRequest)
+    | ({ tab: 'api' } & ApiRequest)
     | ({ tab: EntityTabName } & EntityRequest);
 
 export type WorkspaceConnections = Pick<
@@ -40,16 +47,27 @@ export type WorkspaceConnections = Pick<
     'getOpenConnection' | 'getConnections' | 'onDidChangeOpenConnections' | 'onDidChangeConnections' | 'connect'
 >;
 
+export interface WorkspaceNotebooks {
+    newNotebook(connectionName: string): Promise<void>;
+    openNotebook(connectionName: string): Promise<void>;
+}
+
+export interface WorkspaceServices {
+    apiExecutor: ApiExecute;
+    notebooks: WorkspaceNotebooks;
+}
+
 export type PanelFactory = (title: string) => vscode.WebviewPanel;
 
 export function isWorkspaceTab(value: unknown): value is WorkspaceTab {
-    return value === 'cabinets' || value === 'dump' || isEntityTabName(value);
+    return value === 'cabinets' || value === 'dump' || value === 'api' || isEntityTabName(value);
 }
 
 export class ConnectionWorkspace {
     readonly dump: DumpTab;
     readonly cabinets: CabinetsTab;
     readonly entities: Record<EntityTabName, EntityTab>;
+    readonly api: ApiTab;
     private activeTab: WorkspaceTab;
     private connection: RepositoryConnection | undefined;
     private generation = 0;
@@ -60,6 +78,7 @@ export class ConnectionWorkspace {
         readonly connectionName: string,
         extensionUri: vscode.Uri,
         private readonly connections: WorkspaceConnections,
+        private readonly services: WorkspaceServices,
         activeTab: WorkspaceTab,
         onDispose: () => void
     ) {
@@ -75,6 +94,7 @@ export class ConnectionWorkspace {
         const entityTab = (tab: EntityTabName) =>
             new EntityTab(connectionName, connections, ENTITY_TABS[tab], post, target => this.showDump(target));
         this.entities = { types: entityTab('types'), users: entityTab('users'), groups: entityTab('groups') };
+        this.api = new ApiTab(connectionName, connections, services.apiExecutor, post, target => this.showDump(target));
         this.watchCaches();
 
         panel.title = connectionName;
@@ -102,12 +122,21 @@ export class ConnectionWorkspace {
         await this.dump.show(target);
     }
 
+    showApi(objectId?: string): void {
+        this.selectTab('api');
+        if (objectId) {
+            this.api.setObjectId(objectId);
+        }
+    }
+
     private async onMessage(message: PageMessage): Promise<void> {
         if ('tab' in message) {
             if (message.tab === 'dump') {
                 await this.dump.handleMessage(message);
             } else if (message.tab === 'cabinets') {
                 await this.cabinets.handleMessage(message);
+            } else if (message.tab === 'api') {
+                await this.api.handleMessage(message);
             } else {
                 await this.entities[message.tab].handleMessage(message);
             }
@@ -118,12 +147,19 @@ export class ConnectionWorkspace {
             case 'ready':
                 this.postState();
                 this.dump.ready();
+                this.api.ready();
                 break;
             case 'selectTab':
                 this.activeTab = message.selected;
                 break;
             case 'connect':
                 await this.connections.connect(this.connectionName);
+                break;
+            case 'newNotebook':
+                await this.services.notebooks.newNotebook(this.connectionName);
+                break;
+            case 'openNotebook':
+                await this.services.notebooks.openNotebook(this.connectionName);
                 break;
         }
     }
@@ -162,7 +198,8 @@ export class ConnectionWorkspace {
             username: this.connection?.username ?? config?.username ?? '',
             connected: this.connection !== undefined,
             generation: this.generation,
-            activeTab: this.activeTab
+            activeTab: this.activeTab,
+            apiMethods: COMMON_DFC_METHODS
         };
         void this.panel.webview.postMessage(message);
     }
@@ -181,8 +218,18 @@ export class ConnectionWorkspace {
 <body data-vscode-context='{"preventDefaultContextMenuItems": true}'>
     <div class="workspace">
         <header class="ws-header">
-            <div class="ws-title"><span class="codicon codicon-database"></span><span id="wsName"></span></div>
-            <div class="ws-info" id="wsInfo"></div>
+            <div class="ws-heading">
+                <div class="ws-title"><span class="codicon codicon-database"></span><span id="wsName"></span></div>
+                <div class="ws-info" id="wsInfo"></div>
+            </div>
+            <div class="ws-actions">
+                <button id="wsNewNotebook" title="Open a new notebook bound to this connection">
+                    <span class="codicon codicon-new-file"></span> New DQL notebook
+                </button>
+                <button id="wsOpenNotebook" title="Open a notebook and bind it to this connection">
+                    <span class="codicon codicon-notebook"></span> Open notebook
+                </button>
+            </div>
         </header>
         <div class="ws-banner" id="wsBanner" hidden>
             <span class="codicon codicon-debug-disconnect"></span>
@@ -195,6 +242,7 @@ export class ConnectionWorkspace {
             <button role="tab" id="tab-users" data-tab="users" aria-controls="panel-users">Users</button>
             <button role="tab" id="tab-groups" data-tab="groups" aria-controls="panel-groups">Groups</button>
             <button role="tab" id="tab-dump" data-tab="dump" aria-controls="panel-dump">Dump</button>
+            <button role="tab" id="tab-api" data-tab="api" aria-controls="panel-api">API</button>
         </div>
         <div class="ws-panels">
             <section class="ws-panel cabinets-tab" role="tabpanel" id="panel-cabinets" aria-labelledby="tab-cabinets">
@@ -223,6 +271,7 @@ export class ConnectionWorkspace {
                     <div class="dump-empty">Enter an object ID, or click a document in the Cabinets tab.</div>
                 </div>
             </section>
+            ${API_PANEL}
         </div>
     </div>
     ${assets.script}
@@ -246,6 +295,40 @@ function entityPanel(tab: EntityTabName, label: string): string {
             </section>`;
 }
 
+const API_PANEL = `<section class="ws-panel api-tab" role="tabpanel" id="panel-api" aria-labelledby="tab-api" hidden>
+                <div class="api-section">
+                    <label for="apiObjectId">Object ID (r_object_id)</label>
+                    <input type="text" id="apiObjectId" placeholder="0900000180001234" spellcheck="false">
+                    <span class="api-info">Leave empty for session-level operations. Execute API Method on an item in the Cabinets tab fills it in.</span>
+                </div>
+                <div class="api-section">
+                    <h3>Method</h3>
+                    <label for="apiMethodSearch">Search Methods</label>
+                    <input type="text" id="apiMethodSearch" placeholder="Type to search methods..." spellcheck="false">
+                    <div class="api-categories"></div>
+                    <div class="api-method-list"></div>
+                </div>
+                <div class="api-section api-parameters" hidden>
+                    <h3>Parameters</h3>
+                    <div class="api-parameter-inputs"></div>
+                </div>
+                <div class="api-actions">
+                    <button class="api-execute" data-action="execute" disabled>Execute</button>
+                    <button class="secondary" data-action="clearForm">Clear</button>
+                </div>
+                <div class="api-result" hidden>
+                    <div class="api-result-header">
+                        <span>Result</span>
+                        <span class="api-info api-execution-time"></span>
+                    </div>
+                    <div class="api-result-content"></div>
+                </div>
+                <div class="api-history" hidden>
+                    <h3>Execution History</h3>
+                    <div class="api-history-list"></div>
+                </div>
+            </section>`;
+
 function createWorkspacePanel(extensionUri: vscode.Uri): PanelFactory {
     return title => vscode.window.createWebviewPanel(
         WORKSPACE_VIEW_TYPE,
@@ -265,6 +348,7 @@ export class ConnectionWorkspaces implements vscode.Disposable {
     constructor(
         private readonly extensionUri: vscode.Uri,
         private readonly connections: WorkspaceConnections,
+        private readonly services: WorkspaceServices,
         private readonly createPanel: PanelFactory = createWorkspacePanel(extensionUri)
     ) {
     }
@@ -290,6 +374,10 @@ export class ConnectionWorkspaces implements vscode.Disposable {
         await this.show(connectionName).showDump(target);
     }
 
+    showApi(connectionName: string, objectId?: string): void {
+        this.show(connectionName).showApi(objectId);
+    }
+
     revive(panel: vscode.WebviewPanel, state: WorkspacePageState | undefined): void {
         const name = state?.connectionName;
         const configured = name !== undefined && this.connections.getConnections().some(c => c.name === name);
@@ -303,8 +391,8 @@ export class ConnectionWorkspaces implements vscode.Disposable {
     }
 
     private add(panel: vscode.WebviewPanel, connectionName: string, tab: WorkspaceTab): ConnectionWorkspace {
-        const workspace = new ConnectionWorkspace(panel, connectionName, this.extensionUri, this.connections, tab,
-            () => this.workspaces.delete(connectionName));
+        const workspace = new ConnectionWorkspace(panel, connectionName, this.extensionUri, this.connections,
+            this.services, tab, () => this.workspaces.delete(connectionName));
         this.workspaces.set(connectionName, workspace);
         return workspace;
     }
@@ -322,11 +410,56 @@ interface WorkspaceItemContext {
     name?: string;
 }
 
+async function newDqlNotebook(connectionName: string): Promise<void> {
+    const data = new vscode.NotebookData([
+        new vscode.NotebookCellData(vscode.NotebookCellKind.Code, '', 'dql')
+    ]);
+    data.metadata = { connection: connectionName };
+    const notebook = await vscode.workspace.openNotebookDocument('dctmbook', data);
+    await vscode.window.showNotebookDocument(notebook);
+}
+
+async function openNotebookFor(connectionName: string): Promise<void> {
+    const uris = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        filters: { 'Documentum Notebook': ['dctmbook'] },
+        openLabel: 'Open notebook'
+    });
+    if (!uris || uris.length === 0) {
+        return;
+    }
+
+    const notebook = await vscode.workspace.openNotebookDocument(uris[0]);
+    const boundName = boundConnectionName(notebook.metadata);
+    const action = openNotebookAction(boundName, connectionName);
+    if (action === 'ask') {
+        const choice = await vscode.window.showWarningMessage(
+            `Notebook is bound to "${boundName}". Bind it to "${connectionName}"?`,
+            { modal: true },
+            'Bind',
+            'Open as is'
+        );
+        if (!choice) {
+            return;
+        }
+        if (choice === 'Bind') {
+            await bindNotebook(notebook, connectionName);
+        }
+    } else if (action === 'bind') {
+        await bindNotebook(notebook, connectionName);
+    }
+    await vscode.window.showNotebookDocument(notebook);
+}
+
 export function registerConnectionWorkspace(
     context: vscode.ExtensionContext,
-    connectionManager: ConnectionManager
+    connectionManager: ConnectionManager,
+    apiExecutor: ApiExecute
 ): ConnectionWorkspaces {
-    const workspaces = new ConnectionWorkspaces(context.extensionUri, connectionManager);
+    const workspaces = new ConnectionWorkspaces(context.extensionUri, connectionManager, {
+        apiExecutor,
+        notebooks: { newNotebook: newDqlNotebook, openNotebook: openNotebookFor }
+    });
 
     context.subscriptions.push(
         workspaces,

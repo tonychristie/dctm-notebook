@@ -1,10 +1,13 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import { ApiMethodRequest, ApiMethodResponse } from '../../apiExecutor';
 import { DocumentumConnection } from '../../connectionManager';
 import { RepositoryConnection } from '../../repositoryConnection';
+import { ApiExecute } from '../../workspace/apiTab';
 import {
     ConnectionWorkspaces,
     WorkspaceConnections,
+    WorkspaceNotebooks,
     WorkspaceStateMessage
 } from '../../workspace/connectionWorkspace';
 
@@ -112,21 +115,51 @@ class FakeConnections implements WorkspaceConnections {
     }
 }
 
+class FakeApiExecutor implements ApiExecute {
+    readonly calls: Array<{ request: ApiMethodRequest; connection: RepositoryConnection }> = [];
+
+    async execute(request: ApiMethodRequest, connection: RepositoryConnection): Promise<ApiMethodResponse> {
+        this.calls.push({ request, connection });
+        return { result: `result of ${request.method}`, resultType: 'String', executionTimeMs: 5 };
+    }
+}
+
+class FakeNotebooks implements WorkspaceNotebooks {
+    readonly calls: string[] = [];
+
+    async newNotebook(connectionName: string): Promise<void> {
+        this.calls.push(`new ${connectionName}`);
+    }
+
+    async openNotebook(connectionName: string): Promise<void> {
+        this.calls.push(`open ${connectionName}`);
+    }
+}
+
 interface Harness {
     workspaces: ConnectionWorkspaces;
     connections: FakeConnections;
     panels: FakePanel[];
+    apiExecutor: FakeApiExecutor;
+    notebooks: FakeNotebooks;
 }
 
 function harness(): Harness {
     const connections = new FakeConnections();
     const panels: FakePanel[] = [];
-    const workspaces = new ConnectionWorkspaces(vscode.Uri.file('/extension'), connections, title => {
+    const apiExecutor = new FakeApiExecutor();
+    const notebooks = new FakeNotebooks();
+    const services = { apiExecutor, notebooks };
+    const workspaces = new ConnectionWorkspaces(vscode.Uri.file('/extension'), connections, services, title => {
         const fake = fakePanel(title);
         panels.push(fake);
         return fake.panel;
     });
-    return { workspaces, connections, panels };
+    return { workspaces, connections, panels, apiExecutor, notebooks };
+}
+
+function postedOfType(panel: FakePanel, type: string): Array<Record<string, unknown>> {
+    return panel.posted.filter(message => (message as { type?: string }).type === type) as Array<Record<string, unknown>>;
 }
 
 function lastState(panel: FakePanel): WorkspaceStateMessage | undefined {
@@ -234,6 +267,99 @@ suite('ConnectionWorkspace Test Suite', () => {
         assert.ok(panels[0].posted.some(message => JSON.stringify(message) === '{"type":"selectTab","tab":"dump"}'));
         const dump = panels[0].posted.filter(message => (message as { type?: string }).type === 'dump').pop();
         assert.strictEqual((dump as { kind?: string }).kind, 'user');
+    });
+
+    test('the API tab executes against the workspace connection', async () => {
+        const { workspaces, connections, panels, apiExecutor } = harness();
+        connections.openNow('conn1');
+        const conn2 = connections.openNow('conn2');
+        workspaces.show('conn2');
+
+        await panels[0].send({ tab: 'api', command: 'execute', method: 'getSessionId' });
+
+        assert.strictEqual(apiExecutor.calls.length, 1);
+        assert.strictEqual(apiExecutor.calls[0].connection, conn2);
+        assert.deepStrictEqual(apiExecutor.calls[0].request, { objectId: undefined, method: 'getSessionId', args: undefined });
+        assert.deepStrictEqual(postedOfType(panels[0], 'apiExecuting'), [{ type: 'apiExecuting', method: 'getSessionId' }]);
+        const [result] = postedOfType(panels[0], 'apiResult');
+        assert.strictEqual(result.success, true);
+        assert.strictEqual(result.result, 'result of getSessionId');
+        assert.strictEqual(result.resultType, 'String');
+        assert.strictEqual(result.executionTimeMs, 5);
+    });
+
+    test('the API history survives a page reload', async () => {
+        const { workspaces, connections, panels } = harness();
+        connections.openNow('conn1');
+        workspaces.show('conn1');
+        await panels[0].send({ tab: 'api', command: 'execute', method: 'getObjectName', objectId: '0900000180000001' });
+        await panels[0].send({ tab: 'api', command: 'execute', method: 'save' });
+
+        await panels[0].send({ command: 'ready' });
+
+        const history = postedOfType(panels[0], 'apiHistory').pop()?.history as Array<Record<string, unknown>>;
+        assert.deepStrictEqual(history.map(entry => [entry.method, entry.result, entry.success]), [
+            ['save', 'result of save', true],
+            ['getObjectName', 'result of getObjectName', true]
+        ]);
+    });
+
+    test('the API tab reports Not connected when the connection is closed', async () => {
+        const { workspaces, panels, apiExecutor } = harness();
+        workspaces.show('conn1');
+
+        await panels[0].send({ tab: 'api', command: 'execute', objectId: '0900000180000001', method: 'save' });
+
+        assert.strictEqual(apiExecutor.calls.length, 0);
+        const [result] = postedOfType(panels[0], 'apiResult');
+        assert.strictEqual(result.success, false);
+        assert.strictEqual(result.error, 'Not connected to conn1');
+    });
+
+    test('an object ID clicked in an API result shows in the Dump tab of the same workspace', async () => {
+        const { workspaces, connections, panels } = harness();
+        connections.openNow('conn1');
+        workspaces.show('conn1');
+
+        await panels[0].send({ tab: 'api', command: 'dumpObject', objectId: '0900000180000001' });
+
+        assert.ok(panels[0].posted.some(message => JSON.stringify(message) === '{"type":"selectTab","tab":"dump"}'));
+        assert.strictEqual(postedOfType(panels[0], 'dump').pop()?.objectId, '0900000180000001');
+    });
+
+    test('showApi selects the API tab and fills in the object ID, again when the page loads', async () => {
+        const { workspaces, panels } = harness();
+
+        workspaces.showApi('conn1', '0900000180000001');
+
+        assert.ok(panels[0].posted.some(message => JSON.stringify(message) === '{"type":"selectTab","tab":"api"}'));
+        assert.deepStrictEqual(postedOfType(panels[0], 'apiObjectId'), [{ type: 'apiObjectId', objectId: '0900000180000001' }]);
+
+        await panels[0].send({ command: 'ready' });
+        assert.strictEqual(lastState(panels[0])?.activeTab, 'api');
+        assert.strictEqual(postedOfType(panels[0], 'apiObjectId').length, 2);
+
+        await panels[0].send({ command: 'ready' });
+        assert.strictEqual(postedOfType(panels[0], 'apiObjectId').length, 2);
+    });
+
+    test('the state message carries the API method list', async () => {
+        const { workspaces, panels } = harness();
+        workspaces.show('conn1');
+
+        await panels[0].send({ command: 'ready' });
+
+        assert.ok(Object.keys(lastState(panels[0])?.apiMethods ?? {}).length > 0);
+    });
+
+    test('the notebook buttons act on the workspace connection', async () => {
+        const { workspaces, panels, notebooks } = harness();
+        workspaces.show('conn2');
+
+        await panels[0].send({ command: 'newNotebook' });
+        await panels[0].send({ command: 'openNotebook' });
+
+        assert.deepStrictEqual(notebooks.calls, ['new conn2', 'open conn2']);
     });
 
     test('a restored panel for a configured connection becomes its workspace', () => {

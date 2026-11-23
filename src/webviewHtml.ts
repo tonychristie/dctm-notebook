@@ -3,7 +3,6 @@ import { randomBytes } from 'crypto';
 import { escapeHtml } from './htmlUtils';
 
 export type WebviewEntry =
-    | 'apiPanel'
     | 'connectionWorkspace'
     | 'connectionsPanel'
     | 'objectDumpPanel'

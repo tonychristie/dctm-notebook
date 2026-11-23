@@ -1,9 +1,11 @@
+import type { MethodInfo } from '../apiExecutor';
 import { byId, vscode } from './common';
+import { ApiResult, ApiTabView } from './workspace/apiTab';
 import { CabinetsTabView } from './workspace/cabinetsTab';
 import { DumpContent, DumpTabView } from './workspace/dumpTab';
 import { EntitiesResult, EntityTabName, EntityTabView } from './workspace/entityTab';
 
-type WorkspaceTab = 'cabinets' | EntityTabName | 'dump';
+type WorkspaceTab = 'cabinets' | EntityTabName | 'dump' | 'api';
 
 interface WorkspaceState {
     connectionName: string;
@@ -12,12 +14,14 @@ interface WorkspaceState {
     connected: boolean;
     generation: number;
     activeTab: WorkspaceTab;
+    apiMethods: Record<string, MethodInfo[]>;
 }
 
 const post = (message: object) => vscode.postMessage(message);
 const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
 const cabinets = new CabinetsTabView(byId('panel-cabinets'), post);
 const dump = new DumpTabView(byId('panel-dump'), post);
+const api = new ApiTabView(byId('panel-api'), post);
 const entityTab = (tab: EntityTabName) => new EntityTabView(tab, byId(`panel-${tab}`), post, () => connectionName);
 const entities: Record<EntityTabName, EntityTabView> = {
     types: entityTab('types'),
@@ -60,6 +64,7 @@ function applyState(state: WorkspaceState): void {
         ? `${state.repository} as ${state.username}`
         : state.repository;
     byId('wsBanner').hidden = state.connected;
+    api.setMethods(state.apiMethods);
 
     for (const button of tabs) {
         button.disabled = !state.connected;
@@ -87,6 +92,8 @@ for (const button of tabs) {
 }
 
 byId('wsConnect').addEventListener('click', () => post({ command: 'connect' }));
+byId('wsNewNotebook').addEventListener('click', () => post({ command: 'newNotebook' }));
+byId('wsOpenNotebook').addEventListener('click', () => post({ command: 'openNotebook' }));
 
 window.addEventListener('message', event => {
     const message = event.data;
@@ -105,6 +112,18 @@ window.addEventListener('message', event => {
             break;
         case 'refreshNode':
             cabinets.refreshNode(message.nodeId);
+            break;
+        case 'apiObjectId':
+            api.setObjectId(message.objectId);
+            break;
+        case 'apiExecuting':
+            api.showExecuting(message.method);
+            break;
+        case 'apiResult':
+            api.showResult(message as ApiResult);
+            break;
+        case 'apiHistory':
+            api.showHistory(message.history);
             break;
         case 'entities': {
             const result = message as EntitiesResult;

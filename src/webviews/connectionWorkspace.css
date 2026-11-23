@@ -26,7 +26,17 @@ button {
 }
 
 .ws-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
     padding: 12px 16px 8px;
+}
+
+.ws-actions {
+    display: flex;
+    gap: 6px;
 }
 
 .ws-title {
@@ -59,6 +69,7 @@ button {
 }
 
 .ws-banner button,
+.ws-actions button,
 .tab-toolbar button,
 .dump-tab-header button,
 .tree-error button {
@@ -85,6 +96,7 @@ button {
     background: var(--vscode-button-hoverBackground);
 }
 
+.ws-actions button:hover,
 .tab-toolbar button:hover,
 .dump-tab-header button:hover:not(:disabled):not(.primary),
 .tree-error button:hover {
@@ -285,4 +297,271 @@ button {
 .dump-empty {
     padding: 16px;
     color: var(--vscode-descriptionForeground);
+}
+
+.api-tab {
+    padding: 8px 16px 16px;
+    box-sizing: border-box;
+}
+
+.api-tab * {
+    box-sizing: border-box;
+}
+
+.api-tab h3 {
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0 0 8px;
+}
+
+.api-tab .api-section {
+    margin-bottom: 20px;
+}
+
+.api-tab label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.api-tab input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--vscode-input-border, transparent);
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border-radius: 2px;
+    font-family: var(--vscode-editor-font-family);
+    font-size: 13px;
+}
+
+.api-tab input:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    border-color: var(--vscode-focusBorder);
+}
+
+.api-tab #apiObjectId,
+.api-tab #apiMethodSearch {
+    margin-bottom: 4px;
+}
+
+.api-tab .api-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.api-tab .api-actions button {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.api-tab .api-actions button:hover:not(:disabled) {
+    background: var(--vscode-button-hoverBackground);
+}
+
+.api-tab .api-actions button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.api-tab .api-actions button.secondary {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+}
+
+.api-tab .api-actions button.secondary:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.api-tab .api-info {
+    color: var(--vscode-descriptionForeground);
+    font-size: 12px;
+}
+
+.api-tab .api-success {
+    color: var(--vscode-testing-iconPassed);
+}
+
+.api-tab .api-error {
+    color: var(--vscode-testing-iconFailed);
+}
+
+.api-tab .api-categories {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 8px 0;
+}
+
+.api-tab .api-category {
+    padding: 4px 10px;
+    font-size: 11px;
+    border-radius: 12px;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    cursor: pointer;
+}
+
+.api-tab .api-category:hover {
+    opacity: 0.8;
+}
+
+.api-tab .api-category.active {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}
+
+.api-tab .api-method-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+    border-radius: 2px;
+}
+
+.api-tab .api-method {
+    padding: 6px 10px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.api-tab .api-method:last-child {
+    border-bottom: none;
+}
+
+.api-tab .api-method:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.api-tab .api-method.selected {
+    background: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.api-tab .api-method-name {
+    font-family: var(--vscode-editor-font-family);
+    font-weight: 500;
+}
+
+.api-tab .api-method-return {
+    color: var(--vscode-descriptionForeground);
+    font-size: 11px;
+    margin-left: 8px;
+}
+
+.api-tab .api-method-desc {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    margin-top: 2px;
+}
+
+.api-tab .api-param-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    align-items: center;
+}
+
+.api-tab .api-param-row label {
+    min-width: 120px;
+    margin-bottom: 0;
+}
+
+.api-tab .api-param-row input {
+    flex: 1;
+}
+
+.api-tab .api-param-type {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    min-width: 60px;
+}
+
+.api-tab .api-result {
+    margin-top: 20px;
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.api-tab .api-result-header {
+    background: var(--vscode-sideBarSectionHeader-background);
+    padding: 8px 12px;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.api-tab .api-result-content {
+    padding: 12px;
+    background: var(--vscode-textCodeBlock-background);
+    font-family: var(--vscode-editor-font-family);
+    font-size: 12px;
+    max-height: 300px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.api-tab .api-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.api-tab .api-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--vscode-progressBar-background);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: api-spin 1s linear infinite;
+}
+
+@keyframes api-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.api-tab .api-history {
+    margin-top: 20px;
+}
+
+.api-tab .api-history-item {
+    padding: 8px;
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    margin-bottom: 8px;
+    font-size: 12px;
+}
+
+.api-tab .api-history-item .api-info {
+    margin-top: 4px;
+}
+
+.api-tab .api-history-method {
+    font-family: var(--vscode-editor-font-family);
+    font-weight: 500;
+}
+
+.api-tab .api-history-time {
+    color: var(--vscode-descriptionForeground);
+    float: right;
+}
+
+.api-tab .object-id {
+    color: var(--vscode-textLink-foreground);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.api-tab .object-id:hover {
+    color: var(--vscode-textLink-activeForeground);
 }

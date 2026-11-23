@@ -4,7 +4,6 @@ import { DqlExecutor } from './dqlExecutor';
 import { ResultsPanel } from './resultsPanel';
 import { registerObjectBrowser } from './objectBrowser';
 import { ApiExecutor } from './apiExecutor';
-import { registerApiPanel } from './apiPanel';
 import { registerConnectionsPanel } from './connectionsPanel';
 import { registerTypeBrowser } from './typeBrowser';
 import { registerUserBrowser } from './userBrowser';
@@ -14,6 +13,7 @@ import { registerApiMethodReference } from './apiMethodReference';
 import { registerNotebook } from './notebook';
 import { registerObjectDumpView } from './objectDumpView';
 import { registerConnectionWorkspace } from './workspace/connectionWorkspace';
+import { registerObjectCommands } from './workspace/objectCommands';
 
 let connectionManager: ConnectionManager;
 let dqlExecutor: DqlExecutor;
@@ -104,8 +104,8 @@ export function activate(context: vscode.ExtensionContext) {
     }));
 
     registerObjectBrowser(context, connectionManager);
-    registerConnectionWorkspace(context, connectionManager);
-    registerApiPanel(context, apiExecutor, connectionManager);
+    const workspaces = registerConnectionWorkspace(context, connectionManager, apiExecutor);
+    registerObjectCommands(context, connectionManager, workspaces);
     registerConnectionsPanel(context, connectionManager);
     registerTypeBrowser(context, connectionManager);
     registerDqlSemanticTokens(context, connectionManager);

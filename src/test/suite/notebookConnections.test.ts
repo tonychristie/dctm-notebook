@@ -1,9 +1,10 @@
 import * as assert from 'assert';
+import * as vscode from 'vscode';
 import { ConnectionManager, Credentials, DocumentumConnection } from '../../connectionManager';
 import { describeConnection } from '../../connectionForm';
 import { DctmBridge, DfcConnectParams } from '../../dctmBridge';
 import { RepositoryConnection } from '../../repositoryConnection';
-import { resolveNotebookConnection } from '../../notebook/notebookConnection';
+import { bindNotebook, openNotebookAction, resolveNotebookConnection } from '../../notebook/notebookConnection';
 
 class FakeBridge {
     ensureRunningCalls: ('dfc' | 'rest')[] = [];
@@ -449,5 +450,26 @@ suite('Notebook Connection Resolution Test Suite', () => {
         assert.ok(error);
         assert.strictEqual(manager.prompts.length, 1);
         assert.strictEqual(bridge.connectCalls.length, 1);
+    });
+});
+
+suite('Notebook Binding Test Suite', () => {
+    test('Open notebook binds an unbound notebook, opens one bound to this connection and asks for another', () => {
+        assert.strictEqual(openNotebookAction(undefined, 'conn1'), 'bind');
+        assert.strictEqual(openNotebookAction('conn1', 'conn1'), 'open');
+        assert.strictEqual(openNotebookAction('conn2', 'conn1'), 'ask');
+    });
+
+    test('bindNotebook writes the connection name and keeps the other metadata', async () => {
+        const data = new vscode.NotebookData([
+            new vscode.NotebookCellData(vscode.NotebookCellKind.Code, 'select 1 from dm_server_config', 'dql')
+        ]);
+        data.metadata = { connection: 'conn2', author: 'test' };
+        const notebook = await vscode.workspace.openNotebookDocument('dctmbook', data);
+
+        assert.strictEqual(await bindNotebook(notebook, 'conn1'), true);
+
+        assert.strictEqual(notebook.metadata.connection, 'conn1');
+        assert.strictEqual(notebook.metadata.author, 'test');
     });
 });

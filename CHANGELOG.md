@@ -10,23 +10,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - `documentum.defaultConnection` and `documentum.dfc.profiles` settings, and the `dfcProfile` field of a connection. None of them had any effect.
 - The standalone API panel and the "Documentum: Open API Panel" command. The API tab of the connection workspace replaces them.
+- The Type Browser, User Browser and Group Browser views. The Types, Users and Groups tabs of the connection workspace replace them.
+- The Object Dump view and the separate object, type, user and group dump panels. The Dump tab of the connection workspace replaces them.
+- The `documentum.panels.reuseWindow` setting, which only applied to the separate dump panels.
+- The "Documentum: Dump Object" command. An object ID clicked in a notebook result shows in the Dump tab of the notebook's connection.
+- The Cabinets under a connection in the sidebar, with Show Properties and Refresh. The Cabinets tab of the connection workspace replaces them.
 
 ### Fixed
-- The Explorer now updates when connection settings change. An open connection whose settings change is disconnected.
+- The Connections view now updates when connection settings change. An open connection whose settings change is disconnected.
 - DQL results are no longer cut at 100 rows. Queries in notebooks and DQL files, and the user, cabinet and folder lists, return every row.
 - The null object ID `0000000000000000` shows as a plain value in dumps, notebook results and API results, not as a link that fails to load.
 
 ### Changed
+- The Documentum sidebar is one view, Connections, which lists the connections. Clicking a connection opens its workspace.
 - Renamed `DfcBridge` to `DctmBridge` to better reflect its role as a unified interface to Documentum (both DFC and REST)
 - Refactored bridge architecture to use polymorphism instead of if/else branching:
   - `IUnifiedBridge` interface defines the contract for unified API methods
   - `DfcBridgeImpl` contains pure DFC/DQL implementation (no branching)
   - `RestBridgeImpl` contains pure REST implementation (no branching)
   - `DctmBridge` creates the appropriate implementation at connect time
-- Explorer, Users browser, and Groups browser now use REST endpoints instead of DQL when connected via REST. This improves compatibility with REST-only Documentum setups where DQL may not be available.
+- The Cabinets, Users and Groups tabs use REST endpoints instead of DQL when connected via REST. This improves compatibility with REST-only Documentum setups where DQL may not be available.
 
 ### Added
-- Connection workspace: one editor tab per connection, opened by clicking the connection in the Explorer or with "Documentum: Open Workspace". It has a Cabinets tab to browse cabinets, folders and documents, and a Dump tab with Back, Forward and an object ID box.
+- Connection workspace: one editor tab per connection, opened by clicking the connection in the Connections view or with "Documentum: Open Workspace". It has a Cabinets tab to browse cabinets, folders and documents, and a Dump tab with Back, Forward and an object ID box.
 - Types, Users and Groups tabs in the connection workspace, with search, Refresh, and Dump and Generate DQL Query on the context menu. Type, user and group dumps show in the Dump tab and share its history with object dumps.
 - API tab in the connection workspace, to execute API methods on the workspace's connection. Execute API Method on a cabinet, folder or document shows it with the object ID filled in.
 - Session methods in the API tab: `getSessionId`, `getLoginTicket`, `getLoginUserName`, `getDocbaseName`, `getDocbaseId`, `getDocbaseOwnerName`, `getServerVersion`, `getDBMSName` and `isConnected`. They run on the session, so the README's Get Session Information example works.

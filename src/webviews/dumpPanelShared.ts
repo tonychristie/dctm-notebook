@@ -60,13 +60,13 @@ export interface DumpActions {
 }
 
 // The filter box and the Show inherited box are read at each event, as the dump content is replaced on each load.
-function applyDumpFilter(root: Document | HTMLElement, actions: DumpActions): void {
+function applyDumpFilter(root: HTMLElement, actions: DumpActions): void {
     const filter = root.querySelector<HTMLInputElement>('#filter')?.value ?? '';
     const showInherited = root.querySelector<HTMLInputElement>('#showInherited')?.checked ?? true;
     applyAttributeFilter(filter, actions.filterField, showInherited, root);
 }
 
-export function registerDumpActions(root: Document | HTMLElement, current: () => DumpActions | undefined): void {
+export function registerDumpActions(root: HTMLElement, current: () => DumpActions | undefined): void {
     onActions(action => current()?.handlers[action], root);
     root.addEventListener('input', event => {
         const actions = current();

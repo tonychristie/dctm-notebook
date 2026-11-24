@@ -7,9 +7,7 @@ import { describeConnection } from '../connectionForm';
 import { DqlExecutor } from '../dqlExecutor';
 import { ApiExecutor } from '../apiExecutor';
 import { ApiMethodReference } from '../apiMethodReference';
-import { ObjectDumpPanel } from '../objectDumpPanel';
-import { extractObjectId } from '../workspace/objectCommands';
-import { isObjectId } from '../htmlUtils';
+import type { ConnectionWorkspaces } from '../workspace/connectionWorkspace';
 import { exportToExcel, exportToJson } from './exporter';
 import { getOutputFormat, nextOutputFormat } from './commandParsing';
 import { bindNotebook, boundConnectionName, resolveNotebookConnection } from './notebookConnection';
@@ -17,6 +15,22 @@ import { bindNotebook, boundConnectionName, resolveNotebookConnection } from './
 export { DctmNotebookSerializer } from './notebookSerializer';
 export { DctmNotebookController } from './notebookController';
 export { NotebookApiCompletionProvider, registerNotebookCompletions } from './notebookCompletionProvider';
+
+export type NotebookDumpWorkspaces = Pick<ConnectionWorkspaces, 'showDump'>;
+
+export async function dumpFromNotebook(
+    connectionManager: ConnectionManager,
+    workspaces: NotebookDumpWorkspaces,
+    metadata: { [key: string]: unknown } | undefined,
+    objectId: string
+): Promise<void> {
+    const { connection, error } = await resolveNotebookConnection(connectionManager, metadata);
+    if (!connection) {
+        vscode.window.showErrorMessage(error);
+        return;
+    }
+    await workspaces.showDump(connection.name, { kind: 'object', objectId });
+}
 
 /**
  * Register the Documentum notebook support
@@ -31,6 +45,7 @@ export function registerNotebook(
     connectionManager: ConnectionManager,
     dqlExecutor: DqlExecutor,
     apiExecutor: ApiExecutor,
+    workspaces: NotebookDumpWorkspaces,
     apiReference?: ApiMethodReference
 ): void {
     // Register the notebook serializer
@@ -70,15 +85,7 @@ export function registerNotebook(
 
         if (message.command === 'dumpObject' && message.objectId) {
             try {
-                const { connection, error } = await resolveNotebookConnection(
-                    connectionManager,
-                    e.editor.notebook.metadata
-                );
-                if (!connection) {
-                    vscode.window.showErrorMessage(error);
-                    return;
-                }
-                await vscode.commands.executeCommand('dctm.dumpObject', message.objectId, connection.name);
+                await dumpFromNotebook(connectionManager, workspaces, e.editor.notebook.metadata, message.objectId);
             } catch (error) {
                 const errorMsg = error instanceof Error ? error.message : String(error);
                 vscode.window.showErrorMessage(`Connection failed: ${errorMsg}`);
@@ -255,47 +262,6 @@ function registerNotebookCommands(
         }
     );
 
-    // Command to dump an object by ID (opens Object Dump panel)
-    const dumpObject = vscode.commands.registerCommand(
-        'dctm.dumpObject',
-        async (arg?: unknown, connectionName?: string) => {
-            let objectId = extractObjectId(arg);
-
-            // If no objectId provided, prompt for one
-            if (!objectId) {
-                objectId = await vscode.window.showInputBox({
-                    prompt: 'Enter Object ID',
-                    placeHolder: '0900000000000001',
-                    validateInput: (value) => {
-                        if (!isObjectId(value)) {
-                            return 'Object ID must be a 16-character hex string';
-                        }
-                        return null;
-                    }
-                });
-            }
-
-            if (!objectId) {
-                return;
-            }
-
-            const connection = connectionName
-                ? connectionManager.getOpenConnection(connectionName)
-                : connectionManager.getSelectedConnection();
-            if (!connection) {
-                vscode.window.showErrorMessage('Not connected to Documentum. Use "Documentum: Connect" first.');
-                return;
-            }
-
-            try {
-                await ObjectDumpPanel.createOrShow(context.extensionUri, connectionManager, connection.name, objectId);
-            } catch (error) {
-                const message = error instanceof Error ? error.message : String(error);
-                vscode.window.showErrorMessage(`Failed to dump object: ${message}`);
-            }
-        }
-    );
-
     // Command to bind notebook to a specific connection
     const bindConnection = vscode.commands.registerCommand(
         'dctm.notebook.bindConnection',
@@ -379,7 +345,6 @@ function registerNotebookCommands(
         insertApiCell,
         insertMarkdownCell,
         toggleOutputFormat,
-        dumpObject,
         bindConnection,
         unbindConnection
     );

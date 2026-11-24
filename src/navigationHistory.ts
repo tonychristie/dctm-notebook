@@ -36,7 +36,3 @@ export class NavigationHistory<T> {
         return this.index < this.entries.length - 1;
     }
 }
-
-export function addToRecent(recent: string[], id: string, maxSize: number): string[] {
-    return [id, ...recent.filter(existing => existing !== id)].slice(0, maxSize);
-}

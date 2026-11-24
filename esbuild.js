@@ -62,13 +62,7 @@ async function main() {
       'src/webviews/connectionWorkspace.ts',
       'src/webviews/connectionWorkspace.css',
       'src/webviews/connectionsPanel.ts',
-      'src/webviews/objectDumpPanel.ts',
-      'src/webviews/typeDumpPanel.ts',
-      'src/webviews/userDumpPanel.ts',
-      'src/webviews/groupDumpPanel.ts',
-      'src/webviews/objectDumpView.ts',
-      'src/webviews/resultsPanel.ts',
-      'src/webviews/dumpPanel.css'
+      'src/webviews/resultsPanel.ts'
     ],
     bundle: true,
     format: 'iife',

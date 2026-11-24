@@ -289,11 +289,6 @@ button {
     overflow: auto;
 }
 
-.dump-tab .dump-content .loader {
-    height: auto;
-    padding: 48px 0;
-}
-
 .dump-empty {
     padding: 16px;
     color: var(--vscode-descriptionForeground);

@@ -77,7 +77,7 @@ const groupLabels: Record<AttributeGroup, string> = {
 
 const groupOrder: AttributeGroup[] = ['custom', 'standard', 'application', 'system', 'internal'];
 
-export function renderObjectDump(dump: ObjectDump, leadingActions = ''): string {
+export function renderObjectDump(dump: ObjectDump): string {
     const groups = groupObjectAttributes(dump.attributes, dump.standardAttributeNames);
 
     return `<div class="header">
@@ -89,7 +89,6 @@ export function renderObjectDump(dump: ObjectDump, leadingActions = ''): string 
                 Loaded in ${dump.fetchTime}ms
             </div>
             <div class="header-actions">
-                ${leadingActions}
                 <button data-action="refresh">Refresh</button>
                 <button data-action="copyObjectId" data-value="${escapeHtml(dump.objectId)}">Copy Object ID</button>
                 <button data-action="collapseAll">Collapse All</button>

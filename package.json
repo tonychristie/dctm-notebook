@@ -480,6 +480,26 @@
           "when": "false"
         },
         {
+          "command": "dctm.connectFromTree",
+          "when": "false"
+        },
+        {
+          "command": "dctm.disconnectFromTree",
+          "when": "false"
+        },
+        {
+          "command": "dctm.checkout",
+          "when": "false"
+        },
+        {
+          "command": "dctm.checkin",
+          "when": "false"
+        },
+        {
+          "command": "dctm.cancelCheckout",
+          "when": "false"
+        },
+        {
           "command": "dctm.notebook.bindConnection",
           "when": "notebookType == dctmbook && !dctm.notebookBound"
         },

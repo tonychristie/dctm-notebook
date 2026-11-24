@@ -118,6 +118,11 @@
         "category": "Documentum"
       },
       {
+        "command": "dctm.linkConnection",
+        "title": "Link to Connection",
+        "category": "Documentum"
+      },
+      {
         "command": "dctm.openWorkspace",
         "title": "Open Workspace",
         "category": "Documentum"
@@ -160,18 +165,6 @@
         "title": "Disconnect",
         "category": "Documentum",
         "icon": "$(debug-disconnect)"
-      },
-      {
-        "command": "dctm.switchUser",
-        "title": "Switch User",
-        "category": "Documentum",
-        "icon": "$(account)"
-      },
-      {
-        "command": "dctm.switchUserFromTree",
-        "title": "Switch User",
-        "category": "Documentum",
-        "icon": "$(account)"
       },
       {
         "command": "dctm.executeApiOnObject",
@@ -379,6 +372,11 @@
           "command": "dctm.executeDql",
           "when": "editorLangId == dql",
           "group": "documentum"
+        },
+        {
+          "command": "dctm.linkConnection",
+          "when": "editorLangId == dql",
+          "group": "documentum"
         }
       ],
       "view/title": [
@@ -403,11 +401,6 @@
           "command": "dctm.disconnectFromTree",
           "when": "view == documentumConnections && viewItem == connection-connected",
           "group": "inline"
-        },
-        {
-          "command": "dctm.switchUserFromTree",
-          "when": "view == documentumConnections && viewItem == connection-connected",
-          "group": "1_connection"
         }
       ],
       "webview/context": [
@@ -467,6 +460,10 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "dctm.linkConnection",
+          "when": "editorLangId == dql"
+        },
         {
           "command": "dctm.workspace.dump",
           "when": "false"

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { buildGroupQuery, buildTypeQuery, buildUserQuery } from '../dqlQueries';
+import type { DocumentConnections } from '../documentConnections';
 import { RepositoryConnection } from '../repositoryConnection';
 
 export type EntityKind = 'type' | 'user' | 'group';
@@ -21,11 +22,14 @@ async function entityQuery(connection: RepositoryConnection, kind: EntityKind, n
     }
 }
 
+export type QueryDocuments = Pick<DocumentConnections, 'link'>;
+
 export async function openEntityQuery(
     connection: RepositoryConnection | undefined,
     connectionName: string,
     kind: EntityKind,
-    name: string
+    name: string,
+    documents: QueryDocuments
 ): Promise<void> {
     if (!connection) {
         vscode.window.showErrorMessage(`Not connected to ${connectionName}`);
@@ -43,5 +47,7 @@ export async function openEntityQuery(
         return;
     }
     const doc = await vscode.workspace.openTextDocument({ content, language: 'dql' });
+    // Linked before it shows, so the status bar and the type colours are right at once.
+    await documents.link(doc, connectionName);
     await vscode.window.showTextDocument(doc);
 }

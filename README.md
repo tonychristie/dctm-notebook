@@ -22,8 +22,11 @@ A VS Code notebook interface for DQL queries with REST and DFC connectivity to O
 
 1. **Start the bridge**: the DFC Bridge for DFC connections, the REST Bridge for REST connections. If it is not on `localhost:9876` (DFC) or `localhost:9877` (REST), set `documentum.bridge.host`, `documentum.bridge.port` and `documentum.bridge.restPort`.
 2. **Add a connection**: run "Documentum: Manage Connections", or click "Add Connection" in the Connections view. Use Test Connection to check it.
-3. **Connect**: click the connection in the Connections view. It connects and opens the connection's workspace. The plug button on the connection connects without opening the workspace, and the Documentum status bar item also connects. Enter the password when asked. Passwords are not stored and are asked for on each connect.
-4. **Notebooks**: a notebook uses the selected connection, or the connection it is bound to with "Bind to Connection" in the notebook toolbar.
+3. **Connect**: click the connection in the Connections view. It connects and opens the connection's workspace. The plug button on the connection connects without opening the workspace. Enter the password when asked. Passwords are not stored and are asked for on each connect.
+4. **Notebooks**: a notebook runs on the connection it is bound to. Running a cell in a notebook with no binding asks for a connection and binds the notebook to it. "Bind to Connection" in the notebook toolbar changes the binding.
+5. **DQL files**: a `.dql` file is linked to a connection. The first Execute DQL on a file uses the only open connection, or asks which connection to use when none or several are open, and links the file to it. "Link to Connection" in the editor context menu changes the link. Links of saved files are kept across window reloads.
+
+The status bar shows the connection of the active notebook or `.dql` file. Click it to change the binding or the link. DQL type names are coloured from the types of that connection, once it is open.
 
 ### Connections view
 
@@ -31,8 +34,8 @@ The Documentum sidebar has one view, Connections, with one item per configured c
 
 - Click a connection to open its workspace, connecting first when needed.
 - The plug button connects a closed connection, and the disconnect button closes an open one.
-- Right-click an open connection for Switch User.
 - The title bar has Refresh and Manage Connections.
+- To work as another user on the same repository, add a second connection with that username.
 
 ### Connection fields
 
@@ -88,7 +91,7 @@ The header also has two notebook buttons:
 - A tab loads its list the first time you show it. Refresh reloads the list and shows how many were loaded. If the list cannot load, the tab shows the error with Retry.
 - Type in the search box to show the names that contain the text, in any case. In Types, a search shows the matching types as a flat list; clear the box to see the tree again. The number of items shown is next to the Refresh button.
 - Click a type, user or group to show it in the Dump tab. In Types, click the arrow to expand a type.
-- Right-click an item for Dump and Generate DQL Query. Generate DQL Query opens the query in a new DQL document.
+- Right-click an item for Dump and Generate DQL Query. Generate DQL Query opens the query in a new DQL document, linked to the workspace's connection.
 
 ### Dump tab
 
@@ -115,8 +118,8 @@ The header also has two notebook buttons:
 ### DQL Editor
 
 - **Syntax Highlighting**: Full DQL syntax highlighting for `.dql` files
-- **Semantic Token Support**: Dynamic highlighting of repository type names
-- **Execute Queries**: Run DQL queries directly from the editor (Ctrl+Shift+E / Cmd+Shift+E)
+- **Semantic Token Support**: Dynamic highlighting of the type names of the file's connection
+- **Execute Queries**: Run DQL queries directly from the editor (Ctrl+Shift+E / Cmd+Shift+E), on the file's connection
 
 ### API Method Support
 

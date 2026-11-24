@@ -149,7 +149,7 @@ function harness(): Harness {
     const panels: FakePanel[] = [];
     const apiExecutor = new FakeApiExecutor();
     const notebooks = new FakeNotebooks();
-    const services = { apiExecutor, notebooks };
+    const services = { apiExecutor, notebooks, documents: { link: async () => undefined } };
     const workspaces = new ConnectionWorkspaces(vscode.Uri.file('/extension'), connections, services, title => {
         const fake = fakePanel(title);
         panels.push(fake);

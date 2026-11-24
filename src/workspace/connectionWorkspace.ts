@@ -8,7 +8,7 @@ import { ApiExecute, ApiRequest, ApiTab } from './apiTab';
 import { CabinetsRequest, CabinetsTab } from './cabinetsTab';
 import { DumpTab, DumpTabRequest, DumpTarget } from './dumpTab';
 import { ENTITY_TABS, EntityRequest, EntityTab, EntityTabName, isEntityTabName } from './entityTab';
-import { isEntityKind, openEntityQuery } from './entityQuery';
+import { QueryDocuments, isEntityKind, openEntityQuery } from './entityQuery';
 
 export const WORKSPACE_VIEW_TYPE = 'dctmConnectionWorkspace';
 
@@ -54,6 +54,7 @@ export interface WorkspaceNotebooks {
 export interface WorkspaceServices {
     apiExecutor: ApiExecute;
     notebooks: WorkspaceNotebooks;
+    documents: QueryDocuments;
 }
 
 export type PanelFactory = (title: string) => vscode.WebviewPanel;
@@ -88,7 +89,7 @@ export class ConnectionWorkspace {
         }
 
         const post = (message: object) => void this.panel.webview.postMessage(message);
-        this.dump = new DumpTab(connectionName, connections, post);
+        this.dump = new DumpTab(connectionName, connections, post, services.documents);
         this.cabinets = new CabinetsTab(connectionName, connections, post, target => this.showDump(target));
         const entityTab = (tab: EntityTabName) =>
             new EntityTab(connectionName, connections, ENTITY_TABS[tab], post, target => this.showDump(target));
@@ -453,11 +454,13 @@ async function openNotebookFor(connectionName: string): Promise<void> {
 export function registerConnectionWorkspace(
     context: vscode.ExtensionContext,
     connectionManager: ConnectionManager,
-    apiExecutor: ApiExecute
+    apiExecutor: ApiExecute,
+    documents: QueryDocuments
 ): ConnectionWorkspaces {
     const workspaces = new ConnectionWorkspaces(context.extensionUri, connectionManager, {
         apiExecutor,
-        notebooks: { newNotebook: newDqlNotebook, openNotebook: openNotebookFor }
+        notebooks: { newNotebook: newDqlNotebook, openNotebook: openNotebookFor },
+        documents
     });
 
     context.subscriptions.push(
@@ -486,7 +489,7 @@ export function registerConnectionWorkspace(
         vscode.commands.registerCommand('dctm.workspace.generateQuery', async (item?: WorkspaceItemContext) => {
             if (item?.connectionName && isEntityKind(item.webviewSection) && item.name) {
                 const connection = connectionManager.getOpenConnection(item.connectionName);
-                await openEntityQuery(connection, item.connectionName, item.webviewSection, item.name);
+                await openEntityQuery(connection, item.connectionName, item.webviewSection, item.name, documents);
             }
         }),
         vscode.commands.registerCommand('dctm.workspace.refreshFolder', (item?: WorkspaceItemContext) => {

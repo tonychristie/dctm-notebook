@@ -24,10 +24,7 @@ export interface Credentials {
 
 export type StorageScope = 'user' | 'workspace';
 
-type ConnectionAction = 'connect' | 'add' | 'switchUser' | 'disconnect';
-
 interface ConnectionPickItem extends vscode.QuickPickItem {
-    action?: ConnectionAction;
     connectionName?: string;
 }
 
@@ -63,39 +60,12 @@ export function openNewConnectionForm(): Thenable<unknown> {
     return vscode.commands.executeCommand('dctm.manageConnections', { newConnection: true });
 }
 
-export function followSelectedCache(
-    connectionManager: ConnectionManager,
-    pickCache: (connection: RepositoryConnection) => { readonly onRefresh: vscode.Event<void> },
-    listener: () => void
-): vscode.Disposable {
-    let cacheSubscription: vscode.Disposable | undefined;
-    const follow = (connection: RepositoryConnection | undefined) => {
-        cacheSubscription?.dispose();
-        cacheSubscription = connection ? pickCache(connection).onRefresh(listener) : undefined;
-    };
-
-    follow(connectionManager.getSelectedConnection());
-    const selectionSubscription = connectionManager.onDidChangeSelection(connection => {
-        follow(connection);
-        listener();
-    });
-
-    return new vscode.Disposable(() => {
-        selectionSubscription.dispose();
-        cacheSubscription?.dispose();
-    });
-}
-
 export class ConnectionManager implements vscode.Disposable {
     private readonly dctmBridge: DctmBridge;
     private readonly openConnections = new Map<string, RepositoryConnection>();
     // Passwords live in memory only, so a restart prompts again.
     private readonly credentials = new Map<string, Credentials>();
     private readonly pendingOpens = new Map<string, Promise<RepositoryConnection | undefined>>();
-    private selectedName: string | undefined;
-
-    private readonly selectionEmitter = new vscode.EventEmitter<RepositoryConnection | undefined>();
-    readonly onDidChangeSelection: vscode.Event<RepositoryConnection | undefined> = this.selectionEmitter.event;
 
     private readonly openConnectionsEmitter = new vscode.EventEmitter<void>();
     readonly onDidChangeOpenConnections: vscode.Event<void> = this.openConnectionsEmitter.event;
@@ -178,8 +148,8 @@ export class ConnectionManager implements vscode.Disposable {
         return this.promptCredentials(config);
     }
 
-    getSelectedConnection(): RepositoryConnection | undefined {
-        return this.selectedName ? this.openConnections.get(this.selectedName) : undefined;
+    getOpenConnections(): RepositoryConnection[] {
+        return [...this.openConnections.values()];
     }
 
     getOpenConnection(name: string): RepositoryConnection | undefined {
@@ -238,11 +208,8 @@ export class ConnectionManager implements vscode.Disposable {
         return connection;
     }
 
-    protected async promptCredentials(
-        config: DocumentumConnection,
-        askUsername = false
-    ): Promise<Credentials | undefined> {
-        const username = (!askUsername && config.username) || await vscode.window.showInputBox({
+    protected async promptCredentials(config: DocumentumConnection): Promise<Credentials | undefined> {
+        const username = config.username || await vscode.window.showInputBox({
             prompt: `Enter username for ${config.name}`,
             placeHolder: 'dmadmin'
         });
@@ -261,18 +228,21 @@ export class ConnectionManager implements vscode.Disposable {
         return { username, password };
     }
 
+    protected showQuickPick<T extends vscode.QuickPickItem>(
+        items: T[],
+        options: vscode.QuickPickOptions
+    ): Thenable<T | undefined> {
+        return vscode.window.showQuickPick(items, options);
+    }
+
     async connect(name?: string): Promise<RepositoryConnection | undefined> {
-        const target = name ?? await this.pickConnection();
+        const target = name ?? await this.chooseConnection();
         if (!target) {
             return undefined;
         }
 
         try {
-            const connection = await this.openConnection(target);
-            if (connection) {
-                this.select(connection.name);
-            }
-            return connection;
+            return await this.openConnection(target);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             vscode.window.showErrorMessage(`Connection failed: ${message}`);
@@ -280,7 +250,12 @@ export class ConnectionManager implements vscode.Disposable {
         }
     }
 
-    private async pickConnection(): Promise<string | undefined> {
+    async pickConnection(): Promise<RepositoryConnection | undefined> {
+        const open = this.getOpenConnections();
+        return open.length === 1 ? open[0] : this.connect();
+    }
+
+    private async chooseConnection(): Promise<string | undefined> {
         const connections = this.getConnections();
 
         if (connections.length === 0) {
@@ -294,33 +269,50 @@ export class ConnectionManager implements vscode.Disposable {
             return undefined;
         }
 
-        const selected = await vscode.window.showQuickPick(
-            connections.map(c => ({
+        const isOpen = (c: DocumentumConnection) => this.openConnections.has(c.name);
+        const ordered = [...connections.filter(isOpen), ...connections.filter(c => !isOpen(c))];
+        const picked = await this.showQuickPick<ConnectionPickItem>(
+            ordered.map(c => ({
                 label: c.name,
-                description: describeConnection(c),
-                detail: c.repository
+                description: isOpen(c) ? 'connected' : describeConnection(c),
+                detail: c.repository,
+                connectionName: c.name
             })),
             { placeHolder: 'Select a Documentum connection' }
         );
-        return selected?.label;
+        return picked?.connectionName;
     }
 
-    private select(name: string): void {
-        if (this.selectedName === name) {
-            return;
-        }
-        this.selectedName = name;
-        this.selectionEmitter.fire(this.getSelectedConnection());
-    }
-
-    async disconnect(name: string | undefined = this.selectedName): Promise<void> {
-        const connection = name ? this.openConnections.get(name) : undefined;
+    async disconnect(name?: string): Promise<void> {
+        const connection = name ? this.openConnections.get(name) : await this.chooseOpenConnection();
         if (!connection) {
             return;
         }
 
         await this.close(connection);
         vscode.window.showInformationMessage(`Disconnected from ${connection.name}`);
+    }
+
+    private async chooseOpenConnection(): Promise<RepositoryConnection | undefined> {
+        const open = this.getOpenConnections();
+        if (open.length === 0) {
+            vscode.window.showInformationMessage('No open connections.');
+            return undefined;
+        }
+        if (open.length === 1) {
+            return open[0];
+        }
+
+        const picked = await this.showQuickPick<ConnectionPickItem>(
+            open.map(c => ({
+                label: c.name,
+                description: describeConnection(c.config),
+                detail: c.config.repository,
+                connectionName: c.name
+            })),
+            { placeHolder: 'Select a connection to disconnect' }
+        );
+        return picked?.connectionName ? this.openConnections.get(picked.connectionName) : undefined;
     }
 
     private async close(connection: RepositoryConnection): Promise<void> {
@@ -334,37 +326,6 @@ export class ConnectionManager implements vscode.Disposable {
         }
 
         this.openConnectionsEmitter.fire();
-        if (this.selectedName === connection.name) {
-            this.selectedName = undefined;
-            this.selectionEmitter.fire(undefined);
-        }
-    }
-
-    async switchUser(name: string | undefined = this.selectedName): Promise<void> {
-        const connection = name ? this.openConnections.get(name) : undefined;
-        if (!connection) {
-            vscode.window.showWarningMessage('No active connection to switch user');
-            return;
-        }
-
-        const credentials = await this.promptCredentials(connection.config, true);
-        if (!credentials) {
-            return;
-        }
-
-        const wasSelected = this.selectedName === connection.name;
-        await this.close(connection);
-        this.credentials.set(connection.name, credentials);
-
-        try {
-            const reopened = await this.openConnection(connection.name);
-            if (reopened && wasSelected) {
-                this.select(reopened.name);
-            }
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            vscode.window.showErrorMessage(`Connection failed: ${message}`);
-        }
     }
 
     async disconnectAll(): Promise<void> {
@@ -372,57 +333,27 @@ export class ConnectionManager implements vscode.Disposable {
     }
 
     async showConnections(): Promise<void> {
-        const selected = this.getSelectedConnection();
-
         const items: ConnectionPickItem[] = this.getConnections().map(c => ({
-            label: c.name === selected?.name ? `$(check) ${c.name}` : c.name,
+            label: `${this.openConnections.has(c.name) ? '$(database)' : '$(debug-disconnect)'} ${c.name}`,
             description: describeConnection(c),
             detail: c.repository,
-            action: 'connect',
             connectionName: c.name
         }));
 
-        items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
-        items.push({ label: '$(add) Add New Connection...', description: 'Open connection manager', action: 'add' });
+        const addItem: ConnectionPickItem = { label: '$(add) Add New Connection...', description: 'Open connection manager' };
+        items.push({ label: '', kind: vscode.QuickPickItemKind.Separator }, addItem);
 
-        if (selected) {
-            items.push({
-                label: '$(account) Switch User...',
-                description: `Login as different user to ${selected.name}`,
-                action: 'switchUser',
-                connectionName: selected.name
-            });
-            items.push({
-                label: '$(debug-disconnect) Disconnect',
-                description: selected.name,
-                action: 'disconnect',
-                connectionName: selected.name
-            });
-        }
+        const choice = await this.showQuickPick(items, { placeHolder: 'Select a connection to open its workspace' });
 
-        const choice = await vscode.window.showQuickPick(items, {
-            placeHolder: selected ? `Connected to: ${selected.name}` : 'No active connection'
-        });
-
-        switch (choice?.action) {
-            case 'add':
-                void openNewConnectionForm();
-                break;
-            case 'switchUser':
-                await this.switchUser(choice.connectionName);
-                break;
-            case 'disconnect':
-                await this.disconnect(choice.connectionName);
-                break;
-            case 'connect':
-                await this.connect(choice.connectionName);
-                break;
+        if (choice === addItem) {
+            void openNewConnectionForm();
+        } else if (choice?.connectionName) {
+            await vscode.commands.executeCommand('dctm.openWorkspace', choice.connectionName);
         }
     }
 
     dispose(): void {
         this.configurationListener.dispose();
-        this.selectionEmitter.dispose();
         this.openConnectionsEmitter.dispose();
         this.connectionsEmitter.dispose();
     }

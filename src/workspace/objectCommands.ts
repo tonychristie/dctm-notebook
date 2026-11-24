@@ -26,13 +26,14 @@ export function registerObjectCommands(
 ): void {
     const connectionFor = (arg: unknown): RepositoryConnection | undefined => {
         const name = extractConnectionName(arg);
-        return name ? connectionManager.getOpenConnection(name) : connectionManager.getSelectedConnection();
+        return name ? connectionManager.getOpenConnection(name) : undefined;
     };
 
     const executeApiOnObjectCommand = vscode.commands.registerCommand(
         'dctm.executeApiOnObject',
         async (arg?: unknown) => {
-            const connection = await connectionManager.connect(extractConnectionName(arg));
+            const name = extractConnectionName(arg);
+            const connection = name ? await connectionManager.connect(name) : await connectionManager.pickConnection();
             if (connection) {
                 workspaces.showApi(connection.name, extractObjectId(arg));
             }

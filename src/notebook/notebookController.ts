@@ -79,10 +79,7 @@ export class DctmNotebookController {
         execution.start(Date.now());
 
         try {
-            const { connection, error } = await resolveNotebookConnection(
-                this.connectionManager,
-                cell.notebook.metadata
-            );
+            const { connection, error } = await resolveNotebookConnection(this.connectionManager, cell.notebook);
             if (!connection) {
                 execution.replaceOutput([errorOutput(error)]);
                 execution.end(false, Date.now());

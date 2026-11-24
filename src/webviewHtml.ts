@@ -5,11 +5,6 @@ import { escapeHtml } from './htmlUtils';
 export type WebviewEntry =
     | 'connectionWorkspace'
     | 'connectionsPanel'
-    | 'objectDumpPanel'
-    | 'typeDumpPanel'
-    | 'userDumpPanel'
-    | 'groupDumpPanel'
-    | 'objectDumpView'
     | 'resultsPanel';
 
 export interface WebviewAssets {
@@ -37,7 +32,7 @@ export function webviewAssets(webview: vscode.Webview, extensionUri: vscode.Uri,
 export function webviewStylesheet(
     webview: vscode.Webview,
     extensionUri: vscode.Uri,
-    name: 'dumpPanel' | 'connectionWorkspace'
+    name: 'connectionWorkspace'
 ): string {
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewsRoot(extensionUri), `${name}.css`));
     return `<link rel="stylesheet" href="${styleUri}">`;

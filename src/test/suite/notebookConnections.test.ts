@@ -5,6 +5,8 @@ import { describeConnection } from '../../connectionForm';
 import { DctmBridge, DfcConnectParams } from '../../dctmBridge';
 import { RepositoryConnection } from '../../repositoryConnection';
 import { bindNotebook, openNotebookAction, resolveNotebookConnection } from '../../notebook/notebookConnection';
+import { dumpFromNotebook } from '../../notebook';
+import { DumpTarget } from '../../workspace/dumpTab';
 
 class FakeBridge {
     ensureRunningCalls: ('dfc' | 'rest')[] = [];
@@ -450,6 +452,15 @@ suite('Notebook Connection Resolution Test Suite', () => {
         assert.ok(error);
         assert.strictEqual(manager.prompts.length, 1);
         assert.strictEqual(bridge.connectCalls.length, 1);
+    });
+
+    test('an object ID clicked in a bound notebook opens the Dump tab of the bound connection', async () => {
+        const dumps: [string, DumpTarget][] = [];
+        const workspaces = { showDump: async (name: string, target: DumpTarget) => { dumps.push([name, target]); } };
+
+        await dumpFromNotebook(manager, workspaces, { connection: 'Rest' }, '0900000180000001');
+
+        assert.deepStrictEqual(dumps, [['Rest', { kind: 'object', objectId: '0900000180000001' }]]);
     });
 });
 

@@ -21,9 +21,18 @@ A VS Code notebook interface for DQL queries with REST and DFC connectivity to O
 ## Getting connected
 
 1. **Start the bridge**: the DFC Bridge for DFC connections, the REST Bridge for REST connections. If it is not on `localhost:9876` (DFC) or `localhost:9877` (REST), set `documentum.bridge.host`, `documentum.bridge.port` and `documentum.bridge.restPort`.
-2. **Add a connection**: run "Documentum: Manage Connections", or click "Add Connection" in the Documentum Explorer. Use Test Connection to check it.
-3. **Connect**: click the plug button on the connection in the Explorer, or click the Documentum status bar item. Enter the password when asked. Passwords are not stored and are asked for on each connect.
+2. **Add a connection**: run "Documentum: Manage Connections", or click "Add Connection" in the Connections view. Use Test Connection to check it.
+3. **Connect**: click the connection in the Connections view. It connects and opens the connection's workspace. The plug button on the connection connects without opening the workspace, and the Documentum status bar item also connects. Enter the password when asked. Passwords are not stored and are asked for on each connect.
 4. **Notebooks**: a notebook uses the selected connection, or the connection it is bound to with "Bind to Connection" in the notebook toolbar.
+
+### Connections view
+
+The Documentum sidebar has one view, Connections, with one item per configured connection. An open connection shows its repository and user; a closed one shows "disconnected".
+
+- Click a connection to open its workspace, connecting first when needed.
+- The plug button connects a closed connection, and the disconnect button closes an open one.
+- Right-click an open connection for Switch User.
+- The title bar has Refresh and Manage Connections.
 
 ### Connection fields
 
@@ -57,7 +66,7 @@ A REST connection:
 
 ## Connection workspace
 
-Click a connection in the Documentum Explorer to open its workspace, an editor tab titled with the connection name. When the connection is not open, it connects first and asks for the password. "Documentum: Open Workspace" in the Command Palette does the same for a connection you pick. Each connection has one workspace; clicking the connection again shows it. Several workspaces can be open at the same time, one per connection.
+Click a connection in the Connections view to open its workspace, an editor tab titled with the connection name. When the connection is not open, it connects first and asks for the password. "Documentum: Open Workspace" in the Command Palette does the same for a connection you pick. Each connection has one workspace; clicking the connection again shows it. Several workspaces can be open at the same time, one per connection.
 
 The header shows the connection name, the repository and the user. Below it are the tabs.
 
@@ -85,8 +94,9 @@ The header also has two notebook buttons:
 
 - Enter an object ID in the box and press Enter or click Dump. An object ID is 16 hexadecimal characters.
 - An object dump shows the object's attributes in groups, with a filter, Refresh, Copy Object ID, Collapse All and Expand All.
-- Type, user and group dumps show the same content as their separate panels, including Generate DQL.
+- Type, user and group dumps show the type's attributes, the user's details and groups, and the group's members and parent groups, each with Generate DQL.
 - Click an object ID value, a supertype or child type, a user's group, a group's parent group or a group member to show it in the same tab. Back and Forward move through everything shown, objects, types, users and groups in one history.
+- Click an object ID in a notebook result to show it in the Dump tab of the notebook's connection. The workspace opens when it is not open.
 
 ### API tab
 
@@ -107,12 +117,6 @@ The header also has two notebook buttons:
 - **Syntax Highlighting**: Full DQL syntax highlighting for `.dql` files
 - **Semantic Token Support**: Dynamic highlighting of repository type names
 - **Execute Queries**: Run DQL queries directly from the editor (Ctrl+Shift+E / Cmd+Shift+E)
-
-### Repository Browser
-
-- **Object Browser**: Navigate repository folders and objects
-- **Type Browser**: Explore type hierarchy and attributes
-- **Properties View**: View object properties and metadata
 
 ### API Method Support
 
@@ -138,7 +142,6 @@ The API tab of a connection workspace executes DFC methods on repository objects
 
 1. **From the workspace**: Click the API tab.
 2. **From the Cabinets tab**: Right-click a cabinet, folder or document and select "Execute API Method". The API tab shows with the object ID filled in.
-3. **From the Explorer**: Right-click a cabinet, folder or document and select "Execute API Method". The workspace of the item's connection opens on the API tab, with the object ID filled in.
 
 ### Executing Methods
 

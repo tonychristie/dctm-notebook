@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - `documentum.defaultConnection` and `documentum.dfc.profiles` settings, and the `dfcProfile` field of a connection. None of them had any effect.
 - The standalone API panel and the "Documentum: Open API Panel" command. The API tab of the connection workspace replaces them.
+- The Type Browser, User Browser and Group Browser views. The Types, Users and Groups tabs of the connection workspace replace them.
+- The Object Dump view and the separate object, type, user and group dump panels. The Dump tab of the connection workspace replaces them.
+- The `documentum.panels.reuseWindow` setting, which only applied to the separate dump panels.
+- The "Documentum: Dump Object" command. An object ID clicked in a notebook result shows in the Dump tab of the notebook's connection.
+- The Cabinets under a connection in the sidebar, with Show Properties and Refresh. The Cabinets tab of the connection workspace replaces them.
 
 ### Fixed
 - The Explorer now updates when connection settings change. An open connection whose settings change is disconnected.
@@ -17,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The null object ID `0000000000000000` shows as a plain value in dumps, notebook results and API results, not as a link that fails to load.
 
 ### Changed
+- The Documentum sidebar is one view, Connections, which lists the connections. Clicking a connection opens its workspace.
 - Renamed `DfcBridge` to `DctmBridge` to better reflect its role as a unified interface to Documentum (both DFC and REST)
 - Refactored bridge architecture to use polymorphism instead of if/else branching:
   - `IUnifiedBridge` interface defines the contract for unified API methods

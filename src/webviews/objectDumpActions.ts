@@ -1,4 +1,4 @@
-import { DumpActions, DumpMessage, groupActions, registerDumpActions } from './dumpPanelShared';
+import { DumpActions, DumpMessage, groupActions } from './dumpPanelShared';
 
 function showNotification(root: ParentNode, message: string): void {
     const notification = root.querySelector('.copy-notification');
@@ -17,8 +17,6 @@ export function objectDumpActions(root: ParentNode, send: (message: DumpMessage)
             ...groupActions,
             refresh: () => send({ command: 'refresh' }),
             copyObjectId: el => send({ command: 'copyValue', value: el.dataset.value }),
-            goBack: () => send({ command: 'goBack' }),
-            goForward: () => send({ command: 'goForward' }),
             copyValue: el => {
                 send({ command: 'copyValue', value: el.dataset.value });
                 showNotification(root, 'Copied to clipboard');
@@ -26,9 +24,4 @@ export function objectDumpActions(root: ParentNode, send: (message: DumpMessage)
             dumpObject: el => send({ command: 'dumpObject', objectId: el.dataset.value })
         }
     };
-}
-
-export function registerObjectDumpActions(root: Document | HTMLElement, send: (message: DumpMessage) => void): void {
-    const actions = objectDumpActions(root, send);
-    registerDumpActions(root, () => actions);
 }

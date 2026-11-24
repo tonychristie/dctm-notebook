@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { NavigationHistory, addToRecent } from '../../navigationHistory';
+import { NavigationHistory } from '../../navigationHistory';
 
 suite('Navigation History Test Suite', () => {
     suite('NavigationHistory', () => {
@@ -58,20 +58,6 @@ suite('Navigation History Test Suite', () => {
 
             assert.strictEqual(history.canGoForward(), false);
             assert.strictEqual(history.back(), 'a');
-        });
-    });
-
-    suite('addToRecent', () => {
-        test('adds a new ID to the front', () => {
-            assert.deepStrictEqual(addToRecent(['b', 'c'], 'a', 5), ['a', 'b', 'c']);
-        });
-
-        test('moves a repeated ID to the front', () => {
-            assert.deepStrictEqual(addToRecent(['a', 'b', 'c'], 'c', 5), ['c', 'a', 'b']);
-        });
-
-        test('keeps at most the maximum number of entries', () => {
-            assert.deepStrictEqual(addToRecent(['a', 'b', 'c'], 'd', 3), ['d', 'a', 'b']);
         });
     });
 });

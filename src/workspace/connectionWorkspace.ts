@@ -9,7 +9,6 @@ import { CabinetsRequest, CabinetsTab } from './cabinetsTab';
 import { DumpTab, DumpTabRequest, DumpTarget } from './dumpTab';
 import { ENTITY_TABS, EntityRequest, EntityTab, EntityTabName, isEntityTabName } from './entityTab';
 import { isEntityKind, openEntityQuery } from './entityQuery';
-import { extractConnectionName } from './objectCommands';
 
 export const WORKSPACE_VIEW_TYPE = 'dctmConnectionWorkspace';
 
@@ -469,8 +468,7 @@ export function registerConnectionWorkspace(
             }
         }),
         vscode.commands.registerCommand('dctm.openWorkspace', async (arg?: unknown) => {
-            const name = typeof arg === 'string' ? arg : extractConnectionName(arg);
-            const connection = await connectionManager.connect(name);
+            const connection = await connectionManager.connect(typeof arg === 'string' ? arg : undefined);
             if (connection) {
                 workspaces.show(connection.name);
             }

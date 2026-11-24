@@ -3,18 +3,16 @@ import { ConnectionManager } from '../connectionManager';
 import { RepositoryConnection } from '../repositoryConnection';
 import type { ConnectionWorkspaces } from './connectionWorkspace';
 
-// An Explorer tree item holds its fields under data; a workspace webview context holds them at the top level.
 function itemField(arg: unknown, field: 'objectId' | 'connectionName'): string | undefined {
     if (!arg || typeof arg !== 'object') {
         return undefined;
     }
-    const item = arg as Record<string, unknown> & { data?: Record<string, unknown> };
-    const value = item.data && typeof item.data === 'object' ? item.data[field] : item[field];
+    const value = (arg as Record<string, unknown>)[field];
     return typeof value === 'string' ? value : undefined;
 }
 
 export function extractObjectId(arg: unknown): string | undefined {
-    return typeof arg === 'string' ? arg : itemField(arg, 'objectId');
+    return itemField(arg, 'objectId');
 }
 
 export function extractConnectionName(arg: unknown): string | undefined {

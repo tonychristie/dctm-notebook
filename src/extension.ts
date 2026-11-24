@@ -2,16 +2,12 @@ import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
 import { DqlExecutor } from './dqlExecutor';
 import { ResultsPanel } from './resultsPanel';
-import { registerObjectBrowser } from './objectBrowser';
+import { registerConnectionsView } from './connectionsView';
 import { ApiExecutor } from './apiExecutor';
 import { registerConnectionsPanel } from './connectionsPanel';
-import { registerTypeBrowser } from './typeBrowser';
-import { registerUserBrowser } from './userBrowser';
-import { registerGroupBrowser } from './groupBrowser';
 import { registerDqlSemanticTokens } from './dqlSemanticTokens';
 import { registerApiMethodReference } from './apiMethodReference';
 import { registerNotebook } from './notebook';
-import { registerObjectDumpView } from './objectDumpView';
 import { registerConnectionWorkspace } from './workspace/connectionWorkspace';
 import { registerObjectCommands } from './workspace/objectCommands';
 
@@ -103,19 +99,15 @@ export function activate(context: vscode.ExtensionContext) {
         }
     }));
 
-    registerObjectBrowser(context, connectionManager);
+    registerConnectionsView(context, connectionManager);
     const workspaces = registerConnectionWorkspace(context, connectionManager, apiExecutor);
     registerObjectCommands(context, connectionManager, workspaces);
     registerConnectionsPanel(context, connectionManager);
-    registerTypeBrowser(context, connectionManager);
     registerDqlSemanticTokens(context, connectionManager);
-    registerUserBrowser(context, connectionManager);
-    registerGroupBrowser(context, connectionManager);
 
     const apiReference = registerApiMethodReference(context);
 
-    registerNotebook(context, connectionManager, dqlExecutor, apiExecutor, apiReference);
-    registerObjectDumpView(context, connectionManager);
+    registerNotebook(context, connectionManager, dqlExecutor, apiExecutor, workspaces, apiReference);
 }
 
 export async function deactivate() {

@@ -1,14 +1,47 @@
 import { ObjectInfo } from '../bridgeTypes';
-import {
-    compareFolderContentNodes,
-    createChildNodeId,
-    createNodeId,
-    documentIconName,
-    isFolderObjectId
-} from '../objectBrowserNodes';
 import { DumpTarget, OpenConnections } from './dumpTab';
 
 export type CabinetNodeType = 'cabinet' | 'folder' | 'document';
+
+const documentIconMappings: Array<{ patterns: string[]; icon: string }> = [
+    { patterns: ['pdf'], icon: 'file-pdf' },
+    { patterns: ['word', 'doc', 'docx', 'text', 'txt', 'excel', 'xls', 'xlsx'], icon: 'file-text' },
+    { patterns: ['image', 'jpg', 'jpeg', 'png', 'gif', 'bmp'], icon: 'file-media' },
+    { patterns: ['xml', 'html'], icon: 'file-code' },
+    { patterns: ['zip', 'rar', 'tar'], icon: 'file-zip' }
+];
+
+function documentIconName(format: string | undefined): string {
+    const lowerFormat = format?.toLowerCase() ?? '';
+    const mapping = documentIconMappings.find(({ patterns }) => patterns.some(p => lowerFormat.includes(p)));
+    return mapping?.icon ?? 'file';
+}
+
+/**
+ * An object linked into several folders appears once under each, so its id carries the parent chain.
+ */
+export function createChildNodeId(parentNodeId: string, objectId: string): string {
+    return `${parentNodeId}/${objectId}`;
+}
+
+export function compareFolderContentNodes(
+    a: { name: string; type: CabinetNodeType },
+    b: { name: string; type: CabinetNodeType }
+): number {
+    const aIsFolder = a.type === 'folder';
+    if (aIsFolder !== (b.type === 'folder')) {
+        return aIsFolder ? -1 : 1;
+    }
+    return a.name.localeCompare(b.name);
+}
+
+/**
+ * The object id prefix comes from the base type: 0b for dm_folder and its subtypes, 0c for dm_cabinet.
+ */
+export function isFolderObjectId(objectId: string): boolean {
+    const prefix = objectId.substring(0, 2).toLowerCase();
+    return prefix === '0b' || prefix === '0c';
+}
 
 export interface CabinetNodeContext {
     webviewSection: CabinetNodeType;
@@ -69,7 +102,7 @@ function node(
 export function cabinetNodes(connectionName: string, cabinets: ObjectInfo[]): CabinetNode[] {
     return cabinets.map(cabinet => {
         const path = '/' + cabinet.name;
-        return node(connectionName, createNodeId(connectionName, 'cabinet', cabinet.objectId), 'cabinet', cabinet, {
+        return node(connectionName, `${connectionName}::cabinet::${cabinet.objectId}`, 'cabinet', cabinet, {
             icon: 'archive',
             path,
             tooltip: `${path}\nID: ${cabinet.objectId}`

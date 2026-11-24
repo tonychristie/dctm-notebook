@@ -33,4 +33,11 @@ suite('Object Dump Test Suite', () => {
         assert.ok(html.includes('data-action="copyValue" data-value="0000000000000000"'));
         assert.ok(html.includes('data-action="dumpObject" data-value="0b00000180000101"'));
     });
+
+    test('escapes the object id in the header', () => {
+        const html = renderObjectDump({ ...dumpWith('object_name', 'Doc'), objectId: '09<b>' });
+
+        assert.ok(html.includes('<span class="object-id">09&lt;b&gt;</span>'));
+        assert.ok(!html.includes('09<b>'));
+    });
 });

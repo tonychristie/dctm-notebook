@@ -36,7 +36,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('dctm.connect', async () => {
             const connection = await connectionManager.connect();
             if (connection) {
-                workspaces.show(connection.name);
+                await workspaces.show(connection.name);
             }
         }),
         vscode.commands.registerCommand('dctm.disconnect', async () => {

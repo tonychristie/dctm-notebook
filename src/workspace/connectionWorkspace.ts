@@ -342,14 +342,48 @@ function workspacePanelOptions(extensionUri: vscode.Uri): vscode.WebviewOptions 
     return { enableScripts: true, localResourceRoots: webviewResourceRoots(extensionUri) };
 }
 
+export interface RestoredTabs {
+    // Activates the restored workspace tab of the connection, so VS Code revives it; false when there is none.
+    activate(connectionName: string): Promise<boolean>;
+}
+
+const FOCUS_GROUP_COMMANDS = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth']
+    .map(position => `workbench.action.focus${position}EditorGroup`);
+
+export function restoredWorkspaceTabs(): RestoredTabs {
+    return {
+        async activate(connectionName: string): Promise<boolean> {
+            for (const group of vscode.window.tabGroups.all) {
+                const index = group.tabs.findIndex(tab =>
+                    tab.input instanceof vscode.TabInputWebview &&
+                    // VS Code prefixes the view type of an extension webview.
+                    tab.input.viewType.endsWith(WORKSPACE_VIEW_TYPE) &&
+                    tab.label === connectionName
+                );
+                const focusGroup = FOCUS_GROUP_COMMANDS[group.viewColumn - 1];
+                if (index >= 0 && focusGroup) {
+                    await vscode.commands.executeCommand(focusGroup);
+                    await vscode.commands.executeCommand('workbench.action.openEditorAtIndex', index);
+                    return true;
+                }
+            }
+            return false;
+        }
+    };
+}
+
+const REVIVE_TIMEOUT_MS = 3000;
+
 export class ConnectionWorkspaces implements vscode.Disposable {
     private readonly workspaces = new Map<string, ConnectionWorkspace>();
+    private readonly pendingRevivals = new Map<string, (workspace: ConnectionWorkspace | undefined) => void>();
 
     constructor(
         private readonly extensionUri: vscode.Uri,
         private readonly connections: WorkspaceConnections,
         private readonly services: WorkspaceServices,
-        private readonly createPanel: PanelFactory = createWorkspacePanel(extensionUri)
+        private readonly createPanel: PanelFactory = createWorkspacePanel(extensionUri),
+        private readonly restoredTabs: RestoredTabs = restoredWorkspaceTabs()
     ) {
     }
 
@@ -357,8 +391,8 @@ export class ConnectionWorkspaces implements vscode.Disposable {
         return this.workspaces.get(connectionName);
     }
 
-    show(connectionName: string, tab?: WorkspaceTab): ConnectionWorkspace {
-        let workspace = this.workspaces.get(connectionName);
+    async show(connectionName: string, tab?: WorkspaceTab): Promise<ConnectionWorkspace> {
+        let workspace = this.workspaces.get(connectionName) ?? await this.reviveRestored(connectionName);
         if (workspace) {
             workspace.panel.reveal(vscode.ViewColumn.Active);
         } else {
@@ -371,11 +405,30 @@ export class ConnectionWorkspaces implements vscode.Disposable {
     }
 
     async showDump(connectionName: string, target: DumpTarget): Promise<void> {
-        await this.show(connectionName).showDump(target);
+        await (await this.show(connectionName)).showDump(target);
     }
 
-    showApi(connectionName: string, objectId?: string): void {
-        this.show(connectionName).showApi(objectId);
+    async showApi(connectionName: string, objectId?: string): Promise<void> {
+        (await this.show(connectionName)).showApi(objectId);
+    }
+
+    // After a window reload VS Code revives a workspace tab only when it is first shown.
+    private async reviveRestored(connectionName: string): Promise<ConnectionWorkspace | undefined> {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const revived = new Promise<ConnectionWorkspace | undefined>(resolve => {
+            this.pendingRevivals.set(connectionName, resolve);
+            timer = setTimeout(() => resolve(undefined), REVIVE_TIMEOUT_MS);
+        });
+
+        try {
+            if (!await this.restoredTabs.activate(connectionName)) {
+                return undefined;
+            }
+            return await revived ?? this.workspaces.get(connectionName);
+        } finally {
+            clearTimeout(timer);
+            this.pendingRevivals.delete(connectionName);
+        }
     }
 
     revive(panel: vscode.WebviewPanel, state: WorkspacePageState | undefined): void {
@@ -383,11 +436,15 @@ export class ConnectionWorkspaces implements vscode.Disposable {
         const configured = name !== undefined && this.connections.getConnections().some(c => c.name === name);
         if (!configured || this.workspaces.has(name)) {
             panel.dispose();
+            if (name !== undefined) {
+                this.pendingRevivals.get(name)?.(this.workspaces.get(name));
+            }
             return;
         }
         panel.webview.options = workspacePanelOptions(this.extensionUri);
         const tab = state?.activeTab;
-        this.add(panel, name, isWorkspaceTab(tab) ? tab : 'cabinets');
+        const workspace = this.add(panel, name, isWorkspaceTab(tab) ? tab : 'cabinets');
+        this.pendingRevivals.get(name)?.(workspace);
     }
 
     private add(panel: vscode.WebviewPanel, connectionName: string, tab: WorkspaceTab): ConnectionWorkspace {
@@ -473,7 +530,7 @@ export function registerConnectionWorkspace(
         vscode.commands.registerCommand('dctm.openWorkspace', async (arg?: unknown) => {
             const connection = await connectionManager.connect(typeof arg === 'string' ? arg : undefined);
             if (connection) {
-                workspaces.show(connection.name);
+                await workspaces.show(connection.name);
             }
         }),
         vscode.commands.registerCommand('dctm.workspace.dump', async (item?: WorkspaceItemContext) => {

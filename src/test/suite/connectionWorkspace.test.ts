@@ -6,6 +6,7 @@ import { RepositoryConnection } from '../../repositoryConnection';
 import { ApiExecute } from '../../workspace/apiTab';
 import {
     ConnectionWorkspaces,
+    RestoredTabs,
     WorkspaceConnections,
     WorkspaceNotebooks,
     WorkspaceStateMessage
@@ -144,7 +145,7 @@ interface Harness {
     notebooks: FakeNotebooks;
 }
 
-function harness(): Harness {
+function harness(restoredTabs: RestoredTabs = { activate: async () => false }): Harness {
     const connections = new FakeConnections();
     const panels: FakePanel[] = [];
     const apiExecutor = new FakeApiExecutor();
@@ -154,7 +155,7 @@ function harness(): Harness {
         const fake = fakePanel(title);
         panels.push(fake);
         return fake.panel;
-    });
+    }, restoredTabs);
     return { workspaces, connections, panels, apiExecutor, notebooks };
 }
 
@@ -169,22 +170,58 @@ function lastState(panel: FakePanel): WorkspaceStateMessage | undefined {
 }
 
 suite('ConnectionWorkspace Test Suite', () => {
-    test('show reveals the existing workspace and creates no second panel', () => {
+    test('show reveals the existing workspace and creates no second panel', async () => {
         const { workspaces, panels } = harness();
 
-        const first = workspaces.show('conn1');
-        const second = workspaces.show('conn1');
+        const first = await workspaces.show('conn1');
+        const second = await workspaces.show('conn1');
 
         assert.strictEqual(first, second);
         assert.strictEqual(panels.length, 1);
         assert.strictEqual(panels[0].reveals, 1);
     });
 
-    test('two connections get two panels titled with their names', () => {
+    test('show of a restored tab that is not yet revived reveals the revived workspace and creates no panel', async () => {
+        const restored = fakePanel('conn1');
+        const activated: string[] = [];
+        const { workspaces, panels } = harness({
+            activate: async (connectionName: string) => {
+                activated.push(connectionName);
+                // VS Code revives the tab through the serializer after the tab is shown.
+                setTimeout(() => workspaces.revive(restored.panel, { connectionName, activeTab: 'dump' }), 0);
+                return true;
+            }
+        });
+
+        const workspace = await workspaces.show('conn1');
+
+        assert.deepStrictEqual(activated, ['conn1']);
+        assert.strictEqual(panels.length, 0);
+        assert.strictEqual(workspace.panel, restored.panel);
+        assert.strictEqual(workspaces.get('conn1'), workspace);
+        assert.strictEqual(restored.reveals, 1);
+    });
+
+    test('show with no restored tab creates a panel', async () => {
+        const activated: string[] = [];
+        const { workspaces, panels } = harness({
+            activate: async (connectionName: string) => {
+                activated.push(connectionName);
+                return false;
+            }
+        });
+
+        await workspaces.show('conn1');
+
+        assert.deepStrictEqual(activated, ['conn1']);
+        assert.strictEqual(panels.length, 1);
+    });
+
+    test('two connections get two panels titled with their names', async () => {
         const { workspaces, panels } = harness();
 
-        workspaces.show('conn1');
-        workspaces.show('conn2');
+        await workspaces.show('conn1');
+        await workspaces.show('conn2');
 
         assert.deepStrictEqual(panels.map(panel => panel.title()), ['conn1', 'conn2']);
     });
@@ -192,7 +229,7 @@ suite('ConnectionWorkspace Test Suite', () => {
     test('a closed connection posts the disconnected state and keeps the workspace open', async () => {
         const { workspaces, connections, panels } = harness();
         connections.openNow('conn1');
-        workspaces.show('conn1');
+        await workspaces.show('conn1');
         await panels[0].send({ command: 'ready' });
         assert.strictEqual(lastState(panels[0])?.connected, true);
 
@@ -205,10 +242,10 @@ suite('ConnectionWorkspace Test Suite', () => {
         assert.ok(workspaces.get('conn1'));
     });
 
-    test('a reopened connection posts a new generation so the page reloads its trees', () => {
+    test('a reopened connection posts a new generation so the page reloads its trees', async () => {
         const { workspaces, connections, panels } = harness();
         connections.openNow('conn1');
-        workspaces.show('conn1');
+        await workspaces.show('conn1');
 
         connections.close('conn1');
         connections.openNow('conn1');
@@ -220,7 +257,7 @@ suite('ConnectionWorkspace Test Suite', () => {
 
     test('Connect from the banner connects the workspace connection', async () => {
         const { workspaces, connections, panels } = harness();
-        workspaces.show('conn1');
+        await workspaces.show('conn1');
 
         await panels[0].send({ command: 'connect' });
 
@@ -228,10 +265,10 @@ suite('ConnectionWorkspace Test Suite', () => {
         assert.strictEqual(lastState(panels[0])?.connected, true);
     });
 
-    test('a connection removed from settings disposes its workspace', () => {
+    test('a connection removed from settings disposes its workspace', async () => {
         const { workspaces, connections, panels } = harness();
-        workspaces.show('conn1');
-        workspaces.show('conn2');
+        await workspaces.show('conn1');
+        await workspaces.show('conn2');
 
         connections.setConnections(connections.connections.filter(c => c.name !== 'conn1'));
 
@@ -240,9 +277,9 @@ suite('ConnectionWorkspace Test Suite', () => {
         assert.strictEqual(workspaces.get('conn1'), undefined);
     });
 
-    test('a renamed connection disposes its workspace', () => {
+    test('a renamed connection disposes its workspace', async () => {
         const { workspaces, connections, panels } = harness();
-        workspaces.show('conn1');
+        await workspaces.show('conn1');
 
         connections.setConnections(connections.connections.map(c => c.name === 'conn1' ? { ...c, name: 'renamed' } : c));
 
@@ -260,7 +297,7 @@ suite('ConnectionWorkspace Test Suite', () => {
 
     test('opening a user from the Users tab shows its dump in the Dump tab', async () => {
         const { workspaces, panels } = harness();
-        workspaces.show('conn1');
+        await workspaces.show('conn1');
 
         await panels[0].send({ tab: 'users', command: 'open', name: 'jsmith' });
 
@@ -273,7 +310,7 @@ suite('ConnectionWorkspace Test Suite', () => {
         const { workspaces, connections, panels, apiExecutor } = harness();
         connections.openNow('conn1');
         const conn2 = connections.openNow('conn2');
-        workspaces.show('conn2');
+        await workspaces.show('conn2');
 
         await panels[0].send({ tab: 'api', command: 'execute', method: 'getSessionId' });
 
@@ -291,7 +328,7 @@ suite('ConnectionWorkspace Test Suite', () => {
     test('a session method runs on the session even with an object ID in the box', async () => {
         const { workspaces, connections, panels, apiExecutor } = harness();
         connections.openNow('conn1');
-        workspaces.show('conn1');
+        await workspaces.show('conn1');
 
         await panels[0].send({ tab: 'api', command: 'execute', objectId: '0900000180000001', method: 'getLoginTicket' });
         await panels[0].send({ tab: 'api', command: 'execute', objectId: '0900000180000001', method: 'getObjectName' });
@@ -302,7 +339,7 @@ suite('ConnectionWorkspace Test Suite', () => {
     test('the API history survives a page reload', async () => {
         const { workspaces, connections, panels } = harness();
         connections.openNow('conn1');
-        workspaces.show('conn1');
+        await workspaces.show('conn1');
         await panels[0].send({ tab: 'api', command: 'execute', method: 'getObjectName', objectId: '0900000180000001' });
         await panels[0].send({ tab: 'api', command: 'execute', method: 'save' });
 
@@ -317,7 +354,7 @@ suite('ConnectionWorkspace Test Suite', () => {
 
     test('the API tab reports Not connected when the connection is closed', async () => {
         const { workspaces, panels, apiExecutor } = harness();
-        workspaces.show('conn1');
+        await workspaces.show('conn1');
 
         await panels[0].send({ tab: 'api', command: 'execute', objectId: '0900000180000001', method: 'save' });
 
@@ -330,7 +367,7 @@ suite('ConnectionWorkspace Test Suite', () => {
     test('an object ID clicked in an API result shows in the Dump tab of the same workspace', async () => {
         const { workspaces, connections, panels } = harness();
         connections.openNow('conn1');
-        workspaces.show('conn1');
+        await workspaces.show('conn1');
 
         await panels[0].send({ tab: 'api', command: 'dumpObject', objectId: '0900000180000001' });
 
@@ -341,7 +378,7 @@ suite('ConnectionWorkspace Test Suite', () => {
     test('showApi selects the API tab and fills in the object ID, again when the page loads', async () => {
         const { workspaces, panels } = harness();
 
-        workspaces.showApi('conn1', '0900000180000001');
+        await workspaces.showApi('conn1', '0900000180000001');
 
         assert.ok(panels[0].posted.some(message => JSON.stringify(message) === '{"type":"selectTab","tab":"api"}'));
         assert.deepStrictEqual(postedOfType(panels[0], 'apiObjectId'), [{ type: 'apiObjectId', objectId: '0900000180000001' }]);
@@ -356,7 +393,7 @@ suite('ConnectionWorkspace Test Suite', () => {
 
     test('the state message carries the API method list', async () => {
         const { workspaces, panels } = harness();
-        workspaces.show('conn1');
+        await workspaces.show('conn1');
 
         await panels[0].send({ command: 'ready' });
 
@@ -365,7 +402,7 @@ suite('ConnectionWorkspace Test Suite', () => {
 
     test('the notebook buttons act on the workspace connection', async () => {
         const { workspaces, panels, notebooks } = harness();
-        workspaces.show('conn2');
+        await workspaces.show('conn2');
 
         await panels[0].send({ command: 'newNotebook' });
         await panels[0].send({ command: 'openNotebook' });

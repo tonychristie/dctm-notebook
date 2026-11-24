@@ -10,6 +10,7 @@ import {
     resolveNotebookConnection
 } from '../../notebook/notebookConnection';
 import { dumpFromNotebook } from '../../notebook';
+import { executeCells } from '../../notebook/notebookController';
 import { DumpTarget } from '../../workspace/dumpTab';
 import { DocumentConnections } from '../../documentConnections';
 import { documentConnection } from '../../executeDql';
@@ -538,6 +539,47 @@ suite('Notebook Connection Resolution Test Suite', () => {
         assert.strictEqual(connection, undefined);
         assert.strictEqual(error, NOT_BOUND_MESSAGE);
         assert.strictEqual(notebook.metadata.connection, undefined);
+    });
+
+    test('Run All on an unbound notebook asks once and ends every cell with the not-bound error', async () => {
+        const data = new vscode.NotebookData(['select 1', 'select 2', 'select 3'].map(query =>
+            new vscode.NotebookCellData(vscode.NotebookCellKind.Code, query, 'dql')
+        ));
+        const notebook = await vscode.workspace.openNotebookDocument('dctmbook', data);
+        let picks = 0;
+        const executed: number[] = [];
+        const failed: [number, string][] = [];
+
+        await executeCells(
+            notebook.getCells(),
+            () => resolveNotebookConnection(manager, notebook, async () => { picks++; return undefined; }),
+            async cell => { executed.push(cell.index); },
+            (cell, message) => failed.push([cell.index, message])
+        );
+
+        assert.strictEqual(picks, 1);
+        assert.deepStrictEqual(executed, []);
+        assert.deepStrictEqual(failed, [[0, NOT_BOUND_MESSAGE], [1, NOT_BOUND_MESSAGE], [2, NOT_BOUND_MESSAGE]]);
+    });
+
+    test('Run All on an unbound notebook binds once and runs every cell on the picked connection', async () => {
+        const data = new vscode.NotebookData(['select 1', 'select 2'].map(query =>
+            new vscode.NotebookCellData(vscode.NotebookCellKind.Code, query, 'dql')
+        ));
+        const notebook = await vscode.workspace.openNotebookDocument('dctmbook', data);
+        let picks = 0;
+        const executed: [number, string][] = [];
+
+        await executeCells(
+            notebook.getCells(),
+            () => resolveNotebookConnection(manager, notebook, async () => { picks++; return 'Rest'; }),
+            async (cell, connection) => { executed.push([cell.index, connection.name]); },
+            () => assert.fail('no cell should fail')
+        );
+
+        assert.strictEqual(picks, 1);
+        assert.deepStrictEqual(executed, [[0, 'Rest'], [1, 'Rest']]);
+        assert.strictEqual(notebook.metadata.connection, 'Rest');
     });
 
     test('a binding that is not in the configured connections is reported as not found', async () => {

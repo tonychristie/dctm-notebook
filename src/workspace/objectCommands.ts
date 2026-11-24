@@ -35,7 +35,7 @@ export function registerObjectCommands(
             const name = extractConnectionName(arg);
             const connection = name ? await connectionManager.connect(name) : await connectionManager.pickConnection();
             if (connection) {
-                workspaces.showApi(connection.name, extractObjectId(arg));
+                await workspaces.showApi(connection.name, extractObjectId(arg));
             }
         }
     );

@@ -1,6 +1,9 @@
 import * as assert from 'assert';
+import * as vscode from 'vscode';
 import { RepositoryConnection } from '../../repositoryConnection';
 import { DumpContentMessage, DumpTab, DumpTarget } from '../../workspace/dumpTab';
+
+const noDocuments = { link: async () => undefined };
 
 interface Deferred<T> {
     promise: Promise<T>;
@@ -39,6 +42,7 @@ function harness(resolveAtOnce = true): Harness {
         'conn1',
         { getOpenConnection: () => connection },
         message => posted.push(message),
+        noDocuments,
         (_connection, target, refresh) => {
             const result = deferred<string>();
             calls.push({ target, refresh, result });
@@ -218,10 +222,29 @@ suite('DumpTab Test Suite', () => {
 
     test('a closed connection shows the Not connected error', async () => {
         const posted: DumpContentMessage[] = [];
-        const tab = new DumpTab('conn1', { getOpenConnection: () => undefined }, message => posted.push(message));
+        const tab = new DumpTab('conn1', { getOpenConnection: () => undefined }, message => posted.push(message), noDocuments);
 
         await tab.show(objectA);
 
         assert.ok(posted[posted.length - 1].html.includes('Not connected to conn1'));
+    });
+
+    test('Generate DQL links its new document to the workspace connection before it shows', async () => {
+        const links: { languageId: string; connectionName: string; visible: boolean }[] = [];
+        const documents = {
+            link: async (document: vscode.TextDocument, connectionName: string) => {
+                const visible = vscode.window.visibleTextEditors.some(editor => editor.document === document);
+                links.push({ languageId: document.languageId, connectionName, visible });
+            }
+        };
+        const connection = { name: 'conn1' } as RepositoryConnection;
+        const tab = new DumpTab('conn1', { getOpenConnection: () => connection }, () => undefined, documents,
+            async () => 'user dump');
+        await tab.show({ kind: 'user', name: 'test01' });
+
+        await tab.handleMessage({ command: 'generateDql' });
+
+        assert.deepStrictEqual(links, [{ languageId: 'dql', connectionName: 'conn1', visible: false }]);
+        await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
     });
 });

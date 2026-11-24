@@ -3,7 +3,7 @@ import { ConnectionManager } from '../connectionManager';
 import { RepositoryConnection } from '../repositoryConnection';
 import { DqlExecutor, DqlResult } from '../dqlExecutor';
 import { ApiExecutor, ApiMethodResponse } from '../apiExecutor';
-import { resolveNotebookConnection } from './notebookConnection';
+import { NotebookConnectionResult, resolveNotebookConnection } from './notebookConnection';
 import {
     OutputFormat,
     formatValue,
@@ -16,6 +16,33 @@ import {
 // A constructed Error carries a stack, and a name of 'Error' adds an 'Error: ' prefix in the renderer.
 export function errorOutput(message: string): vscode.NotebookCellOutput {
     return new vscode.NotebookCellOutput([vscode.NotebookCellOutputItem.error({ name: '', message })]);
+}
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
+// The connection is resolved once for the run, so a cancelled picker is not shown again for each cell.
+export async function executeCells<Cell>(
+    cells: readonly Cell[],
+    resolve: () => Promise<NotebookConnectionResult>,
+    execute: (cell: Cell, connection: RepositoryConnection) => Promise<void>,
+    fail: (cell: Cell, message: string) => void
+): Promise<void> {
+    let result: NotebookConnectionResult;
+    try {
+        result = await resolve();
+    } catch (error) {
+        result = { error: errorMessage(error) };
+    }
+
+    for (const cell of cells) {
+        if (result.connection) {
+            await execute(cell, result.connection);
+        } else {
+            fail(cell, result.error);
+        }
+    }
 }
 
 /**
@@ -62,33 +89,37 @@ export class DctmNotebookController {
      */
     private async executeHandler(
         cells: vscode.NotebookCell[],
-        _notebook: vscode.NotebookDocument,
+        notebook: vscode.NotebookDocument,
         _controller: vscode.NotebookController
     ): Promise<void> {
-        for (const cell of cells) {
-            await this.executeCell(cell);
-        }
+        await executeCells(
+            cells,
+            () => resolveNotebookConnection(this.connectionManager, notebook),
+            (cell, connection) => this.executeCell(cell, connection),
+            (cell, message) => this.failCell(cell, message)
+        );
+    }
+
+    private startExecution(cell: vscode.NotebookCell): vscode.NotebookCellExecution {
+        const execution = this.controller.createNotebookCellExecution(cell);
+        execution.executionOrder = ++this.executionOrder;
+        execution.start(Date.now());
+        return execution;
+    }
+
+    private failCell(cell: vscode.NotebookCell, message: string): void {
+        const execution = this.startExecution(cell);
+        execution.replaceOutput([errorOutput(message)]);
+        execution.end(false, Date.now());
     }
 
     /**
      * Execute a single notebook cell
      */
-    private async executeCell(cell: vscode.NotebookCell): Promise<void> {
-        const execution = this.controller.createNotebookCellExecution(cell);
-        execution.executionOrder = ++this.executionOrder;
-        execution.start(Date.now());
+    private async executeCell(cell: vscode.NotebookCell, connection: RepositoryConnection): Promise<void> {
+        const execution = this.startExecution(cell);
 
         try {
-            const { connection, error } = await resolveNotebookConnection(
-                this.connectionManager,
-                cell.notebook.metadata
-            );
-            if (!connection) {
-                execution.replaceOutput([errorOutput(error)]);
-                execution.end(false, Date.now());
-                return;
-            }
-
             const content = cell.document.getText().trim();
             if (!content) {
                 execution.replaceOutput([]);

@@ -6,7 +6,7 @@ import { errorFragment, fetchObjectDump, loadingFragment, renderObjectDump } fro
 import { fetchTypeDump, renderTypeDump } from '../dumps/typeDump';
 import { fetchUserDump, renderUserDump } from '../dumps/userDump';
 import { fetchGroupDump, renderGroupDump } from '../dumps/groupDump';
-import { EntityKind, openEntityQuery } from './entityQuery';
+import { EntityKind, QueryDocuments, openEntityQuery } from './entityQuery';
 
 export type DumpTarget =
     | { kind: 'object'; objectId: string }
@@ -66,6 +66,7 @@ export class DumpTab {
         private readonly connectionName: string,
         private readonly connections: OpenConnections,
         private readonly post: (message: DumpContentMessage) => void,
+        private readonly documents: QueryDocuments,
         private readonly render: DumpRenderer = renderDumpTarget
     ) {
     }
@@ -150,7 +151,7 @@ export class DumpTab {
         const target = this.history.current();
         if (target && target.kind !== 'object') {
             const connection = this.connections.getOpenConnection(this.connectionName);
-            await openEntityQuery(connection, this.connectionName, target.kind, target.name);
+            await openEntityQuery(connection, this.connectionName, target.kind, target.name, this.documents);
         }
     }
 

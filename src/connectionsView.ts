@@ -65,9 +65,6 @@ export function registerConnectionsView(
         }),
         vscode.commands.registerCommand('dctm.disconnectFromTree', async (item?: ConnectionItem) => {
             await connectionManager.disconnect(item?.data.connectionName);
-        }),
-        vscode.commands.registerCommand('dctm.switchUserFromTree', async (item?: ConnectionItem) => {
-            await connectionManager.switchUser(item?.data.connectionName);
         })
     );
 

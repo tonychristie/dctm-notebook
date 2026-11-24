@@ -3,10 +3,17 @@ import * as vscode from 'vscode';
 import { ConnectionManager, Credentials, DocumentumConnection } from '../../connectionManager';
 import { describeConnection } from '../../connectionForm';
 import { DctmBridge, DfcConnectParams } from '../../dctmBridge';
-import { RepositoryConnection } from '../../repositoryConnection';
-import { bindNotebook, openNotebookAction, resolveNotebookConnection } from '../../notebook/notebookConnection';
+import {
+    NOT_BOUND_MESSAGE,
+    bindNotebook,
+    openNotebookAction,
+    resolveNotebookConnection
+} from '../../notebook/notebookConnection';
 import { dumpFromNotebook } from '../../notebook';
+import { executeCells } from '../../notebook/notebookController';
 import { DumpTarget } from '../../workspace/dumpTab';
+import { DocumentConnections } from '../../documentConnections';
+import { documentConnection } from '../../executeDql';
 
 class FakeBridge {
     ensureRunningCalls: ('dfc' | 'rest')[] = [];
@@ -47,9 +54,16 @@ class FakeBridge {
     }
 }
 
+interface PickCall {
+    labels: string[];
+    descriptions: (string | undefined)[];
+}
+
 class TestConnectionManager extends ConnectionManager {
-    prompts: { name: string; askUsername: boolean }[] = [];
+    prompts: { name: string }[] = [];
     answers: (Credentials | undefined)[] = [];
+    pickCalls: PickCall[] = [];
+    pickAnswers: (string | undefined)[] = [];
 
     constructor(bridge: FakeBridge, private connections: DocumentumConnection[]) {
         super(bridge as unknown as DctmBridge);
@@ -66,13 +80,44 @@ class TestConnectionManager extends ConnectionManager {
         await this.updateConnections(connections);
     }
 
-    protected async promptCredentials(
-        config: DocumentumConnection,
-        askUsername = false
-    ): Promise<Credentials | undefined> {
-        this.prompts.push({ name: config.name, askUsername });
+    protected async promptCredentials(config: DocumentumConnection): Promise<Credentials | undefined> {
+        this.prompts.push({ name: config.name });
         return this.answers.length > 0 ? this.answers.shift() : { username: 'user', password: 'pass' };
     }
+
+    protected showQuickPick<T extends vscode.QuickPickItem>(items: T[]): Thenable<T | undefined> {
+        this.pickCalls.push({ labels: items.map(i => i.label), descriptions: items.map(i => i.description) });
+        const answer = this.pickAnswers.shift();
+        return Promise.resolve(items.find(item => (item as { connectionName?: string }).connectionName === answer));
+    }
+}
+
+class FakeMemento implements vscode.Memento {
+    private readonly values = new Map<string, unknown>();
+
+    keys(): readonly string[] {
+        return [...this.values.keys()];
+    }
+
+    get<T>(key: string, defaultValue?: T): T | undefined {
+        return this.values.has(key) ? this.values.get(key) as T : defaultValue;
+    }
+
+    async update(key: string, value: unknown): Promise<void> {
+        this.values.set(key, value);
+    }
+}
+
+async function notebookWith(metadata: { [key: string]: unknown }): Promise<vscode.NotebookDocument> {
+    const data = new vscode.NotebookData([
+        new vscode.NotebookCellData(vscode.NotebookCellKind.Code, 'select 1 from dm_server_config', 'dql')
+    ]);
+    data.metadata = metadata;
+    return vscode.workspace.openNotebookDocument('dctmbook', data);
+}
+
+function fileDocument(path: string): vscode.TextDocument {
+    return { uri: vscode.Uri.file(path) } as vscode.TextDocument;
 }
 
 const restConnection: DocumentumConnection = {
@@ -99,17 +144,14 @@ const defaultsConnection: DocumentumConnection = {
 suite('Connection Manager Test Suite', () => {
     let bridge: FakeBridge;
     let manager: TestConnectionManager;
-    let selectionEvents: (string | undefined)[];
     let openConnectionsEvents: number;
     let connectionsEvents: number;
 
     setup(() => {
         bridge = new FakeBridge();
         manager = new TestConnectionManager(bridge, [restConnection, dfcConnection, defaultsConnection]);
-        selectionEvents = [];
         openConnectionsEvents = 0;
         connectionsEvents = 0;
-        manager.onDidChangeSelection(connection => selectionEvents.push(connection?.name));
         manager.onDidChangeOpenConnections(() => openConnectionsEvents++);
         manager.onDidChangeConnections(() => connectionsEvents++);
     });
@@ -209,14 +251,15 @@ suite('Connection Manager Test Suite', () => {
     });
 
     suite('connect', () => {
-        test('selects the named connection without the picker', async () => {
-            await manager.connect('Rest');
+        test('opens the named connection without the pick and fires the open connections event', async () => {
+            const connection = await manager.connect('Rest');
 
-            assert.strictEqual(manager.getSelectedConnection()?.name, 'Rest');
-            assert.deepStrictEqual(selectionEvents, ['Rest']);
+            assert.strictEqual(connection, manager.getOpenConnection('Rest'));
+            assert.strictEqual(openConnectionsEvents, 1);
+            assert.deepStrictEqual(manager.pickCalls, []);
         });
 
-        test('selecting an open connection makes no bridge call', async () => {
+        test('connecting an open connection makes no bridge call', async () => {
             await manager.connect('Rest');
             await manager.connect('Dfc');
 
@@ -224,16 +267,63 @@ suite('Connection Manager Test Suite', () => {
 
             assert.strictEqual(bridge.connectCalls.length, 2);
             assert.strictEqual(manager.prompts.length, 2);
-            assert.strictEqual(manager.getSelectedConnection()?.name, 'Rest');
         });
 
-        test('selecting a second connection leaves the first one open', async () => {
+        test('connecting a second connection leaves the first one open', async () => {
             await manager.connect('Rest');
             await manager.connect('Dfc');
 
-            assert.ok(manager.getOpenConnection('Rest'));
-            assert.strictEqual(manager.getSelectedConnection()?.name, 'Dfc');
+            assert.deepStrictEqual(manager.getOpenConnections().map(c => c.name), ['Rest', 'Dfc']);
             assert.deepStrictEqual(bridge.disconnectCalls, []);
+        });
+
+        test('with no name shows every connection with the open ones first, while one is open', async () => {
+            await manager.connect('Dfc');
+            manager.pickAnswers = ['Rest'];
+
+            const connection = await manager.connect();
+
+            assert.strictEqual(connection?.name, 'Rest');
+            assert.deepStrictEqual(manager.pickCalls, [{
+                labels: ['Dfc', 'Rest', 'Defaults'],
+                descriptions: ['connected', 'http://dctm:8080/dctm-rest', 'DFC']
+            }]);
+        });
+    });
+
+    suite('pickConnection', () => {
+        test('returns the only open connection without showing the pick', async () => {
+            const open = await manager.connect('Dfc');
+
+            assert.strictEqual(await manager.pickConnection(), open);
+            assert.deepStrictEqual(manager.pickCalls, []);
+        });
+
+        test('with two open connections shows the pick with the open ones first', async () => {
+            await manager.connect('Dfc');
+            await manager.connect('Defaults');
+            manager.pickAnswers = ['Defaults'];
+
+            const connection = await manager.pickConnection();
+
+            assert.strictEqual(connection, manager.getOpenConnection('Defaults'));
+            assert.deepStrictEqual(manager.pickCalls[0].labels, ['Dfc', 'Defaults', 'Rest']);
+        });
+
+        test('with no open connection shows the pick and connects the one picked', async () => {
+            manager.pickAnswers = ['Rest'];
+
+            const connection = await manager.pickConnection();
+
+            assert.strictEqual(connection, manager.getOpenConnection('Rest'));
+            assert.deepStrictEqual(manager.pickCalls[0].labels, ['Rest', 'Dfc', 'Defaults']);
+        });
+
+        test('a cancelled pick connects nothing', async () => {
+            manager.pickAnswers = [undefined];
+
+            assert.strictEqual(await manager.pickConnection(), undefined);
+            assert.deepStrictEqual(bridge.connectCalls, []);
         });
     });
 
@@ -249,11 +339,10 @@ suite('Connection Manager Test Suite', () => {
             assert.strictEqual(bridge.connectCalls.length, 2);
         });
 
-        test('closes only the named session, fires both events and clears the selection when it was selected', async () => {
+        test('closes only the named session and fires the open connections event', async () => {
             await manager.connect('Rest');
             await manager.connect('Dfc');
             const dfcSession = manager.getOpenConnection('Dfc')?.sessionId;
-            selectionEvents = [];
             openConnectionsEvents = 0;
 
             await manager.disconnect('Dfc');
@@ -261,22 +350,35 @@ suite('Connection Manager Test Suite', () => {
             assert.deepStrictEqual(bridge.disconnectCalls, [dfcSession]);
             assert.ok(manager.getOpenConnection('Rest'));
             assert.strictEqual(manager.getOpenConnection('Dfc'), undefined);
-            assert.strictEqual(manager.getSelectedConnection(), undefined);
-            assert.deepStrictEqual(selectionEvents, [undefined]);
             assert.strictEqual(openConnectionsEvents, 1);
         });
 
-        test('keeps the selection when the disconnected connection is not selected', async () => {
+        test('with no name and one open connection disconnects it without the pick', async () => {
             await manager.connect('Rest');
-            await manager.connect('Dfc');
-            selectionEvents = [];
-            openConnectionsEvents = 0;
 
-            await manager.disconnect('Rest');
+            await manager.disconnect();
 
-            assert.strictEqual(manager.getSelectedConnection()?.name, 'Dfc');
-            assert.deepStrictEqual(selectionEvents, []);
-            assert.strictEqual(openConnectionsEvents, 1);
+            assert.strictEqual(manager.getOpenConnection('Rest'), undefined);
+            assert.deepStrictEqual(manager.pickCalls, []);
+        });
+
+        test('with no name and two open connections asks which open connection to disconnect', async () => {
+            await manager.connect('Rest');
+            await manager.connect('Defaults');
+            manager.pickAnswers = ['Defaults'];
+
+            await manager.disconnect();
+
+            assert.deepStrictEqual(manager.pickCalls[0].labels, ['Rest', 'Defaults']);
+            assert.ok(manager.getOpenConnection('Rest'));
+            assert.strictEqual(manager.getOpenConnection('Defaults'), undefined);
+        });
+
+        test('with no name and no open connection shows no pick and disconnects nothing', async () => {
+            await manager.disconnect();
+
+            assert.deepStrictEqual(manager.pickCalls, []);
+            assert.deepStrictEqual(bridge.disconnectCalls, []);
         });
 
         test('removes the connection when the bridge disconnect fails', async () => {
@@ -297,29 +399,6 @@ suite('Connection Manager Test Suite', () => {
             assert.deepStrictEqual(bridge.disconnectCalls.sort(), [first?.sessionId, second?.sessionId].sort());
             assert.strictEqual(manager.getOpenConnection('Rest'), undefined);
             assert.strictEqual(manager.getOpenConnection('Dfc'), undefined);
-        });
-    });
-
-    suite('switchUser', () => {
-        test('closes the old session, opens a new one and replaces the stored credentials', async () => {
-            await manager.connect('Rest');
-            const oldSession = manager.getOpenConnection('Rest')?.sessionId;
-            manager.answers = [{ username: 'other', password: 'secret' }];
-
-            await manager.switchUser('Rest');
-
-            const switched = manager.getOpenConnection('Rest');
-            assert.deepStrictEqual(bridge.disconnectCalls, [oldSession]);
-            assert.strictEqual(switched?.username, 'other');
-            assert.notStrictEqual(switched?.sessionId, oldSession);
-            assert.strictEqual(manager.getSelectedConnection(), switched);
-            assert.deepStrictEqual(manager.prompts[1], { name: 'Rest', askUsername: true });
-
-            await manager.disconnect('Rest');
-            await manager.openConnection('Rest');
-
-            assert.strictEqual(manager.prompts.length, 2);
-            assert.strictEqual(bridge.connectCalls[bridge.connectCalls.length - 1].username, 'other');
         });
     });
 
@@ -367,7 +446,6 @@ suite('Connection Manager Test Suite', () => {
             }]);
             assert.deepStrictEqual(bridge.disconnectCalls, ['session-1']);
             assert.strictEqual(manager.getOpenConnection('Dfc'), undefined);
-            assert.deepStrictEqual(selectionEvents, []);
             assert.strictEqual(openConnectionsEvents, 0);
         });
 
@@ -408,45 +486,106 @@ suite('Connection Manager Test Suite', () => {
 suite('Notebook Connection Resolution Test Suite', () => {
     let bridge: FakeBridge;
     let manager: TestConnectionManager;
-    let selected: RepositoryConnection | undefined;
 
     setup(async () => {
         bridge = new FakeBridge();
         manager = new TestConnectionManager(bridge, [restConnection, dfcConnection]);
         await manager.connect('Dfc');
-        selected = manager.getSelectedConnection();
-        assert.ok(selected);
     });
 
     teardown(() => {
         manager.dispose();
     });
 
-    test('a bound notebook resolves to its bound connection while another connection is selected', async () => {
-        const { connection } = await resolveNotebookConnection(manager, { connection: 'Rest' });
+    test('a bound notebook resolves to its bound connection while another connection is open', async () => {
+        const notebook = await notebookWith({ connection: 'Rest' });
 
-        assert.strictEqual(connection?.name, 'Rest');
-        assert.strictEqual(manager.getSelectedConnection(), selected);
+        const { connection } = await resolveNotebookConnection(manager, notebook);
+
+        assert.strictEqual(connection, manager.getOpenConnection('Rest'));
     });
 
     test('a bound notebook whose prompt is cancelled resolves to no connection', async () => {
+        const notebook = await notebookWith({ connection: 'Rest' });
         manager.answers = [undefined];
 
-        const { connection, error } = await resolveNotebookConnection(manager, { connection: 'Rest' });
+        const { connection, error } = await resolveNotebookConnection(manager, notebook);
 
         assert.strictEqual(connection, undefined);
         assert.ok(error);
         assert.deepStrictEqual(manager.prompts.map(p => p.name), ['Dfc', 'Rest']);
     });
 
-    test('an unbound notebook resolves to the selected connection', async () => {
-        const { connection } = await resolveNotebookConnection(manager, {});
+    test('an unbound notebook binds the picked connection and resolves to it', async () => {
+        const notebook = await notebookWith({ author: 'test' });
+        const offered: (string | undefined)[] = [];
 
-        assert.strictEqual(connection, selected);
+        const { connection } = await resolveNotebookConnection(manager, notebook, async current => {
+            offered.push(current);
+            return 'Rest';
+        });
+
+        assert.deepStrictEqual(offered, [undefined]);
+        assert.strictEqual(connection, manager.getOpenConnection('Rest'));
+        assert.strictEqual(notebook.metadata.connection, 'Rest');
+        assert.strictEqual(notebook.metadata.author, 'test');
+    });
+
+    test('an unbound notebook whose picker is cancelled reports that it is not bound', async () => {
+        const notebook = await notebookWith({});
+
+        const { connection, error } = await resolveNotebookConnection(manager, notebook, async () => undefined);
+
+        assert.strictEqual(connection, undefined);
+        assert.strictEqual(error, NOT_BOUND_MESSAGE);
+        assert.strictEqual(notebook.metadata.connection, undefined);
+    });
+
+    test('Run All on an unbound notebook asks once and ends every cell with the not-bound error', async () => {
+        const data = new vscode.NotebookData(['select 1', 'select 2', 'select 3'].map(query =>
+            new vscode.NotebookCellData(vscode.NotebookCellKind.Code, query, 'dql')
+        ));
+        const notebook = await vscode.workspace.openNotebookDocument('dctmbook', data);
+        let picks = 0;
+        const executed: number[] = [];
+        const failed: [number, string][] = [];
+
+        await executeCells(
+            notebook.getCells(),
+            () => resolveNotebookConnection(manager, notebook, async () => { picks++; return undefined; }),
+            async cell => { executed.push(cell.index); },
+            (cell, message) => failed.push([cell.index, message])
+        );
+
+        assert.strictEqual(picks, 1);
+        assert.deepStrictEqual(executed, []);
+        assert.deepStrictEqual(failed, [[0, NOT_BOUND_MESSAGE], [1, NOT_BOUND_MESSAGE], [2, NOT_BOUND_MESSAGE]]);
+    });
+
+    test('Run All on an unbound notebook binds once and runs every cell on the picked connection', async () => {
+        const data = new vscode.NotebookData(['select 1', 'select 2'].map(query =>
+            new vscode.NotebookCellData(vscode.NotebookCellKind.Code, query, 'dql')
+        ));
+        const notebook = await vscode.workspace.openNotebookDocument('dctmbook', data);
+        let picks = 0;
+        const executed: [number, string][] = [];
+
+        await executeCells(
+            notebook.getCells(),
+            () => resolveNotebookConnection(manager, notebook, async () => { picks++; return 'Rest'; }),
+            async (cell, connection) => { executed.push([cell.index, connection.name]); },
+            () => assert.fail('no cell should fail')
+        );
+
+        assert.strictEqual(picks, 1);
+        assert.deepStrictEqual(executed, [[0, 'Rest'], [1, 'Rest']]);
+        assert.strictEqual(notebook.metadata.connection, 'Rest');
     });
 
     test('a binding that is not in the configured connections is reported as not found', async () => {
-        const { connection, error } = await resolveNotebookConnection(manager, { connection: 'Missing' });
+        const notebook = await notebookWith({ connection: 'Missing' });
+
+        const { connection, error } = await resolveNotebookConnection(manager, notebook);
 
         assert.strictEqual(connection, undefined);
         assert.ok(error);
@@ -457,10 +596,156 @@ suite('Notebook Connection Resolution Test Suite', () => {
     test('an object ID clicked in a bound notebook opens the Dump tab of the bound connection', async () => {
         const dumps: [string, DumpTarget][] = [];
         const workspaces = { showDump: async (name: string, target: DumpTarget) => { dumps.push([name, target]); } };
+        const notebook = await notebookWith({ connection: 'Rest' });
 
-        await dumpFromNotebook(manager, workspaces, { connection: 'Rest' }, '0900000180000001');
+        await dumpFromNotebook(manager, workspaces, notebook, '0900000180000001');
 
         assert.deepStrictEqual(dumps, [['Rest', { kind: 'object', objectId: '0900000180000001' }]]);
+    });
+});
+
+suite('DQL Document Connection Test Suite', () => {
+    let bridge: FakeBridge;
+    let manager: TestConnectionManager;
+    let documents: DocumentConnections;
+
+    setup(() => {
+        bridge = new FakeBridge();
+        manager = new TestConnectionManager(bridge, [restConnection, dfcConnection]);
+        documents = new DocumentConnections(new FakeMemento());
+    });
+
+    teardown(() => {
+        documents.dispose();
+        manager.dispose();
+    });
+
+    test('a document with no link gets the picked connection as its link, and the next run uses the link', async () => {
+        const document = await vscode.workspace.openTextDocument({ language: 'dql', content: 'select 1' });
+        manager.pickAnswers = ['Rest'];
+
+        const first = await documentConnection(manager, documents, document);
+        const second = await documentConnection(manager, documents, document);
+
+        assert.strictEqual(first, manager.getOpenConnection('Rest'));
+        assert.strictEqual(second, first);
+        assert.strictEqual(documents.connectionName(document), 'Rest');
+        assert.strictEqual(manager.pickCalls.length, 1);
+    });
+
+    test('a linked connection that is not open is connected', async () => {
+        const document = await vscode.workspace.openTextDocument({ language: 'dql', content: 'select 1' });
+        await documents.link(document, 'Dfc');
+
+        const connection = await documentConnection(manager, documents, document);
+
+        assert.strictEqual(connection, manager.getOpenConnection('Dfc'));
+        assert.deepStrictEqual(manager.pickCalls, []);
+    });
+
+    test('a link to a connection that is no longer configured asks again', async () => {
+        const document = await vscode.workspace.openTextDocument({ language: 'dql', content: 'select 1' });
+        await documents.link(document, 'Missing');
+        manager.pickAnswers = ['Dfc'];
+
+        const connection = await documentConnection(manager, documents, document);
+
+        assert.strictEqual(connection?.name, 'Dfc');
+        assert.strictEqual(documents.connectionName(document), 'Dfc');
+        assert.strictEqual(manager.pickCalls.length, 1);
+    });
+
+    test('with one open connection a document with no link uses it without asking', async () => {
+        const document = await vscode.workspace.openTextDocument({ language: 'dql', content: 'select 1' });
+        const open = await manager.connect('Dfc');
+
+        const connection = await documentConnection(manager, documents, document);
+
+        assert.strictEqual(connection, open);
+        assert.strictEqual(documents.connectionName(document), 'Dfc');
+        assert.deepStrictEqual(manager.pickCalls, []);
+    });
+});
+
+suite('Document Connections Test Suite', () => {
+    let state: FakeMemento;
+    let documents: DocumentConnections;
+
+    setup(() => {
+        state = new FakeMemento();
+        documents = new DocumentConnections(state);
+    });
+
+    teardown(() => {
+        documents.dispose();
+    });
+
+    test('a link survives a new DocumentConnections built on the same workspace state', async () => {
+        await documents.link(fileDocument('/work/query.dql'), 'Rest');
+
+        const reloaded = new DocumentConnections(state);
+
+        assert.strictEqual(reloaded.connectionName(fileDocument('/work/query.dql')), 'Rest');
+        reloaded.dispose();
+    });
+
+    test('an untitled document link is kept in memory only', async () => {
+        const document = await vscode.workspace.openTextDocument({ language: 'dql', content: 'select 1' });
+
+        await documents.link(document, 'Rest');
+
+        assert.strictEqual(documents.connectionName(document), 'Rest');
+        assert.deepStrictEqual(state.keys(), []);
+    });
+
+    test('a renamed file keeps its link under the new URI, and so does a file in a renamed folder', async () => {
+        await documents.link(fileDocument('/work/query.dql'), 'Rest');
+        await documents.link(fileDocument('/work/dql/users.dql'), 'Dfc');
+
+        await documents.moveLinks([
+            { oldUri: vscode.Uri.file('/work/query.dql'), newUri: vscode.Uri.file('/work/renamed.dql') },
+            { oldUri: vscode.Uri.file('/work/dql'), newUri: vscode.Uri.file('/work/queries') }
+        ]);
+
+        assert.strictEqual(documents.connectionName(fileDocument('/work/query.dql')), undefined);
+        assert.strictEqual(documents.connectionName(fileDocument('/work/renamed.dql')), 'Rest');
+        assert.strictEqual(documents.connectionName(fileDocument('/work/queries/users.dql')), 'Dfc');
+    });
+
+    test('a deleted file loses its link and other links stay', async () => {
+        await documents.link(fileDocument('/work/query.dql'), 'Rest');
+        await documents.link(fileDocument('/work/other.dql'), 'Dfc');
+
+        await documents.removeLinks([vscode.Uri.file('/work/query.dql')]);
+
+        assert.strictEqual(documents.connectionName(fileDocument('/work/query.dql')), undefined);
+        assert.strictEqual(documents.connectionName(fileDocument('/work/other.dql')), 'Dfc');
+    });
+
+    test('the connection of a notebook cell is its notebook binding', async () => {
+        const notebook = await notebookWith({ connection: 'Rest' });
+
+        assert.strictEqual(documents.connectionName(notebook.cellAt(0).document), 'Rest');
+    });
+
+    test('linking a notebook cell binds its notebook', async () => {
+        const notebook = await notebookWith({});
+
+        await documents.link(notebook.cellAt(0).document, 'Dfc');
+
+        assert.strictEqual(notebook.metadata.connection, 'Dfc');
+        assert.deepStrictEqual(state.keys(), []);
+    });
+
+    test('fires the change event when a link changes and when a notebook binding changes', async () => {
+        const notebook = await notebookWith({});
+        let fired = 0;
+        documents.onDidChange(() => fired++);
+
+        await documents.link(fileDocument('/work/query.dql'), 'Rest');
+        await bindNotebook(notebook, 'Dfc');
+
+        assert.strictEqual(fired, 2);
     });
 });
 

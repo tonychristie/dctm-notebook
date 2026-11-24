@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `documentum.panels.reuseWindow` setting, which only applied to the separate dump panels.
 - The "Documentum: Dump Object" command. An object ID clicked in a notebook result shows in the Dump tab of the notebook's connection.
 - The Cabinets under a connection in the sidebar, with Show Properties and Refresh. The Cabinets tab of the connection workspace replaces them.
+- The selected connection and the global "Documentum: ..." status bar item. Every notebook and DQL file uses its own connection.
+- Switch User. A different user on the same repository is a separate connection.
 
 ### Fixed
 - The Connections view now updates when connection settings change. An open connection whose settings change is disconnected.
@@ -23,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - The Documentum sidebar is one view, Connections, which lists the connections. Clicking a connection opens its workspace.
+- Execute DQL runs on the connection the `.dql` file is linked to. A file with no link uses the only open connection, or asks for one, and keeps it as its link. "Documentum: Link to Connection" changes the link.
+- Running a cell in a notebook with no binding asks for a connection and binds the notebook to it.
+- DQL type colouring uses the types of the document's own connection: the notebook binding for a cell, the link for a `.dql` file.
+- The status bar shows the connection of the active notebook or `.dql` file, and clicking it changes the binding or the link.
+- Connect to Documentum opens the workspace of the connection it connects. Disconnect from Documentum asks which connection when several are open. Show Connections lists every connection with its state and opens the workspace of the one picked.
+- Generate DQL Query links its new document to the workspace's connection.
 - Renamed `DfcBridge` to `DctmBridge` to better reflect its role as a unified interface to Documentum (both DFC and REST)
 - Refactored bridge architecture to use polymorphism instead of if/else branching:
   - `IUnifiedBridge` interface defines the contract for unified API methods

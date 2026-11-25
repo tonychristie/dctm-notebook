@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Running a cell in a notebook with no binding asks for a connection and binds the notebook to it.
 - DQL type colouring uses the types of the document's own connection: the notebook binding for a cell, the link for a `.dql` file.
 - Execute DQL results use the notebook results grid, with sorting, the context menu, Export Excel, Export JSON and object ID links. An object ID opens in the Dump tab of the connection the query ran on.
+- DQL type names in `.dql` files and notebook cells are coloured only from the types of the connection, in a type position. The fixed list of type names and the `_c` and `_s` suffix rule are gone. Attribute names are no longer coloured, including the name of a repeating attribute such as `r_version_label[0]`.
 - The status bar shows the connection of the active notebook or `.dql` file, and clicking it changes the binding or the link.
 - Connect to Documentum opens the workspace of the connection it connects. Disconnect from Documentum asks which connection when several are open. Show Connections lists every connection with its state and opens the workspace of the one picked.
 - Generate DQL Query links its new document to the workspace's connection.
@@ -42,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Cabinets, Users and Groups tabs use REST endpoints instead of DQL when connected via REST. This improves compatibility with REST-only Documentum setups where DQL may not be available.
 
 ### Added
+- DQL tab in the connection workspace: a query box with DQL colouring and completion of keywords, functions, the connection's types and the attributes of the query's types. Run or Ctrl+Enter runs the selection or the whole query on the workspace's connection. Results show in the notebook results grid, and the last 10 queries are kept in a history.
 - Connection workspace: one editor tab per connection, opened by clicking the connection in the Connections view or with "Documentum: Open Workspace". It has a Cabinets tab to browse cabinets, folders and documents, and a Dump tab with Back, Forward and an object ID box.
 - Types, Users and Groups tabs in the connection workspace, with search, Refresh, and Dump and Generate DQL Query on the context menu. Type, user and group dumps show in the Dump tab and share its history with object dumps.
 - API tab in the connection workspace, to execute API methods on the workspace's connection. Execute API Method on a cabinet, folder or document shows it with the object ID filled in.

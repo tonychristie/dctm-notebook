@@ -23,7 +23,26 @@ const esbuildProblemMatcherPlugin = {
   }
 };
 
+// The DQL grammar is generated from the shared vocabulary, so the file colouring matches the DQL tab.
+async function writeGrammar() {
+  const result = await esbuild.build({
+    entryPoints: ['src/dql/grammar.ts'],
+    bundle: true,
+    format: 'cjs',
+    platform: 'node',
+    write: false,
+    logLevel: 'silent'
+  });
+  const module = { exports: {} };
+  new Function('module', 'exports', result.outputFiles[0].text)(module, module.exports);
+  // The generated grammar is the only file in syntaxes, so a clean checkout has no syntaxes directory.
+  fs.mkdirSync('syntaxes', { recursive: true });
+  fs.writeFileSync('syntaxes/dql.tmLanguage.json', JSON.stringify(module.exports.dqlGrammar(), null, 2) + '\n');
+}
+
 async function main() {
+  await writeGrammar();
+
   const ctx = await esbuild.context({
     entryPoints: ['src/extension.ts'],
     bundle: true,

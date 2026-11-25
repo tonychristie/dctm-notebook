@@ -93,6 +93,15 @@ The header also has two notebook buttons:
 - Click a type, user or group to show it in the Dump tab. In Types, click the arrow to expand a type.
 - Right-click an item for Dump and Generate DQL Query. Generate DQL Query opens the query in a new DQL document, linked to the workspace's connection.
 
+### DQL tab
+
+- A query box with DQL colouring and completion, on the workspace's connection. Keywords, functions and constants are coloured, and so are the connection's types where a type name is expected. Attribute names are plain.
+- Completion opens while you type, after a `.` and on Ctrl+Space. It offers the connection's types after `FROM`, `JOIN`, `INTO`, `UPDATE` and `TYPE`, the attributes of a type after `<type or alias>.`, and elsewhere the keywords, the DQL functions and the attributes of the query's types. A query is the lines around the cursor up to a blank line or a `;`.
+- Click Run, or press Ctrl+Enter (Cmd+Enter on macOS), to run the selection, or the whole query when nothing is selected.
+- Results show in the same grid as notebooks. Click an object ID to show it in the Dump tab.
+- The history below the results keeps the last 10 queries, with the time and the row count or Error. Click an entry to put its query in the box; it does not run.
+- The query text, the result and the history stay when the workspace is hidden, and the query text stays after a window reload.
+
 ### Dump tab
 
 - Enter an object ID in the box and press Enter or click Dump. An object ID is 16 hexadecimal characters.
@@ -200,6 +209,7 @@ The API tab of a connection workspace executes DFC methods on repository objects
 | Action | Shortcut |
 |--------|----------|
 | Execute DQL Query | `Ctrl+Shift+E` / `Cmd+Shift+E` |
+| Run query in the DQL tab | `Ctrl+Enter` / `Cmd+Enter` |
 
 ## Requirements
 
@@ -210,7 +220,7 @@ The API tab of a connection workspace executes DFC methods on repository objects
 
 ### Token Types
 
-DQL syntax highlighting uses standard TextMate scopes that work with any VS Code colour theme:
+DQL syntax highlighting uses standard TextMate scopes that work with any VS Code colour theme. Type names come from the connection, as the semantic token type `type`:
 
 | Element | Scope | Description |
 |---------|-------|-------------|
@@ -221,13 +231,13 @@ DQL syntax highlighting uses standard TextMate scopes that work with any VS Code
 | Numbers | `constant.numeric.dql` | 123, 45.67 |
 | Comments | `comment.*.dql` | -- or /* */ |
 | Functions | `support.function.*.dql` | COUNT(), UPPER(), etc. |
-| Types | `storage.type.*.dql` | dm_document, dm_folder, etc. |
+| Types | semantic token type `type` | The types of the document's connection, where a type name is expected |
 | Constants | `constant.language.*.dql` | TRUE, FALSE, NULL |
 | Hints | `keyword.other.hint.dql` | /*+ SQL_DEF_RESULT_SET */ |
 
 ### Customising Colours
 
-You can customise DQL syntax colours in your VS Code `settings.json` using `editor.tokenColorCustomizations`:
+You can customise DQL syntax colours in your VS Code `settings.json` using `editor.tokenColorCustomizations`, and the type colour using `editor.semanticTokenColorCustomizations`:
 
 ```json
 {
@@ -241,18 +251,17 @@ You can customise DQL syntax colours in your VS Code `settings.json` using `edit
         }
       },
       {
-        "scope": "storage.type.dm.dql",
-        "settings": {
-          "foreground": "#E67700"
-        }
-      },
-      {
         "scope": "support.function",
         "settings": {
           "foreground": "#8250DF"
         }
       }
     ]
+  },
+  "editor.semanticTokenColorCustomizations": {
+    "rules": {
+      "type:dql": { "foreground": "#E67700" }
+    }
   }
 }
 ```
@@ -276,10 +285,6 @@ The default theme colours depend on your VS Code colour theme. For users who nee
         "settings": { "foreground": "#E67700" }
       },
       {
-        "scope": ["storage.type.dm.dql", "storage.type.dmi.dql"],
-        "settings": { "foreground": "#6E5494", "fontStyle": "italic" }
-      },
-      {
         "scope": "support.function",
         "settings": { "foreground": "#0550AE" }
       },
@@ -296,6 +301,11 @@ The default theme colours depend on your VS Code colour theme. For users who nee
         "settings": { "foreground": "#0077CC", "fontStyle": "bold" }
       }
     ]
+  },
+  "editor.semanticTokenColorCustomizations": {
+    "rules": {
+      "type:dql": { "foreground": "#6E5494", "fontStyle": "italic" }
+    }
   }
 }
 ```
@@ -315,10 +325,6 @@ The default theme colours depend on your VS Code colour theme. For users who nee
         "settings": { "foreground": "#B35900", "fontStyle": "" }
       },
       {
-        "scope": ["storage.type.dm.dql", "storage.type.dmi.dql"],
-        "settings": { "foreground": "#5C2D91", "fontStyle": "italic" }
-      },
-      {
         "scope": "support.function",
         "settings": { "foreground": "#005A9E", "fontStyle": "underline" }
       },
@@ -331,6 +337,11 @@ The default theme colours depend on your VS Code colour theme. For users who nee
         "settings": { "foreground": "#7B3F00", "fontStyle": "bold" }
       }
     ]
+  },
+  "editor.semanticTokenColorCustomizations": {
+    "rules": {
+      "type:dql": { "foreground": "#5C2D91", "fontStyle": "italic" }
+    }
   }
 }
 ```
@@ -352,10 +363,6 @@ For users who prefer minimal colour variation, this palette uses font styles as 
         "settings": { "foreground": "#1F2328", "fontStyle": "" }
       },
       {
-        "scope": ["storage.type.dm.dql", "storage.type.dmi.dql"],
-        "settings": { "foreground": "#1F2328", "fontStyle": "italic underline" }
-      },
-      {
         "scope": "support.function",
         "settings": { "foreground": "#1F2328", "fontStyle": "italic" }
       },
@@ -368,6 +375,11 @@ For users who prefer minimal colour variation, this palette uses font styles as 
         "settings": { "foreground": "#1F2328", "fontStyle": "bold italic" }
       }
     ]
+  },
+  "editor.semanticTokenColorCustomizations": {
+    "rules": {
+      "type:dql": { "foreground": "#1F2328", "fontStyle": "italic underline" }
+    }
   }
 }
 ```

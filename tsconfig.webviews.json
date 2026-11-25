@@ -15,6 +15,7 @@
   },
   "include": [
     "src/webviews/**/*.ts",
-    "src/results/**/*.ts"
+    "src/results/**/*.ts",
+    "src/dql/**/*.ts"
   ]
 }

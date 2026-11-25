@@ -2,10 +2,11 @@ import type { MethodInfo } from '../apiExecutor';
 import { byId, vscode } from './common';
 import { ApiResult, ApiTabView } from './workspace/apiTab';
 import { CabinetsTabView } from './workspace/cabinetsTab';
+import { DqlCompletionAnswer, DqlState, DqlTabView } from './workspace/dqlTab';
 import { DumpContent, DumpTabView } from './workspace/dumpTab';
 import { EntitiesResult, EntityTabName, EntityTabView } from './workspace/entityTab';
 
-type WorkspaceTab = 'cabinets' | EntityTabName | 'dump' | 'api';
+type WorkspaceTab = 'cabinets' | EntityTabName | 'dql' | 'dump' | 'api';
 
 interface WorkspaceState {
     connectionName: string;
@@ -22,6 +23,9 @@ const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab
 const cabinets = new CabinetsTabView(byId('panel-cabinets'), post);
 const dump = new DumpTabView(byId('panel-dump'), post);
 const api = new ApiTabView(byId('panel-api'), post);
+// The query text is kept in the page state, so it survives the page reloading.
+const savedState = vscode.getState() as { dqlQuery?: string } | undefined;
+const dql = new DqlTabView(byId('panel-dql'), post, savedState?.dqlQuery ?? '', () => saveState());
 const entityTab = (tab: EntityTabName) => new EntityTabView(tab, byId(`panel-${tab}`), post, () => connectionName);
 const entities: Record<EntityTabName, EntityTabView> = {
     types: entityTab('types'),
@@ -39,7 +43,7 @@ function isEntityTab(tab: WorkspaceTab): tab is EntityTabName {
 }
 
 function saveState(): void {
-    vscode.setState({ connectionName, activeTab });
+    vscode.setState({ connectionName, activeTab, dqlQuery: dql.query() });
 }
 
 function showTab(tab: WorkspaceTab): void {
@@ -124,6 +128,21 @@ window.addEventListener('message', event => {
             break;
         case 'apiHistory':
             api.showHistory(message.history);
+            break;
+        case 'dqlState':
+            dql.setState(message as DqlState);
+            break;
+        case 'dqlRunning':
+            dql.showRunning();
+            break;
+        case 'dqlResult':
+            dql.showResult(message.outcome, message.history);
+            break;
+        case 'dqlCompletion':
+            dql.onCompletion(message as DqlCompletionAnswer);
+            break;
+        case 'dqlTypeNames':
+            dql.setTypeNames(message.names);
             break;
         case 'entities': {
             const result = message as EntitiesResult;

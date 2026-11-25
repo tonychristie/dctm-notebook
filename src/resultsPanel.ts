@@ -27,6 +27,15 @@ export async function handleResultsMessage(
         return;
     }
     const { format, columns, rows } = message.data;
+    await exportRows(format, columns, rows, exporter);
+}
+
+export async function exportRows(
+    format: 'excel' | 'json',
+    columns: string[],
+    rows: Record<string, unknown>[],
+    exporter: ResultsExporter = { exportToExcel, exportToJson }
+): Promise<void> {
     try {
         if (format === 'excel') {
             await exporter.exportToExcel(columns, rows);

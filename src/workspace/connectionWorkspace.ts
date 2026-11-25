@@ -6,17 +6,19 @@ import { RepositoryConnection } from '../repositoryConnection';
 import { webviewAssets, webviewResourceRoots, webviewStylesheet } from '../webviewHtml';
 import { ApiExecute, ApiRequest, ApiTab } from './apiTab';
 import { CabinetsRequest, CabinetsTab } from './cabinetsTab';
+import { DqlExecute, DqlRequest, DqlTab } from './dqlTab';
 import { DumpTab, DumpTabRequest, DumpTarget } from './dumpTab';
 import { ENTITY_TABS, EntityRequest, EntityTab, EntityTabName, isEntityTabName } from './entityTab';
 import { QueryDocuments, isEntityKind, openEntityQuery } from './entityQuery';
 
 export const WORKSPACE_VIEW_TYPE = 'dctmConnectionWorkspace';
 
-export type WorkspaceTab = 'cabinets' | EntityTabName | 'dump' | 'api';
+export type WorkspaceTab = 'cabinets' | EntityTabName | 'dql' | 'dump' | 'api';
 
 export interface WorkspacePageState {
     connectionName: string;
     activeTab?: WorkspaceTab;
+    dqlQuery?: string;
 }
 
 export interface WorkspaceStateMessage {
@@ -39,6 +41,7 @@ type PageMessage =
     | ({ tab: 'dump' } & DumpTabRequest)
     | ({ tab: 'cabinets' } & CabinetsRequest)
     | ({ tab: 'api' } & ApiRequest)
+    | ({ tab: 'dql' } & DqlRequest)
     | ({ tab: EntityTabName } & EntityRequest);
 
 export type WorkspaceConnections = Pick<
@@ -53,6 +56,7 @@ export interface WorkspaceNotebooks {
 
 export interface WorkspaceServices {
     apiExecutor: ApiExecute;
+    dqlExecutor: DqlExecute;
     notebooks: WorkspaceNotebooks;
     documents: QueryDocuments;
 }
@@ -60,7 +64,7 @@ export interface WorkspaceServices {
 export type PanelFactory = (title: string) => vscode.WebviewPanel;
 
 export function isWorkspaceTab(value: unknown): value is WorkspaceTab {
-    return value === 'cabinets' || value === 'dump' || value === 'api' || isEntityTabName(value);
+    return value === 'cabinets' || value === 'dql' || value === 'dump' || value === 'api' || isEntityTabName(value);
 }
 
 export class ConnectionWorkspace {
@@ -68,6 +72,7 @@ export class ConnectionWorkspace {
     readonly cabinets: CabinetsTab;
     readonly entities: Record<EntityTabName, EntityTab>;
     readonly api: ApiTab;
+    readonly dql: DqlTab;
     private activeTab: WorkspaceTab;
     private connection: RepositoryConnection | undefined;
     private generation = 0;
@@ -95,6 +100,7 @@ export class ConnectionWorkspace {
             new EntityTab(connectionName, connections, ENTITY_TABS[tab], post, target => this.showDump(target));
         this.entities = { types: entityTab('types'), users: entityTab('users'), groups: entityTab('groups') };
         this.api = new ApiTab(connectionName, connections, services.apiExecutor, post, target => this.showDump(target));
+        this.dql = new DqlTab(connectionName, connections, services.dqlExecutor, post, target => this.showDump(target));
         this.watchCaches();
 
         panel.title = connectionName;
@@ -106,6 +112,7 @@ export class ConnectionWorkspace {
         );
         panel.onDidDispose(() => {
             Object.values(this.entities).forEach(tab => tab.dispose());
+            this.dql.dispose();
             this.disposables.forEach(d => d.dispose());
             this.disposables.length = 0;
             onDispose();
@@ -137,6 +144,8 @@ export class ConnectionWorkspace {
                 await this.cabinets.handleMessage(message);
             } else if (message.tab === 'api') {
                 await this.api.handleMessage(message);
+            } else if (message.tab === 'dql') {
+                await this.dql.handleMessage(message);
             } else {
                 await this.entities[message.tab].handleMessage(message);
             }
@@ -148,6 +157,7 @@ export class ConnectionWorkspace {
                 this.postState();
                 this.dump.ready();
                 this.api.ready();
+                this.dql.ready();
                 break;
             case 'selectTab':
                 this.activeTab = message.selected;
@@ -179,6 +189,7 @@ export class ConnectionWorkspace {
 
     private watchCaches(): void {
         Object.values(this.entities).forEach(tab => tab.watch(this.connection));
+        this.dql.watch(this.connection);
     }
 
     private onConnectionsChanged(): void {
@@ -241,6 +252,7 @@ export class ConnectionWorkspace {
             <button role="tab" id="tab-types" data-tab="types" aria-controls="panel-types">Types</button>
             <button role="tab" id="tab-users" data-tab="users" aria-controls="panel-users">Users</button>
             <button role="tab" id="tab-groups" data-tab="groups" aria-controls="panel-groups">Groups</button>
+            <button role="tab" id="tab-dql" data-tab="dql" aria-controls="panel-dql">DQL</button>
             <button role="tab" id="tab-dump" data-tab="dump" aria-controls="panel-dump">Dump</button>
             <button role="tab" id="tab-api" data-tab="api" aria-controls="panel-api">API</button>
         </div>
@@ -256,6 +268,7 @@ export class ConnectionWorkspace {
             ${entityPanel('types', 'Types')}
             ${entityPanel('users', 'Users')}
             ${entityPanel('groups', 'Groups')}
+            ${DQL_PANEL}
             <section class="ws-panel dump-tab" role="tabpanel" id="panel-dump" aria-labelledby="tab-dump" hidden>
                 <div class="dump-tab-header">
                     <button data-action="goBack" id="dumpBack" title="Back" disabled>
@@ -294,6 +307,20 @@ function entityPanel(tab: EntityTabName, label: string): string {
                 <div class="tree-container" aria-label="${label}"></div>
             </section>`;
 }
+
+const DQL_PANEL = `<section class="ws-panel dql-tab" role="tabpanel" id="panel-dql" aria-labelledby="tab-dql" hidden>
+                <div class="tab-toolbar">
+                    <button class="primary" data-action="runQuery" title="Run the selection, or the whole query (Ctrl+Enter)">
+                        <span class="codicon codicon-play"></span> Run
+                    </button>
+                </div>
+                <div class="dql-editor" aria-label="DQL query"></div>
+                <div class="dql-results"></div>
+                <div class="dql-history" hidden>
+                    <h3>Query History</h3>
+                    <div class="dql-history-list"></div>
+                </div>
+            </section>`;
 
 const API_PANEL = `<section class="ws-panel api-tab" role="tabpanel" id="panel-api" aria-labelledby="tab-api" hidden>
                 <div class="api-section">
@@ -512,10 +539,12 @@ export function registerConnectionWorkspace(
     context: vscode.ExtensionContext,
     connectionManager: ConnectionManager,
     apiExecutor: ApiExecute,
+    dqlExecutor: DqlExecute,
     documents: QueryDocuments
 ): ConnectionWorkspaces {
     const workspaces = new ConnectionWorkspaces(context.extensionUri, connectionManager, {
         apiExecutor,
+        dqlExecutor,
         notebooks: { newNotebook: newDqlNotebook, openNotebook: openNotebookFor },
         documents
     });

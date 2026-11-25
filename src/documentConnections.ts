@@ -116,8 +116,10 @@ export function registerDocumentConnections(
 
     context.subscriptions.push(
         documents,
-        vscode.commands.registerCommand('dctm.linkConnection', async () => {
-            const document = vscode.window.activeTextEditor?.document;
+        vscode.commands.registerCommand('dctm.linkConnection', async (uri?: vscode.Uri) => {
+            const document = uri
+                ? vscode.workspace.textDocuments.find(d => d.uri.toString() === uri.toString())
+                : vscode.window.activeTextEditor?.document;
             if (!document || document.languageId !== 'dql') {
                 vscode.window.showWarningMessage('No DQL editor is active');
                 return;

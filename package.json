@@ -79,6 +79,11 @@
         "configuration": "./language-configuration.json"
       }
     ],
+    "configurationDefaults": {
+      "[dql]": {
+        "editor.wordBasedSuggestions": "off"
+      }
+    },
     "grammars": [
       {
         "language": "dql",

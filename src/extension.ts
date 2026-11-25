@@ -5,6 +5,7 @@ import { registerConnectionsView } from './connectionsView';
 import { ApiExecutor } from './apiExecutor';
 import { registerConnectionsPanel } from './connectionsPanel';
 import { registerDqlSemanticTokens } from './dqlSemanticTokens';
+import { registerDqlCompletion } from './dqlCompletion';
 import { registerApiMethodReference } from './apiMethodReference';
 import { registerNotebook } from './notebook';
 import { registerConnectionWorkspace } from './workspace/connectionWorkspace';
@@ -29,6 +30,7 @@ export function activate(context: vscode.ExtensionContext) {
     registerObjectCommands(context, connectionManager, workspaces);
     registerConnectionsPanel(context, connectionManager);
     registerDqlSemanticTokens(context, connectionManager, documents);
+    registerDqlCompletion(context, connectionManager, documents);
     registerExecuteDql(context, connectionManager, documents, dqlExecutor, workspaces);
     registerConnectionStatusBar(context, connectionManager, documents);
 

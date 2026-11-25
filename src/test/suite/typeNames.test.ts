@@ -38,6 +38,21 @@ suite('DQL type name rule', () => {
             assert.deepStrictEqual(typeNamesIn('select * from other_type'), []);
         });
 
+        test('finds a later type in a FROM list with aliases, with or without AS', () => {
+            assert.deepStrictEqual(typeNamesIn('select * from dm_document d, dm_folder as f, my_custom_type'),
+                ['dm_document', 'dm_folder', 'my_custom_type']);
+        });
+
+        test('skips a cached type after a comma in an ORDER BY or GROUP BY list', () => {
+            assert.deepStrictEqual(typeNamesIn('select * from dm_document order by object_name, dm_folder'), ['dm_document']);
+            assert.deepStrictEqual(typeNamesIn('select count(*) from dm_document group by owner_name, dm_folder'), ['dm_document']);
+            assert.deepStrictEqual(typeNamesIn('select * from dm_document where title is null order by a, dm_folder'), ['dm_document']);
+        });
+
+        test('skips a cached type after a word that only ends in from, into or type', () => {
+            assert.deepStrictEqual(typeNamesIn('select r_object_type dm_folder, a_content_type dm_document'), []);
+        });
+
         test('gives the line, start and length of each type name', () => {
             assert.deepStrictEqual(findTypeNames('select *\nfrom   Dm_Document', isCached), [{ line: 1, start: 7, length: 11 }]);
         });
@@ -156,6 +171,19 @@ suite('DQL type name rule', () => {
 
         test('in ORDER BY clause', () => {
             assert.strictEqual(contextBefore('SELECT * FROM dm_document ORDER BY dm_folder', 'dm_folder', true), false);
+        });
+
+        test('after a word ending in from, into, type, join or update', () => {
+            assert.strictEqual(isTypeContext('select r_object_type'), false);
+            assert.strictEqual(isTypeContext('select a_content_type'), false);
+            assert.strictEqual(isTypeContext('select datefrom'), false);
+            assert.strictEqual(isTypeContext('select copy_into'), false);
+            assert.strictEqual(isTypeContext('select last_update'), false);
+            assert.strictEqual(isTypeContext('select x_join'), false);
+        });
+
+        test('after a comma in an ORDER BY list', () => {
+            assert.strictEqual(isTypeContext('select object_name from dm_document order by object_name, '), false);
         });
 
         test('in GROUP BY clause', () => {

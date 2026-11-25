@@ -35,6 +35,8 @@ async function writeGrammar() {
   });
   const module = { exports: {} };
   new Function('module', 'exports', result.outputFiles[0].text)(module, module.exports);
+  // The generated grammar is the only file in syntaxes, so a clean checkout has no syntaxes directory.
+  fs.mkdirSync('syntaxes', { recursive: true });
   fs.writeFileSync('syntaxes/dql.tmLanguage.json', JSON.stringify(module.exports.dqlGrammar(), null, 2) + '\n');
 }
 

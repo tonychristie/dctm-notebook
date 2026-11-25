@@ -115,6 +115,33 @@ suite('DQL completion rules', () => {
         assert.deepStrictEqual(labelsOf(result!.items, 'attribute'), ['r_object_id', 'r_folder_path']);
     });
 
+    test('a word that ends in type is not a type position', async () => {
+        const result = await complete('select r_object_type fr|');
+        const afterAttribute = await complete('select title from dm_document where a_content_type |');
+
+        assert.deepStrictEqual(labelsOf(result!.items, 'keyword'), ['FROM', 'FREEZE']);
+        assert.deepStrictEqual(labelsOf(result!.items, 'type'), []);
+        assert.deepStrictEqual(labelsOf(afterAttribute!.items, 'type'), []);
+        assert.ok(labelsOf(afterAttribute!.items, 'keyword').includes('LIKE'));
+    });
+
+    test('a comma in an ORDER BY or GROUP BY list offers attributes, not types', async () => {
+        const orderBy = await complete('select object_name from dm_document order by object_name, r_|');
+        const afterWhere = await complete('select object_name from dm_document where title is null order by r_object_id, ow|');
+        const groupBy = await complete('select count(*) from dm_document group by owner_name, obj|');
+
+        assert.deepStrictEqual(labelsOf(orderBy!.items, 'attribute'), ['r_object_id']);
+        assert.deepStrictEqual(labelsOf(orderBy!.items, 'type'), []);
+        assert.deepStrictEqual(labelsOf(afterWhere!.items, 'attribute'), ['owner_name']);
+        assert.deepStrictEqual(labelsOf(groupBy!.items, 'attribute'), ['object_name']);
+    });
+
+    test('a comma in the FROM list offers types', async () => {
+        const result = await complete('select * from dm_document d, dm_f|');
+
+        assert.deepStrictEqual(result?.items.map(item => item.label), ['dm_folder']);
+    });
+
     test('with no schema offers the vocabulary only', async () => {
         const inSelect = await complete('select obj| from dm_document', null);
         const inFrom = await complete('select * from dm_|', null);

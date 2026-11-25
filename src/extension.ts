@@ -25,7 +25,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     const documents = registerDocumentConnections(context, connectionManager);
     registerConnectionsView(context, connectionManager);
-    const workspaces = registerConnectionWorkspace(context, connectionManager, apiExecutor, documents);
+    const workspaces = registerConnectionWorkspace(context, connectionManager, apiExecutor, dqlExecutor, documents);
     registerObjectCommands(context, connectionManager, workspaces);
     registerConnectionsPanel(context, connectionManager);
     registerDqlSemanticTokens(context, connectionManager, documents);

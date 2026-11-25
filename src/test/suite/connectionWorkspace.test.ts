@@ -2,7 +2,10 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { ApiMethodRequest, ApiMethodResponse } from '../../apiExecutor';
 import { DocumentumConnection } from '../../connectionManager';
+import { DctmBridge } from '../../dctmBridge';
+import { DqlResult } from '../../dqlExecutor';
 import { RepositoryConnection } from '../../repositoryConnection';
+import { TypeCache } from '../../typeCache';
 import { ApiExecute } from '../../workspace/apiTab';
 import {
     ConnectionWorkspaces,
@@ -11,6 +14,7 @@ import {
     WorkspaceNotebooks,
     WorkspaceStateMessage
 } from '../../workspace/connectionWorkspace';
+import { DqlExecute } from '../../workspace/dqlTab';
 
 interface FakePanel {
     panel: vscode.WebviewPanel;
@@ -90,13 +94,13 @@ class FakeConnections implements WorkspaceConnections {
         return name ? this.openNow(name) : undefined;
     }
 
-    openNow(name: string): RepositoryConnection {
-        const cache = { onRefresh: new vscode.EventEmitter<void>().event };
+    openNow(name: string, typeCache?: TypeCache): RepositoryConnection {
+        const cache = { onRefresh: new vscode.EventEmitter<void>().event, getNames: () => [] };
         const connection = {
             name,
             username: 'dmadmin',
             sessionId: `session-${name}`,
-            typeCache: cache,
+            typeCache: typeCache ?? cache,
             userCache: cache,
             groupCache: cache
         } as unknown as RepositoryConnection;
@@ -125,6 +129,45 @@ class FakeApiExecutor implements ApiExecute {
     }
 }
 
+class FakeDqlExecutor implements DqlExecute {
+    readonly calls: Array<{ query: string; connection: RepositoryConnection }> = [];
+
+    async execute(query: string, connection: RepositoryConnection): Promise<DqlResult> {
+        this.calls.push({ query, connection });
+        if (query.includes('bad')) {
+            throw new Error('[DM_QUERY_E_SYNTAX]error: syntax error');
+        }
+        return { columns: ['r_object_id'], rows: [{ r_object_id: '0c00000180000101' }], rowCount: 1, executionTime: 7, query };
+    }
+}
+
+class FakeTypeBridge {
+    detailCalls = 0;
+
+    async getTypes() {
+        return [
+            { name: 'dm_document', superType: null, isInternal: false },
+            { name: 'my_custom_type', superType: 'dm_document', isInternal: false }
+        ];
+    }
+
+    async getTypeDetails(_sessionId: string, typeName: string) {
+        this.detailCalls++;
+        return {
+            name: typeName,
+            superType: null,
+            isInternal: false,
+            attributes: [{ name: 'custom_code', dataType: 'string', length: 32, isRepeating: false, isInherited: false }]
+        };
+    }
+}
+
+async function loadedTypeCache(bridge: FakeTypeBridge): Promise<TypeCache> {
+    const cache = new TypeCache(bridge as unknown as DctmBridge, 'session-types');
+    await cache.refresh();
+    return cache;
+}
+
 class FakeNotebooks implements WorkspaceNotebooks {
     readonly calls: string[] = [];
 
@@ -142,6 +185,7 @@ interface Harness {
     connections: FakeConnections;
     panels: FakePanel[];
     apiExecutor: FakeApiExecutor;
+    dqlExecutor: FakeDqlExecutor;
     notebooks: FakeNotebooks;
 }
 
@@ -149,14 +193,15 @@ function harness(restoredTabs: RestoredTabs = { activate: async () => false }): 
     const connections = new FakeConnections();
     const panels: FakePanel[] = [];
     const apiExecutor = new FakeApiExecutor();
+    const dqlExecutor = new FakeDqlExecutor();
     const notebooks = new FakeNotebooks();
-    const services = { apiExecutor, notebooks, documents: { link: async () => undefined } };
+    const services = { apiExecutor, dqlExecutor, notebooks, documents: { link: async () => undefined } };
     const workspaces = new ConnectionWorkspaces(vscode.Uri.file('/extension'), connections, services, title => {
         const fake = fakePanel(title);
         panels.push(fake);
         return fake.panel;
     }, restoredTabs);
-    return { workspaces, connections, panels, apiExecutor, notebooks };
+    return { workspaces, connections, panels, apiExecutor, dqlExecutor, notebooks };
 }
 
 function postedOfType(panel: FakePanel, type: string): Array<Record<string, unknown>> {
@@ -428,5 +473,129 @@ suite('ConnectionWorkspace Test Suite', () => {
 
         assert.strictEqual(restored.disposed, true);
         assert.strictEqual(workspaces.get('old'), undefined);
+    });
+
+    test('a DQL tab run executes on the workspace connection and sends the result', async () => {
+        const { workspaces, connections, panels, dqlExecutor } = harness();
+        connections.openNow('conn1');
+        const conn2 = connections.openNow('conn2');
+        await workspaces.show('conn2');
+
+        await panels[0].send({ tab: 'dql', command: 'run', query: 'select r_object_id from dm_cabinet' });
+
+        assert.deepStrictEqual(dqlExecutor.calls.map(call => [call.query, call.connection]),
+            [['select r_object_id from dm_cabinet', conn2]]);
+        assert.strictEqual(postedOfType(panels[0], 'dqlRunning').length, 1);
+        const [result] = postedOfType(panels[0], 'dqlResult');
+        assert.deepStrictEqual(result.outcome, {
+            result: { columns: ['r_object_id'], rows: [{ r_object_id: '0c00000180000101' }], rowCount: 1, executionTime: 7 }
+        });
+        const [entry] = result.history as Array<Record<string, unknown>>;
+        assert.deepStrictEqual([entry.query, entry.rowCount, entry.error], ['select r_object_id from dm_cabinet', 1, false]);
+    });
+
+    test('a failed DQL tab run sends DQL Error with the message and an error history entry', async () => {
+        const { workspaces, connections, panels } = harness();
+        connections.openNow('conn1');
+        await workspaces.show('conn1');
+
+        await panels[0].send({ tab: 'dql', command: 'run', query: 'select bad syntax' });
+
+        const [result] = postedOfType(panels[0], 'dqlResult');
+        assert.deepStrictEqual(result.outcome, { error: 'DQL Error: [DM_QUERY_E_SYNTAX]error: syntax error' });
+        assert.strictEqual((result.history as Array<{ error: boolean }>)[0].error, true);
+    });
+
+    test('a DQL tab run on a closed connection sends DQL Error', async () => {
+        const { workspaces, panels, dqlExecutor } = harness();
+        await workspaces.show('conn1');
+
+        await panels[0].send({ tab: 'dql', command: 'run', query: 'select * from dm_cabinet' });
+
+        assert.strictEqual(dqlExecutor.calls.length, 0);
+        assert.deepStrictEqual(postedOfType(panels[0], 'dqlResult')[0].outcome, { error: 'DQL Error: Not connected to conn1' });
+    });
+
+    test('the DQL history keeps the last 10 runs, newest first', async () => {
+        const { workspaces, connections, panels } = harness();
+        connections.openNow('conn1');
+        await workspaces.show('conn1');
+
+        for (let i = 1; i <= 12; i++) {
+            await panels[0].send({ tab: 'dql', command: 'run', query: `select ${i}` });
+        }
+
+        const history = postedOfType(panels[0], 'dqlResult').pop()?.history as Array<{ query: string }>;
+        assert.deepStrictEqual(history.map(entry => entry.query),
+            ['select 12', 'select 11', 'select 10', 'select 9', 'select 8', 'select 7', 'select 6', 'select 5', 'select 4', 'select 3']);
+    });
+
+    test('ready sends the DQL history and the last result', async () => {
+        const { workspaces, connections, panels } = harness();
+        connections.openNow('conn1');
+        await workspaces.show('conn1');
+        await panels[0].send({ tab: 'dql', command: 'run', query: 'select 1' });
+        await panels[0].send({ tab: 'dql', command: 'run', query: 'select bad' });
+
+        await panels[0].send({ command: 'ready' });
+
+        const state = postedOfType(panels[0], 'dqlState').pop()!;
+        assert.strictEqual(state.running, false);
+        assert.deepStrictEqual(state.outcome, { error: 'DQL Error: [DM_QUERY_E_SYNTAX]error: syntax error' });
+        assert.deepStrictEqual((state.history as Array<{ query: string }>).map(entry => entry.query), ['select bad', 'select 1']);
+    });
+
+    test('an object ID clicked in a DQL tab result shows in the Dump tab of the same workspace', async () => {
+        const { workspaces, connections, panels } = harness();
+        connections.openNow('conn1');
+        await workspaces.show('conn1');
+
+        await panels[0].send({ tab: 'dql', command: 'dumpObject', objectId: '0c00000180000101' });
+
+        assert.ok(panels[0].posted.some(message => JSON.stringify(message) === '{"type":"selectTab","tab":"dump"}'));
+    });
+
+    test('the DQL tab gets the type names on ready and when the type cache refreshes', async () => {
+        const { workspaces, connections, panels } = harness();
+        const typeCache = await loadedTypeCache(new FakeTypeBridge());
+        connections.openNow('conn1', typeCache);
+        await workspaces.show('conn1');
+
+        await panels[0].send({ command: 'ready' });
+        const onReady = postedOfType(panels[0], 'dqlTypeNames').length;
+        await typeCache.refresh();
+
+        const posted = postedOfType(panels[0], 'dqlTypeNames');
+        assert.deepStrictEqual(posted.pop()?.names, ['dm_document', 'my_custom_type']);
+        assert.strictEqual(posted.length, onReady);
+    });
+
+    test('DQL tab completion answers with the request id and fetches a type\'s attributes once', async () => {
+        const { workspaces, connections, panels } = harness();
+        const bridge = new FakeTypeBridge();
+        connections.openNow('conn1', await loadedTypeCache(bridge));
+        await workspaces.show('conn1');
+        const text = 'select * from my_custom_type d where d.';
+
+        await panels[0].send({ tab: 'dql', command: 'complete', requestId: 4, text, offset: text.length });
+        await panels[0].send({ tab: 'dql', command: 'complete', requestId: 5, text, offset: text.length });
+
+        const answers = postedOfType(panels[0], 'dqlCompletion');
+        assert.deepStrictEqual(answers.map(answer => answer.requestId), [4, 5]);
+        assert.deepStrictEqual((answers[1].result as { items: Array<{ label: string }> }).items.map(item => item.label), ['custom_code']);
+        assert.strictEqual(bridge.detailCalls, 1);
+    });
+
+    test('DQL tab completion offers the vocabulary only when the connection is closed', async () => {
+        const { workspaces, panels } = harness();
+        await workspaces.show('conn1');
+        const text = 'select * from dm_';
+
+        await panels[0].send({ tab: 'dql', command: 'complete', requestId: 1, text, offset: text.length });
+        await panels[0].send({ tab: 'dql', command: 'complete', requestId: 2, text: 'sel', offset: 3 });
+
+        const answers = postedOfType(panels[0], 'dqlCompletion');
+        assert.deepStrictEqual((answers[0].result as { items: unknown[] }).items, []);
+        assert.ok((answers[1].result as { items: Array<{ label: string }> }).items.some(item => item.label === 'SELECT'));
     });
 });

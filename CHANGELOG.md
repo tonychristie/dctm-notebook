@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Cabinets, Users and Groups tabs use REST endpoints instead of DQL when connected via REST. This improves compatibility with REST-only Documentum setups where DQL may not be available.
 
 ### Added
-- DQL completion in `.dql` files and notebook DQL cells: keywords, functions, the types of the document's connection and the attributes of the query's types, by the same rules as the DQL tab. A document whose connection is not open gets keywords and functions only.
+- DQL completion in `.dql` files and notebook DQL cells: keywords, functions, the types of the document's connection and the attributes of the query's types, by the same rules as the DQL tab. A document whose connection is not open gets keywords and functions only. VS Code's suggestions of words from open documents are off for DQL by default.
 - DQL tab in the connection workspace: a query box with DQL colouring and completion of keywords, functions, the connection's types and the attributes of the query's types. Run or Ctrl+Enter runs the selection or the whole query on the workspace's connection. Results show in the notebook results grid, and the last 10 queries are kept in a history.
 - Connection workspace: one editor tab per connection, opened by clicking the connection in the Connections view or with "Documentum: Open Workspace". It has a Cabinets tab to browse cabinets, folders and documents, and a Dump tab with Back, Forward and an object ID box.
 - Types, Users and Groups tabs in the connection workspace, with search, Refresh, and Dump and Generate DQL Query on the context menu. Type, user and group dumps show in the Dump tab and share its history with object dumps.

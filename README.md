@@ -128,7 +128,7 @@ The header also has two notebook buttons:
 
 - **Syntax Highlighting**: Full DQL syntax highlighting for `.dql` files
 - **Semantic Token Support**: Dynamic highlighting of the type names of the file's connection
-- **Completion**: In `.dql` files and notebook DQL cells, completion of keywords, functions, the connection's types and the attributes of the query's types, by the same rules as the DQL tab. It opens while you type, after a `.` and on Ctrl+Space, and uses the connection of the file or the notebook. When that connection is not open, it offers keywords and functions only.
+- **Completion**: In `.dql` files and notebook DQL cells, completion of keywords, functions, the connection's types and the attributes of the query's types, by the same rules as the DQL tab. It opens while you type, after a `.` and on Ctrl+Space, and uses the connection of the file or the notebook. When that connection is not open, it offers keywords and functions only. VS Code's suggestions of words from open documents are off for DQL; set `editor.wordBasedSuggestions` under `[dql]` in `settings.json` to turn them on.
 - **Execute Queries**: Run DQL queries directly from the editor (Ctrl+Shift+E / Cmd+Shift+E), on the file's connection. Execute DQL shows its results in the same grid as notebooks.
 
 ### API Method Support

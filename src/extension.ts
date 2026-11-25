@@ -13,6 +13,7 @@ import { registerObjectCommands } from './workspace/objectCommands';
 import { registerDocumentConnections } from './documentConnections';
 import { registerExecuteDql } from './executeDql';
 import { registerConnectionStatusBar } from './connectionStatusBar';
+import { registerDqlConnectionLens } from './dqlConnectionLens';
 
 let connectionManager: ConnectionManager;
 let dqlExecutor: DqlExecutor;
@@ -33,6 +34,7 @@ export function activate(context: vscode.ExtensionContext) {
     registerDqlCompletion(context, connectionManager, documents);
     registerExecuteDql(context, connectionManager, documents, dqlExecutor, workspaces);
     registerConnectionStatusBar(context, connectionManager, documents);
+    registerDqlConnectionLens(context, connectionManager, documents);
 
     context.subscriptions.push(
         vscode.commands.registerCommand('dctm.connect', async () => {

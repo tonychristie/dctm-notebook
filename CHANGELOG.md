@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The null object ID `0000000000000000` shows as a plain value in dumps, notebook results and API results, not as a link that fails to load.
 
 ### Changed
+- The plug button on a connection in the Connections view connects it and opens its workspace, the same as a click on the connection.
+- A `.dql` file and an untitled DQL document show their connection in a line above the first line, with Change or Link to run Link to Connection for that document. Link to Connection links the document it is run from, also when that editor is not the active one.
 - The Documentum sidebar is one view, Connections, which lists the connections. Clicking a connection opens its workspace.
 - Execute DQL runs on the connection the `.dql` file is linked to. A file with no link uses the only open connection, or asks for one, and keeps it as its link. "Documentum: Link to Connection" changes the link.
 - Running a cell in a notebook with no binding asks for a connection and binds the notebook to it.

@@ -22,9 +22,9 @@ A VS Code notebook interface for DQL queries with REST and DFC connectivity to O
 
 1. **Start the bridge**: the DFC Bridge for DFC connections, the REST Bridge for REST connections. If it is not on `localhost:9876` (DFC) or `localhost:9877` (REST), set `documentum.bridge.host`, `documentum.bridge.port` and `documentum.bridge.restPort`.
 2. **Add a connection**: run "Documentum: Manage Connections", or click "Add Connection" in the Connections view. Use Test Connection to check it.
-3. **Connect**: click the connection in the Connections view. It connects and opens the connection's workspace. The plug button on the connection connects without opening the workspace. Enter the password when asked. Passwords are not stored and are asked for on each connect.
+3. **Connect**: click the connection in the Connections view. It connects and opens the connection's workspace. The plug button on the connection does the same. Enter the password when asked. Passwords are not stored and are asked for on each connect.
 4. **Notebooks**: a notebook runs on the connection it is bound to. Running a cell in a notebook with no binding asks for a connection and binds the notebook to it. "Bind to Connection" in the notebook toolbar changes the binding.
-5. **DQL files**: a `.dql` file is linked to a connection. The first Execute DQL on a file uses the only open connection, or asks which connection to use when none or several are open, and links the file to it. "Link to Connection" in the editor context menu changes the link. Links of saved files are kept across window reloads.
+5. **DQL files**: a `.dql` file is linked to a connection. The first Execute DQL on a file uses the only open connection, or asks which connection to use when none or several are open, and links the file to it. "Link to Connection" in the editor context menu changes the link. The line above the first line of the file shows the link, and its Change or Link action changes it. Links of saved files are kept across window reloads.
 
 The status bar shows the connection of the active notebook or `.dql` file. Click it to change the binding or the link. DQL type names are coloured from the types of that connection, once it is open.
 
@@ -33,7 +33,7 @@ The status bar shows the connection of the active notebook or `.dql` file. Click
 The Documentum sidebar has one view, Connections, with one item per configured connection. An open connection shows its repository and user; a closed one shows "disconnected".
 
 - Click a connection to open its workspace, connecting first when needed.
-- The plug button connects a closed connection, and the disconnect button closes an open one.
+- The plug button connects a closed connection and opens its workspace, and the disconnect button closes an open one.
 - The title bar has Refresh and Manage Connections.
 - To work as another user on the same repository, add a second connection with that username.
 
@@ -129,6 +129,7 @@ The header also has two notebook buttons:
 - **Syntax Highlighting**: Full DQL syntax highlighting for `.dql` files
 - **Semantic Token Support**: Dynamic highlighting of the type names of the file's connection
 - **Completion**: In `.dql` files and notebook DQL cells, completion of keywords, functions, the connection's types and the attributes of the query's types, by the same rules as the DQL tab. It opens while you type, after a `.` and on Ctrl+Space, and uses the connection of the file or the notebook. When that connection is not open, it offers keywords and functions only. VS Code's suggestions of words from open documents are off for DQL; set `editor.wordBasedSuggestions` under `[dql]` in `settings.json` to turn them on.
+- **Connection Line**: A `.dql` file and an untitled DQL document show their connection above the first line: `Connection: <name> · <repository> as <user>` when the connection is open, `Connection: <name> · disconnected` when it is not, and `Connection: none` when there is no link. Click Change or Link next to it to run Link to Connection for that document. Notebook DQL cells show no connection line; the notebook toolbar shows the binding.
 - **Execute Queries**: Run DQL queries directly from the editor (Ctrl+Shift+E / Cmd+Shift+E), on the file's connection. Execute DQL shows its results in the same grid as notebooks.
 
 ### API Method Support

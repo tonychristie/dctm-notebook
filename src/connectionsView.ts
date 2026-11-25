@@ -61,7 +61,7 @@ export function registerConnectionsView(
         treeView,
         vscode.commands.registerCommand('dctm.refreshConnections', () => provider.refresh()),
         vscode.commands.registerCommand('dctm.connectFromTree', async (item: ConnectionItem) => {
-            await connectionManager.connect(item.data.connectionName);
+            await vscode.commands.executeCommand('dctm.openWorkspace', item.data.connectionName);
         }),
         vscode.commands.registerCommand('dctm.disconnectFromTree', async (item?: ConnectionItem) => {
             await connectionManager.disconnect(item?.data.connectionName);

@@ -15,6 +15,7 @@
   },
   "include": [
     "src/notebook/renderer.ts",
-    "src/notebook/css.d.ts"
+    "src/notebook/css.d.ts",
+    "src/results/**/*.ts"
   ]
 }

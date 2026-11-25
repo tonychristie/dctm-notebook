@@ -1,7 +1,7 @@
 /**
  * Export functionality for notebook results
  *
- * Provides Excel, JSON and CSV export capabilities for DQL query results.
+ * Provides Excel and JSON export capabilities for DQL query results.
  */
 
 import * as vscode from 'vscode';
@@ -222,62 +222,6 @@ export async function exportToJson(
     const jsonContent = JSON.stringify(exportData, null, 2);
     const encoder = new TextEncoder();
     await vscode.workspace.fs.writeFile(uri, encoder.encode(jsonContent));
-
-    vscode.window.showInformationMessage(`Exported ${rows.length} rows to ${uri.fsPath}`);
-}
-
-function csvCell(value: unknown): string {
-    if (value === null || value === undefined) {
-        return '';
-    }
-    const str = String(value);
-    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return '"' + str.replace(/"/g, '""') + '"';
-    }
-    return str;
-}
-
-/**
- * Build CSV text with a header row followed by one line per result row
- */
-export function toCsv(columns: string[], rows: Record<string, unknown>[]): string {
-    const header = columns.map(csvCell).join(',');
-    const lines = rows.map(row => columns.map(col => csvCell(row[col])).join(','));
-    return [header, ...lines].join('\n');
-}
-
-/**
- * Build tab-separated text with a header row followed by one line per result row
- */
-export function toTsv(columns: string[], rows: Record<string, unknown>[]): string {
-    const header = columns.join('\t');
-    const lines = rows.map(row => columns.map(col => String(row[col] ?? '')).join('\t'));
-    return [header, ...lines].join('\n');
-}
-
-/**
- * Export data to CSV file (.csv)
- */
-export async function exportToCsv(
-    columns: string[],
-    rows: Record<string, unknown>[]
-): Promise<void> {
-    // Show save dialog with default location
-    const defaultPath = path.join(getDefaultSaveDirectory(), 'query_results.csv');
-    const uri = await vscode.window.showSaveDialog({
-        defaultUri: vscode.Uri.file(defaultPath),
-        filters: {
-            'CSV Files': ['csv']
-        },
-        saveLabel: 'Export to CSV'
-    });
-
-    if (!uri) {
-        return; // User cancelled
-    }
-
-    const encoder = new TextEncoder();
-    await vscode.workspace.fs.writeFile(uri, encoder.encode(toCsv(columns, rows)));
 
     vscode.window.showInformationMessage(`Exported ${rows.length} rows to ${uri.fsPath}`);
 }

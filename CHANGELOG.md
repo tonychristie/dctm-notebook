@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Cabinets under a connection in the sidebar, with Show Properties and Refresh. The Cabinets tab of the connection workspace replaces them.
 - The selected connection and the global "Documentum: ..." status bar item. Every notebook and DQL file uses its own connection.
 - Switch User. A different user on the same repository is a separate connection.
+- Export CSV in the Execute DQL results. Export Excel and Export JSON replace it.
 
 ### Fixed
 - The Connections view now updates when connection settings change. An open connection whose settings change is disconnected.
@@ -28,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Execute DQL runs on the connection the `.dql` file is linked to. A file with no link uses the only open connection, or asks for one, and keeps it as its link. "Documentum: Link to Connection" changes the link.
 - Running a cell in a notebook with no binding asks for a connection and binds the notebook to it.
 - DQL type colouring uses the types of the document's own connection: the notebook binding for a cell, the link for a `.dql` file.
+- Execute DQL results use the notebook results grid, with sorting, the context menu, Export Excel, Export JSON and object ID links. An object ID opens in the Dump tab of the connection the query ran on.
 - The status bar shows the connection of the active notebook or `.dql` file, and clicking it changes the binding or the link.
 - Connect to Documentum opens the workspace of the connection it connects. Disconnect from Documentum asks which connection when several are open. Show Connections lists every connection with its state and opens the workspace of the one picked.
 - Generate DQL Query links its new document to the workspace's connection.

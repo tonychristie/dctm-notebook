@@ -29,7 +29,7 @@ export function activate(context: vscode.ExtensionContext) {
     registerObjectCommands(context, connectionManager, workspaces);
     registerConnectionsPanel(context, connectionManager);
     registerDqlSemanticTokens(context, connectionManager, documents);
-    registerExecuteDql(context, connectionManager, documents, dqlExecutor);
+    registerExecuteDql(context, connectionManager, documents, dqlExecutor, workspaces);
     registerConnectionStatusBar(context, connectionManager, documents);
 
     context.subscriptions.push(

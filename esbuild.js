@@ -62,7 +62,8 @@ async function main() {
       'src/webviews/connectionWorkspace.ts',
       'src/webviews/connectionWorkspace.css',
       'src/webviews/connectionsPanel.ts',
-      'src/webviews/resultsPanel.ts'
+      'src/webviews/resultsPanel.ts',
+      'src/webviews/resultsPanel.css'
     ],
     bundle: true,
     format: 'iife',

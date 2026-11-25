@@ -99,7 +99,7 @@ The header also has two notebook buttons:
 - An object dump shows the object's attributes in groups, with a filter, Refresh, Copy Object ID, Collapse All and Expand All.
 - Type, user and group dumps show the type's attributes, the user's details and groups, and the group's members and parent groups, each with Generate DQL.
 - Click an object ID value, a supertype or child type, a user's group, a group's parent group or a group member to show it in the same tab. Back and Forward move through everything shown, objects, types, users and groups in one history.
-- Click an object ID in a notebook result to show it in the Dump tab of the notebook's connection. The workspace opens when it is not open.
+- Click an object ID in a notebook result to show it in the Dump tab of the notebook's connection. Click an object ID in the Execute DQL results to show it in the Dump tab of the connection the query ran on. The workspace opens when it is not open.
 
 ### API tab
 
@@ -119,7 +119,7 @@ The header also has two notebook buttons:
 
 - **Syntax Highlighting**: Full DQL syntax highlighting for `.dql` files
 - **Semantic Token Support**: Dynamic highlighting of the type names of the file's connection
-- **Execute Queries**: Run DQL queries directly from the editor (Ctrl+Shift+E / Cmd+Shift+E), on the file's connection
+- **Execute Queries**: Run DQL queries directly from the editor (Ctrl+Shift+E / Cmd+Shift+E), on the file's connection. Execute DQL shows its results in the same grid as notebooks.
 
 ### API Method Support
 

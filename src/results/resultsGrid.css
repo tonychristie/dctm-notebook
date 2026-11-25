@@ -1,0 +1,164 @@
+.dql-result-container {
+    font-family: var(--vscode-font-family);
+    font-size: 12px;
+}
+.dql-result-container .empty-result {
+    color: var(--vscode-descriptionForeground);
+    padding: 8px;
+}
+.dql-result-container .table-container {
+    overflow-x: auto;
+    overflow-y: auto;
+}
+.dql-result-container table {
+    border-collapse: collapse;
+    table-layout: fixed;
+    width: 100%;
+}
+.dql-result-container table.wide {
+    width: auto;
+}
+.dql-result-container thead {
+    position: sticky;
+    top: 0;
+    background: var(--vscode-editor-background);
+}
+.dql-result-container th {
+    text-align: left;
+    padding: 6px 12px;
+    border-bottom: 2px solid var(--vscode-panel-border);
+    font-weight: 600;
+    white-space: nowrap;
+    user-select: none;
+    position: relative;
+    min-width: 80px;
+    max-width: 300px;
+}
+.dql-result-container table.wide th,
+.dql-result-container table.wide td {
+    width: 180px;
+}
+.dql-result-container th:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+.dql-result-container th .sort-indicator {
+    margin-left: 4px;
+    opacity: 0.5;
+}
+.dql-result-container th.sorted-asc .sort-indicator::after {
+    content: ' \25B2';
+}
+.dql-result-container th.sorted-desc .sort-indicator::after {
+    content: ' \25BC';
+}
+.dql-result-container th .resize-handle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    cursor: col-resize;
+    background: transparent;
+}
+.dql-result-container th .resize-handle:hover,
+.dql-result-container th .resize-handle.resizing {
+    background: var(--vscode-focusBorder);
+}
+.dql-result-container th .header-content {
+    cursor: pointer;
+    display: inline-block;
+}
+.dql-result-container td {
+    text-align: left;
+    padding: 4px 12px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    vertical-align: top;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.dql-result-container td:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+.dql-result-container td.selected {
+    background: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+.dql-result-container tr:hover td {
+    background: var(--vscode-list-hoverBackground);
+}
+.dql-result-container .null-value {
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+}
+.dql-result-container .object-id {
+    color: var(--vscode-textLink-foreground);
+    text-decoration: underline;
+    cursor: pointer;
+}
+.dql-result-container .context-menu {
+    position: fixed;
+    background: var(--vscode-menu-background);
+    border: 1px solid var(--vscode-menu-border);
+    border-radius: 4px;
+    padding: 4px 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    min-width: 150px;
+}
+.dql-result-container .context-menu-item {
+    padding: 6px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.dql-result-container .context-menu-item:hover {
+    background: var(--vscode-menu-selectionBackground);
+    color: var(--vscode-menu-selectionForeground);
+}
+.dql-result-container .context-menu-separator {
+    height: 1px;
+    background: var(--vscode-menu-separatorBackground);
+    margin: 4px 0;
+}
+.dql-result-container .toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    align-items: center;
+}
+.dql-result-container .toolbar button {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: none;
+    padding: 4px 8px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 11px;
+}
+.dql-result-container .toolbar button:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+.dql-result-container .status {
+    color: var(--vscode-descriptionForeground);
+    flex-grow: 1;
+}
+.dql-result-container .copy-notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--vscode-notifications-background);
+    color: var(--vscode-notifications-foreground);
+    padding: 8px 16px;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    z-index: 1001;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+.dql-result-container .copy-notification.show {
+    opacity: 1;
+}

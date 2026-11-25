@@ -1,10 +1,7 @@
-import { onActions, vscode } from './common';
+import { renderResultsGrid, ResultsGridData } from '../results/resultsGrid';
+import { byId, readWebviewData, vscode } from './common';
 
-onActions({
-    exportCsv: () => {
-        vscode.postMessage({ command: 'exportCsv' });
-    },
-    copyAll: () => {
-        vscode.postMessage({ command: 'copyAll' });
-    }
+renderResultsGrid(byId('results'), readWebviewData<ResultsGridData>(), {
+    dumpObject: objectId => vscode.postMessage({ command: 'dumpObject', objectId }),
+    exportData: (format, columns, rows) => vscode.postMessage({ command: 'exportData', data: { format, columns, rows } })
 });

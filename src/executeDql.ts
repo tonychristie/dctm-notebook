@@ -3,7 +3,7 @@ import { ConnectionManager } from './connectionManager';
 import type { DocumentConnections } from './documentConnections';
 import { DqlExecutor } from './dqlExecutor';
 import { RepositoryConnection } from './repositoryConnection';
-import { ResultsPanel } from './resultsPanel';
+import { ResultsPanel, ResultsWorkspaces } from './resultsPanel';
 
 export type DqlConnections = Pick<ConnectionManager, 'getConnections' | 'pickConnection' | 'connect'>;
 export type DqlDocumentLinks = Pick<DocumentConnections, 'connectionName' | 'link'>;
@@ -29,7 +29,8 @@ export function registerExecuteDql(
     context: vscode.ExtensionContext,
     connectionManager: ConnectionManager,
     documents: DocumentConnections,
-    dqlExecutor: DqlExecutor
+    dqlExecutor: DqlExecutor,
+    workspaces: ResultsWorkspaces
 ): void {
     context.subscriptions.push(vscode.commands.registerCommand('dctm.executeDql', async () => {
         const editor = vscode.window.activeTextEditor;
@@ -55,7 +56,7 @@ export function registerExecuteDql(
 
         try {
             const results = await dqlExecutor.execute(query, connection);
-            ResultsPanel.createOrShow(context.extensionUri, results);
+            ResultsPanel.createOrShow(context.extensionUri, connection.name, results, workspaces);
         } catch (error) {
             if (error instanceof Error) {
                 vscode.window.showErrorMessage(`DQL Error: ${error.message}`);

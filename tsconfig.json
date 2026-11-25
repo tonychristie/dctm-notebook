@@ -21,6 +21,7 @@
     "node_modules",
     ".vscode-test",
     "src/notebook/renderer.ts",
+    "src/results/resultsGrid.ts",
     "src/webviews"
   ]
 }

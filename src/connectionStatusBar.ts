@@ -15,7 +15,8 @@ export interface ConnectionStatus {
 export function connectionStatus(
     kind: EditorKind,
     connectionName: string | undefined,
-    connection: RepositoryConnection | undefined
+    connection: RepositoryConnection | undefined,
+    configured: boolean
 ): ConnectionStatus {
     const notebook = kind === 'notebook';
     const icon = notebook ? '$(notebook)' : '$(file-code)';
@@ -30,6 +31,14 @@ export function connectionStatus(
             tooltip: `${subject} ${linked} to ${connection.name} as ${connection.username}. ${change}`,
             command,
             warning: false
+        };
+    }
+    if (connectionName && !configured) {
+        return {
+            text: `${icon} ${connectionName} (not found)`,
+            tooltip: `${subject} ${linked} to ${connectionName}, which is not a configured connection. ${change}`,
+            command,
+            warning: true
         };
     }
     if (connectionName) {
@@ -91,7 +100,8 @@ export function registerConnectionStatusBar(
         }
 
         const connection = connectionName ? connectionManager.getOpenConnection(connectionName) : undefined;
-        const status = connectionStatus(kind, connectionName, connection);
+        const configured = connectionManager.getConnections().some(c => c.name === connectionName);
+        const status = connectionStatus(kind, connectionName, connection, configured);
         statusBar.text = status.text;
         statusBar.tooltip = status.tooltip;
         statusBar.command = status.command;
@@ -105,7 +115,8 @@ export function registerConnectionStatusBar(
         vscode.window.onDidChangeActiveNotebookEditor(update),
         vscode.window.onDidChangeActiveTextEditor(update),
         documents.onDidChange(update),
-        connectionManager.onDidChangeOpenConnections(update)
+        connectionManager.onDidChangeOpenConnections(update),
+        connectionManager.onDidChangeConnections(update)
     );
 
     update();

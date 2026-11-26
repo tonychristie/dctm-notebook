@@ -19,12 +19,80 @@ interface ManageConnectionsOptions {
     newConnection?: boolean;
 }
 
+export type ConnectionSettingsSource = Pick<
+    ConnectionManager,
+    'storedConnections' | 'saveConnections' | 'requestCredentials' | 'testConnection'
+>;
+
+export class ConnectionSettingsHandler {
+    constructor(
+        private readonly connectionManager: ConnectionSettingsSource,
+        private readonly post: (message: unknown) => void,
+        private readonly confirmDelete: (message: string) => Thenable<boolean>,
+        private readonly notify: (message: string) => void
+    ) {}
+
+    async save(originalName: string | undefined, connection: DocumentumConnection): Promise<void> {
+        const connections = [...this.connectionManager.storedConnections()];
+        const index = originalName === undefined ? -1 : connections.findIndex(c => c.name === originalName);
+        if (index >= 0) {
+            connections[index] = connection;
+        } else {
+            connections.push(connection);
+        }
+
+        await this.connectionManager.saveConnections(connections);
+
+        if (originalName !== undefined && originalName !== connection.name) {
+            this.notify(
+                `Notebooks and DQL files bound or linked to "${originalName}" must be bound or linked to "${connection.name}" again.`
+            );
+        }
+    }
+
+    async delete(name: string): Promise<void> {
+        const confirmed = await this.confirmDelete(
+            `Delete connection "${name}"? Notebooks and DQL files bound or linked to it must be bound or linked to another connection.`
+        );
+        if (!confirmed) {
+            return;
+        }
+
+        const connections = this.connectionManager.storedConnections().filter(c => c.name !== name);
+        await this.connectionManager.saveConnections(connections);
+    }
+
+    async test(connection: DocumentumConnection): Promise<void> {
+        const credentials = await this.connectionManager.requestCredentials(connection);
+        if (!credentials) {
+            this.post({ type: 'testResult' });
+            return;
+        }
+
+        try {
+            await this.connectionManager.testConnection(connection, credentials);
+            this.post({
+                type: 'testResult',
+                success: true,
+                message: `Connected to ${connection.repository} as ${credentials.username}.`
+            });
+        } catch (error) {
+            this.post({
+                type: 'testResult',
+                success: false,
+                message: error instanceof Error ? error.message : String(error)
+            });
+        }
+    }
+}
+
 export class ConnectionsPanel {
     private static currentPanel: ConnectionsPanel | undefined;
     private static readonly viewType = 'dctmConnectionsPanel';
 
     private readonly panel: vscode.WebviewPanel;
     private readonly connectionManager: ConnectionManager;
+    private readonly settings: ConnectionSettingsHandler;
     private disposables: vscode.Disposable[] = [];
 
     private constructor(
@@ -35,6 +103,12 @@ export class ConnectionsPanel {
     ) {
         this.panel = panel;
         this.connectionManager = connectionManager;
+        this.settings = new ConnectionSettingsHandler(
+            connectionManager,
+            message => void this.panel.webview.postMessage(message),
+            async message => await vscode.window.showWarningMessage(message, { modal: true }, 'Delete') === 'Delete',
+            message => void vscode.window.showInformationMessage(message)
+        );
 
         this.panel.webview.html = this.getHtmlForWebview(extensionUri, newConnection);
 
@@ -82,13 +156,13 @@ export class ConnectionsPanel {
         try {
             switch (message.type) {
                 case 'save':
-                    await this.save(message.originalName, formToConnection(message.form));
+                    await this.settings.save(message.originalName, formToConnection(message.form));
                     break;
                 case 'delete':
-                    await this.delete(message.name);
+                    await this.settings.delete(message.name);
                     break;
                 case 'test':
-                    await this.test(formToConnection(message.form));
+                    await this.settings.test(formToConnection(message.form));
                     break;
                 case 'openSettingsJson':
                     await vscode.commands.executeCommand(
@@ -101,61 +175,6 @@ export class ConnectionsPanel {
         } catch (error) {
             const text = error instanceof Error ? error.message : String(error);
             vscode.window.showErrorMessage(`Connection settings could not be saved: ${text}`);
-        }
-    }
-
-    private async save(originalName: string | undefined, connection: DocumentumConnection): Promise<void> {
-        const connections = [...this.connectionManager.storedConnections()];
-        const index = originalName === undefined ? -1 : connections.findIndex(c => c.name === originalName);
-        if (index >= 0) {
-            connections[index] = connection;
-        } else {
-            connections.push(connection);
-        }
-
-        await this.connectionManager.saveConnections(connections);
-
-        if (originalName !== undefined && originalName !== connection.name) {
-            vscode.window.showInformationMessage(
-                `Notebooks bound to "${originalName}" must be bound to "${connection.name}" again.`
-            );
-        }
-    }
-
-    private async delete(name: string): Promise<void> {
-        const answer = await vscode.window.showWarningMessage(
-            `Delete connection "${name}"? Notebooks bound to it must be bound to another connection.`,
-            { modal: true },
-            'Delete'
-        );
-        if (answer !== 'Delete') {
-            return;
-        }
-
-        const connections = this.connectionManager.storedConnections().filter(c => c.name !== name);
-        await this.connectionManager.saveConnections(connections);
-    }
-
-    private async test(connection: DocumentumConnection): Promise<void> {
-        const credentials = await this.connectionManager.requestCredentials(connection);
-        if (!credentials) {
-            this.panel.webview.postMessage({ type: 'testResult' });
-            return;
-        }
-
-        try {
-            await this.connectionManager.testConnection(connection, credentials);
-            this.panel.webview.postMessage({
-                type: 'testResult',
-                success: true,
-                message: `Connected to ${connection.repository} as ${credentials.username}.`
-            });
-        } catch (error) {
-            this.panel.webview.postMessage({
-                type: 'testResult',
-                success: false,
-                message: error instanceof Error ? error.message : String(error)
-            });
         }
     }
 

@@ -24,6 +24,7 @@ class FakeBridge {
     disconnectCalls: string[] = [];
     failConnect = false;
     failDisconnect = false;
+    connectGate: Promise<void> | undefined;
 
     async ensureRunning(connectionType: 'dfc' | 'rest'): Promise<void> {
         this.ensureRunningCalls.push(connectionType);
@@ -31,6 +32,7 @@ class FakeBridge {
 
     async connect(params: DfcConnectParams): Promise<string> {
         this.connectCalls.push(params);
+        await this.connectGate;
         if (this.failConnect) {
             throw new Error('authentication failed');
         }
@@ -432,6 +434,61 @@ suite('Connection Manager Test Suite', () => {
             await manager.openConnection('Dfc');
 
             assert.deepStrictEqual(manager.prompts.map(p => p.name), ['Rest', 'Dfc', 'Rest']);
+        });
+    });
+
+    suite('settings change while a connect is in progress', () => {
+        const changedMessage = 'Connection "Rest" was changed in settings. Connect again to use the new settings.';
+
+        async function heldOpen(): Promise<{ opening: Promise<unknown>; release: () => void }> {
+            let release: () => void = () => undefined;
+            bridge.connectGate = new Promise<void>(resolve => {
+                release = resolve;
+            });
+            const opening = manager.openConnection('Rest');
+            while (bridge.connectCalls.length === 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+            return { opening, release };
+        }
+
+        test('a changed connection makes the open reject, disconnects the session and keeps no credentials', async () => {
+            const { opening, release } = await heldOpen();
+
+            await manager.changeConnections([{ ...restConnection, repository: 'other' }, dfcConnection, defaultsConnection]);
+            release();
+
+            await assert.rejects(opening, { message: changedMessage });
+            assert.deepStrictEqual(bridge.disconnectCalls, ['session-1']);
+            assert.strictEqual(manager.getOpenConnection('Rest'), undefined);
+            bridge.connectGate = undefined;
+            await manager.openConnection('Rest');
+            assert.deepStrictEqual(manager.prompts.map(p => p.name), ['Rest', 'Rest']);
+        });
+
+        test('a removed connection makes the open reject, disconnects the session and keeps no credentials', async () => {
+            const { opening, release } = await heldOpen();
+
+            await manager.changeConnections([dfcConnection, defaultsConnection]);
+            release();
+
+            await assert.rejects(opening, { message: changedMessage });
+            assert.deepStrictEqual(bridge.disconnectCalls, ['session-1']);
+            assert.strictEqual(manager.getOpenConnection('Rest'), undefined);
+            bridge.connectGate = undefined;
+            await manager.changeConnections([restConnection, dfcConnection, defaultsConnection]);
+            await manager.openConnection('Rest');
+            assert.deepStrictEqual(manager.prompts.map(p => p.name), ['Rest', 'Rest']);
+        });
+
+        test('a failed disconnect of the unused session still rejects with the settings error', async () => {
+            const { opening, release } = await heldOpen();
+            bridge.failDisconnect = true;
+
+            await manager.changeConnections([dfcConnection, defaultsConnection]);
+            release();
+
+            await assert.rejects(opening, { message: changedMessage });
         });
     });
 

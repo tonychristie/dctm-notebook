@@ -31,6 +31,7 @@ export class DocumentConnections implements vscode.Disposable {
             vscode.workspace.onDidDeleteFiles(event => void this.removeLinks(event.files)),
             // A new untitled document can reuse the URI of a closed one.
             vscode.workspace.onDidCloseTextDocument(document => this.untitledLinks.delete(document.uri.toString())),
+            vscode.workspace.onDidSaveTextDocument(document => void this.keepUntitledLink(document)),
             vscode.workspace.onDidChangeNotebookDocument(event => {
                 if (event.metadata) {
                     this.changeEmitter.fire();
@@ -65,6 +66,25 @@ export class DocumentConnections implements vscode.Disposable {
         } else {
             await this.state.update(LINKS_KEY, { ...this.links(), [key]: connectionName });
         }
+        this.changeEmitter.fire();
+    }
+
+    // VS Code reports no link between an untitled document and the file it is saved to. The untitled
+    // document is closed only after the file is saved, so it is still open here with the same text.
+    private async keepUntitledLink(document: vscode.TextDocument): Promise<void> {
+        const key = document.uri.toString();
+        if (document.uri.scheme !== 'file' || document.languageId !== 'dql' || key in this.links()) {
+            return;
+        }
+        const text = document.getText();
+        const names = new Set(vscode.workspace.textDocuments
+            .filter(d => d.uri.scheme === 'untitled' && d.languageId === 'dql' && d.getText() === text)
+            .map(d => this.untitledLinks.get(d.uri.toString()))
+            .filter((name): name is string => name !== undefined));
+        if (names.size !== 1) {
+            return;
+        }
+        await this.state.update(LINKS_KEY, { ...this.links(), [key]: [...names][0] });
         this.changeEmitter.fire();
     }
 

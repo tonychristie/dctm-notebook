@@ -90,6 +90,7 @@ suite('Attribute Groups Test Suite', () => {
             assert.strictEqual(categorizeUserAttribute('user_login_name'), 'identity');
             assert.strictEqual(categorizeUserAttribute('user_privileges'), 'access');
             assert.strictEqual(categorizeUserAttribute('default_folder'), 'preferences');
+            assert.strictEqual(categorizeUserAttribute('user_group_name'), 'preferences');
         });
 
         test('sends r_ and i_ to system and everything else to other', () => {

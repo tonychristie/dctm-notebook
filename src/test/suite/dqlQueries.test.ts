@@ -13,6 +13,13 @@ suite('DQL Queries Test Suite', () => {
         test('doubles single quotes in the name', () => {
             assert.ok(buildUserQuery("O'Brien").includes("WHERE user_name = 'O''Brien'"));
         });
+
+        test('selects user_group_name, the dm_user attribute for the default group', () => {
+            const dql = buildUserQuery('jsmith');
+
+            assert.ok(dql.includes('user_group_name'));
+            assert.ok(!dql.includes('default_group'));
+        });
     });
 
     suite('buildGroupQuery', () => {

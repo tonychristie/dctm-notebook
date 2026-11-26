@@ -23,8 +23,8 @@ export function renderResultsGrid(
 ): void {
     let sortColumn: number | null = null;
     let sortDirection: SortDirection = 'asc';
-    let selectedCell: { row: number; col: number } | null = null;
-    let selectedRow: number | null = null;
+    // The row object, not its index, so the selection stays on the same row after a sort.
+    let selected: { row: Record<string, unknown>; col: number } | null = null;
     let sortedRows = [...data.rows];
 
     let resizing: { colIdx: number; th: HTMLElement } | null = null;
@@ -120,15 +120,11 @@ export function renderResultsGrid(
     }
 
     function copySelectedRow(): void {
-        if (selectedRow === null) {
+        if (!selected) {
             showNotification('No row selected');
             return;
         }
-        const row = sortedRows[selectedRow];
-        if (!row) {
-            return;
-        }
-        navigator.clipboard.writeText(toTsvRow(data.columns, row)).then(() => {
+        navigator.clipboard.writeText(toTsvRow(data.columns, selected.row)).then(() => {
             showNotification('Row copied to clipboard');
         });
     }
@@ -185,7 +181,25 @@ export function renderResultsGrid(
             return `<tr data-row-idx="${rowIdx}">${cells}</tr>`;
         }).join('');
 
+        selectedCellElement()?.classList.add('selected');
         attachEventHandlers();
+    }
+
+    function selectedCellElement(): HTMLElement | null {
+        if (!selected) {
+            return null;
+        }
+        const rowIdx = sortedRows.indexOf(selected.row);
+        return tbody.querySelector(`td[data-row="${rowIdx}"][data-col="${selected.col}"]`);
+    }
+
+    function selectCell(td: HTMLElement): void {
+        selected = {
+            row: sortedRows[parseInt(td.getAttribute('data-row') || '0')],
+            col: parseInt(td.getAttribute('data-col') || '0')
+        };
+        tbody.querySelectorAll('td.selected').forEach(el => el.classList.remove('selected'));
+        td.classList.add('selected');
     }
 
     function attachEventHandlers(): void {
@@ -213,14 +227,7 @@ export function renderResultsGrid(
                 return;
             }
 
-            tbody.querySelectorAll('td.selected').forEach(el => el.classList.remove('selected'));
-
-            td.classList.add('selected');
-            selectedCell = {
-                row: parseInt(td.getAttribute('data-row') || '0'),
-                col: parseInt(td.getAttribute('data-col') || '0')
-            };
-            selectedRow = selectedCell.row;
+            selectCell(td);
 
             const objIdSpan = (e.target as HTMLElement).closest('.object-id') as HTMLElement | null;
             if (objIdSpan) {
@@ -239,17 +246,15 @@ export function renderResultsGrid(
 
             e.preventDefault();
             const value = td.getAttribute('data-value') || '';
-            const rowIdx = parseInt(td.getAttribute('data-row') || '0');
             const colIdx = parseInt(td.getAttribute('data-col') || '0');
-            const objIdSpan = td.querySelector('.object-id');
-            const isObjId = !!objIdSpan;
+            const isObjId = !!td.querySelector('.object-id');
 
-            selectedRow = rowIdx;
-            showContextMenu(e, value, isObjId, rowIdx, colIdx);
+            selectCell(td);
+            showContextMenu(e, value, isObjId, colIdx);
         };
     }
 
-    function showContextMenu(e: MouseEvent, cellValue: string, isObjId: boolean, rowIdx: number, colIdx: number): void {
+    function showContextMenu(e: MouseEvent, cellValue: string, isObjId: boolean, colIdx: number): void {
         contextMenu.innerHTML = '';
 
         const copyCell = document.createElement('div');
@@ -267,7 +272,6 @@ export function renderResultsGrid(
         copyRow.className = 'context-menu-item';
         copyRow.textContent = 'Copy Row';
         copyRow.onclick = () => {
-            selectedRow = rowIdx;
             copySelectedRow();
             hideContextMenu();
         };
@@ -365,8 +369,8 @@ export function renderResultsGrid(
     };
 
     tableContainer.addEventListener('keydown', (e: KeyboardEvent) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedCell) {
-            const td = tbody.querySelector(`td[data-row="${selectedCell.row}"][data-col="${selectedCell.col}"]`) as HTMLElement | null;
+        if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+            const td = selectedCellElement();
             if (td) {
                 navigator.clipboard.writeText(td.getAttribute('data-value') || '').then(() => {
                     showNotification('Cell copied');

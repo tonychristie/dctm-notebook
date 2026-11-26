@@ -6,13 +6,13 @@ const open = { name: 'A', username: 'test01' } as RepositoryConnection;
 
 suite('Connection Status Bar Test Suite', () => {
     test('a notebook shows its binding and binds on click', () => {
-        assert.deepStrictEqual(connectionStatus('notebook', 'A', open), {
+        assert.deepStrictEqual(connectionStatus('notebook', 'A', open, true), {
             text: '$(notebook) A (test01)',
             tooltip: 'Notebook bound to A as test01. Click to change the binding.',
             command: 'dctm.notebook.bindConnection',
             warning: false
         });
-        assert.deepStrictEqual(connectionStatus('notebook', undefined, undefined), {
+        assert.deepStrictEqual(connectionStatus('notebook', undefined, undefined, false), {
             text: '$(notebook) No connection',
             tooltip: 'Notebook is not bound to a connection. Click to bind it.',
             command: 'dctm.notebook.bindConnection',
@@ -21,13 +21,28 @@ suite('Connection Status Bar Test Suite', () => {
     });
 
     test('a DQL file shows its link and links on click', () => {
-        assert.deepStrictEqual(connectionStatus('dql', 'A', undefined), {
+        assert.deepStrictEqual(connectionStatus('dql', 'A', undefined, true), {
             text: '$(file-code) A (disconnected)',
             tooltip: 'File linked to A, which is not connected. Running the query connects it. Click to change the link.',
             command: 'dctm.linkConnection',
             warning: true
         });
-        assert.strictEqual(connectionStatus('dql', 'A', open).text, '$(file-code) A (test01)');
-        assert.strictEqual(connectionStatus('dql', undefined, undefined).text, '$(file-code) No connection');
+        assert.strictEqual(connectionStatus('dql', 'A', open, true).text, '$(file-code) A (test01)');
+        assert.strictEqual(connectionStatus('dql', undefined, undefined, false).text, '$(file-code) No connection');
+    });
+
+    test('a link or binding to a name that is not configured shows not found', () => {
+        assert.deepStrictEqual(connectionStatus('dql', 'B', undefined, false), {
+            text: '$(file-code) B (not found)',
+            tooltip: 'File linked to B, which is not a configured connection. Click to change the link.',
+            command: 'dctm.linkConnection',
+            warning: true
+        });
+        assert.deepStrictEqual(connectionStatus('notebook', 'B', undefined, false), {
+            text: '$(notebook) B (not found)',
+            tooltip: 'Notebook bound to B, which is not a configured connection. Click to change the binding.',
+            command: 'dctm.notebook.bindConnection',
+            warning: true
+        });
     });
 });

@@ -5,7 +5,7 @@ import { RepositoryConnection } from './repositoryConnection';
 
 export type ConnectionLensSource = Pick<
     ConnectionManager,
-    'getOpenConnection' | 'onDidChangeOpenConnections' | 'onDidChangeConnections'
+    'getConnections' | 'getOpenConnection' | 'onDidChangeOpenConnections' | 'onDidChangeConnections'
 >;
 export type ConnectionLensDocuments = Pick<DocumentConnections, 'connectionName' | 'onDidChange'>;
 
@@ -16,13 +16,17 @@ export interface ConnectionLens {
 
 export function connectionLens(
     connectionName: string | undefined,
-    connection: RepositoryConnection | undefined
+    connection: RepositoryConnection | undefined,
+    configured: boolean
 ): ConnectionLens {
     if (connection) {
         return {
             text: `Connection: ${connection.name} · ${connection.config.repository} as ${connection.username}`,
             action: 'Change'
         };
+    }
+    if (connectionName && !configured) {
+        return { text: `Connection: ${connectionName} · not found`, action: 'Change' };
     }
     if (connectionName) {
         return { text: `Connection: ${connectionName} · disconnected`, action: 'Change' };
@@ -50,7 +54,8 @@ export class DqlConnectionLensProvider implements vscode.CodeLensProvider, vscod
     provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
         const connectionName = this.documents.connectionName(document);
         const connection = connectionName ? this.connectionManager.getOpenConnection(connectionName) : undefined;
-        const lens = connectionLens(connectionName, connection);
+        const configured = this.connectionManager.getConnections().some(c => c.name === connectionName);
+        const lens = connectionLens(connectionName, connection, configured);
         const range = new vscode.Range(0, 0, 0, 0);
         return [
             new vscode.CodeLens(range, { title: lens.text, command: '' }),

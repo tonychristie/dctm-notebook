@@ -14,7 +14,7 @@ const USER_IDENTITY = ['user_name', 'user_login_name', 'user_os_name', 'user_add
     'user_source', 'user_ldap_dn', 'user_global_unique_id'];
 const USER_ACCESS = ['acl_domain', 'acl_name', 'owner_name', 'owner_permit', 'user_privileges',
     'user_xprivileges', 'client_capability', 'alias_set_id'];
-const USER_PREFERENCES = ['default_folder', 'default_group', 'home_docbase', 'user_web_page',
+const USER_PREFERENCES = ['default_folder', 'user_group_name', 'home_docbase', 'user_web_page',
     'user_delegation', 'user_email'];
 
 const GROUP_IDENTITY = ['group_name', 'group_address', 'group_source', 'description',

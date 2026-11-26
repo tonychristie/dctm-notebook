@@ -404,6 +404,7 @@ const REVIVE_TIMEOUT_MS = 3000;
 export class ConnectionWorkspaces implements vscode.Disposable {
     private readonly workspaces = new Map<string, ConnectionWorkspace>();
     private readonly pendingRevivals = new Map<string, (workspace: ConnectionWorkspace | undefined) => void>();
+    private readonly pendingShows = new Map<string, Promise<ConnectionWorkspace>>();
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -419,16 +420,26 @@ export class ConnectionWorkspaces implements vscode.Disposable {
     }
 
     async show(connectionName: string, tab?: WorkspaceTab): Promise<ConnectionWorkspace> {
-        let workspace = this.workspaces.get(connectionName) ?? await this.reviveRestored(connectionName);
-        if (workspace) {
-            workspace.panel.reveal(vscode.ViewColumn.Active);
-        } else {
-            workspace = this.add(this.createPanel(connectionName), connectionName, tab ?? 'cabinets');
+        let pending = this.pendingShows.get(connectionName);
+        if (!pending) {
+            pending = this.findOrCreate(connectionName, tab ?? 'cabinets')
+                .finally(() => this.pendingShows.delete(connectionName));
+            this.pendingShows.set(connectionName, pending);
         }
+        const workspace = await pending;
         if (tab) {
             workspace.selectTab(tab);
         }
         return workspace;
+    }
+
+    private async findOrCreate(connectionName: string, initialTab: WorkspaceTab): Promise<ConnectionWorkspace> {
+        const workspace = this.workspaces.get(connectionName) ?? await this.reviveRestored(connectionName);
+        if (workspace) {
+            workspace.panel.reveal(vscode.ViewColumn.Active);
+            return workspace;
+        }
+        return this.add(this.createPanel(connectionName), connectionName, initialTab);
     }
 
     async showDump(connectionName: string, target: DumpTarget): Promise<void> {
@@ -476,7 +487,11 @@ export class ConnectionWorkspaces implements vscode.Disposable {
 
     private add(panel: vscode.WebviewPanel, connectionName: string, tab: WorkspaceTab): ConnectionWorkspace {
         const workspace = new ConnectionWorkspace(panel, connectionName, this.extensionUri, this.connections,
-            this.services, tab, () => this.workspaces.delete(connectionName));
+            this.services, tab, () => {
+                if (this.workspaces.get(connectionName) === workspace) {
+                    this.workspaces.delete(connectionName);
+                }
+            });
         this.workspaces.set(connectionName, workspace);
         return workspace;
     }

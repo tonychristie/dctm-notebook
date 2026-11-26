@@ -198,6 +198,12 @@ export class ConnectionManager implements vscode.Disposable {
             throw error;
         }
 
+        const current = this.getConnections().find(c => c.name === name);
+        if (!current || !sameConnection(config, current)) {
+            await this.dctmBridge.disconnect(sessionId).catch(() => undefined);
+            throw new Error(`Connection "${name}" was changed in settings. Connect again to use the new settings.`);
+        }
+
         const connection = new RepositoryConnection(config, credentials.username, sessionId, this.dctmBridge);
         this.credentials.set(name, credentials);
         this.openConnections.set(name, connection);

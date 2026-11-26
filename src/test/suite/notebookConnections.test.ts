@@ -1,4 +1,7 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { ConnectionManager, Credentials, DocumentumConnection } from '../../connectionManager';
 import { describeConnection } from '../../connectionForm';
@@ -21,6 +24,7 @@ class FakeBridge {
     disconnectCalls: string[] = [];
     failConnect = false;
     failDisconnect = false;
+    connectGate: Promise<void> | undefined;
 
     async ensureRunning(connectionType: 'dfc' | 'rest'): Promise<void> {
         this.ensureRunningCalls.push(connectionType);
@@ -28,6 +32,7 @@ class FakeBridge {
 
     async connect(params: DfcConnectParams): Promise<string> {
         this.connectCalls.push(params);
+        await this.connectGate;
         if (this.failConnect) {
             throw new Error('authentication failed');
         }
@@ -432,6 +437,61 @@ suite('Connection Manager Test Suite', () => {
         });
     });
 
+    suite('settings change while a connect is in progress', () => {
+        const changedMessage = 'Connection "Rest" was changed in settings. Connect again to use the new settings.';
+
+        async function heldOpen(): Promise<{ opening: Promise<unknown>; release: () => void }> {
+            let release: () => void = () => undefined;
+            bridge.connectGate = new Promise<void>(resolve => {
+                release = resolve;
+            });
+            const opening = manager.openConnection('Rest');
+            while (bridge.connectCalls.length === 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+            return { opening, release };
+        }
+
+        test('a changed connection makes the open reject, disconnects the session and keeps no credentials', async () => {
+            const { opening, release } = await heldOpen();
+
+            await manager.changeConnections([{ ...restConnection, repository: 'other' }, dfcConnection, defaultsConnection]);
+            release();
+
+            await assert.rejects(opening, { message: changedMessage });
+            assert.deepStrictEqual(bridge.disconnectCalls, ['session-1']);
+            assert.strictEqual(manager.getOpenConnection('Rest'), undefined);
+            bridge.connectGate = undefined;
+            await manager.openConnection('Rest');
+            assert.deepStrictEqual(manager.prompts.map(p => p.name), ['Rest', 'Rest']);
+        });
+
+        test('a removed connection makes the open reject, disconnects the session and keeps no credentials', async () => {
+            const { opening, release } = await heldOpen();
+
+            await manager.changeConnections([dfcConnection, defaultsConnection]);
+            release();
+
+            await assert.rejects(opening, { message: changedMessage });
+            assert.deepStrictEqual(bridge.disconnectCalls, ['session-1']);
+            assert.strictEqual(manager.getOpenConnection('Rest'), undefined);
+            bridge.connectGate = undefined;
+            await manager.changeConnections([restConnection, dfcConnection, defaultsConnection]);
+            await manager.openConnection('Rest');
+            assert.deepStrictEqual(manager.prompts.map(p => p.name), ['Rest', 'Rest']);
+        });
+
+        test('a failed disconnect of the unused session still rejects with the settings error', async () => {
+            const { opening, release } = await heldOpen();
+            bridge.failDisconnect = true;
+
+            await manager.changeConnections([dfcConnection, defaultsConnection]);
+            release();
+
+            await assert.rejects(opening, { message: changedMessage });
+        });
+    });
+
     suite('testConnection', () => {
         test('connects with the given values and disconnects, leaving no open connection', async () => {
             await manager.testConnection(dfcConnection, { username: 'tester', password: 'secret' });
@@ -665,6 +725,17 @@ suite('DQL Document Connection Test Suite', () => {
         assert.strictEqual(documents.connectionName(document), 'Dfc');
         assert.deepStrictEqual(manager.pickCalls, []);
     });
+
+    test('a cancelled pick returns no connection and stores no link', async () => {
+        const document = await vscode.workspace.openTextDocument({ language: 'dql', content: 'select 1' });
+        manager.pickAnswers = [undefined];
+
+        const connection = await documentConnection(manager, documents, document);
+
+        assert.strictEqual(connection, undefined);
+        assert.strictEqual(documents.connectionName(document), undefined);
+        assert.strictEqual(manager.pickCalls.length, 1);
+    });
 });
 
 suite('Document Connections Test Suite', () => {
@@ -720,6 +791,67 @@ suite('Document Connections Test Suite', () => {
 
         assert.strictEqual(documents.connectionName(fileDocument('/work/query.dql')), undefined);
         assert.strictEqual(documents.connectionName(fileDocument('/work/other.dql')), 'Dfc');
+    });
+
+    suite('an untitled document saved to a file', () => {
+        let folder: string;
+
+        setup(() => {
+            folder = fs.mkdtempSync(path.join(os.tmpdir(), 'dctm-links-'));
+        });
+
+        teardown(async () => {
+            await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+            fs.rmSync(folder, { recursive: true, force: true });
+        });
+
+        async function untitledAt(name: string, text: string): Promise<vscode.TextDocument> {
+            const document = await vscode.workspace.openTextDocument(
+                vscode.Uri.file(path.join(folder, name)).with({ scheme: 'untitled' }));
+            const edit = new vscode.WorkspaceEdit();
+            edit.insert(document.uri, new vscode.Position(0, 0), text);
+            await vscode.workspace.applyEdit(edit);
+            return document;
+        }
+
+        // The link is stored from the save event, after save() has resolved.
+        async function settle(): Promise<void> {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        test('gives the saved file the link of the untitled document in the workspace state', async () => {
+            const untitled = await untitledAt('saved.dql', 'select object_name from dm_cabinet');
+            await documents.link(untitled, 'Rest');
+
+            await untitled.save();
+            await settle();
+
+            const saved = vscode.Uri.file(path.join(folder, 'saved.dql')).toString();
+            assert.deepStrictEqual(state.get('dctm.documentLinks'), { [saved]: 'Rest' });
+        });
+
+        test('a saved file that already has a link keeps it', async () => {
+            await documents.link(fileDocument(path.join(folder, 'linked.dql')), 'Dfc');
+            const untitled = await untitledAt('linked.dql', 'select object_name from dm_cabinet');
+            await documents.link(untitled, 'Rest');
+
+            await untitled.save();
+            await settle();
+
+            assert.strictEqual(documents.connectionName(fileDocument(path.join(folder, 'linked.dql'))), 'Dfc');
+        });
+
+        test('two open untitled documents with the same text and different links give the saved file no link', async () => {
+            const untitled = await untitledAt('shared.dql', 'select object_name from dm_cabinet');
+            await documents.link(untitled, 'Rest');
+            const other = await vscode.workspace.openTextDocument({ language: 'dql', content: 'select object_name from dm_cabinet' });
+            await documents.link(other, 'Dfc');
+
+            await untitled.save();
+            await settle();
+
+            assert.strictEqual(documents.connectionName(fileDocument(path.join(folder, 'shared.dql'))), undefined);
+        });
     });
 
     test('the connection of a notebook cell is its notebook binding', async () => {

@@ -4,7 +4,7 @@ export function quoteDqlString(value: string): string {
 
 export function buildUserQuery(userName: string): string {
     return `SELECT user_name, user_login_name, user_os_name, user_address,
-    default_folder, default_group, description, user_state
+    default_folder, user_group_name, description, user_state
 FROM dm_user
 WHERE user_name = ${quoteDqlString(userName)}`;
 }

@@ -414,12 +414,4 @@ export class DctmBridge {
     async getParentGroups(sessionId: string, groupName: string): Promise<GroupInfo[]> {
         return this.getImplForSession(sessionId).getParentGroups(sessionId, groupName);
     }
-
-    /**
-     * Stop the bridges if we started them
-     */
-    async stop(): Promise<void> {
-        this.clients.clear();
-        this.sessionImpls.clear();
-    }
 }

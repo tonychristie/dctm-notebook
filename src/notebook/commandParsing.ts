@@ -10,8 +10,11 @@ export interface DmApiCommand {
     value?: string;
 }
 
+// Lines break only at a newline outside quotes, so trimming and dropping blank lines never
+// touch the text of a multi-line string literal.
 export function stripComments(code: string, includeBlockComments: boolean = false): string {
-    let stripped = '';
+    const lines: string[] = [];
+    let line = '';
     let quote: string | null = null;
     let i = 0;
 
@@ -22,11 +25,15 @@ export function stripComments(code: string, includeBlockComments: boolean = fals
             if (ch === quote) {
                 quote = null;
             }
-            stripped += ch;
+            line += ch;
             i++;
         } else if (ch === "'" || ch === '"') {
             quote = ch;
-            stripped += ch;
+            line += ch;
+            i++;
+        } else if (ch === '\n') {
+            lines.push(line.trim());
+            line = '';
             i++;
         } else if (code.startsWith('--', i)) {
             const lineEnd = code.indexOf('\n', i);
@@ -34,23 +41,20 @@ export function stripComments(code: string, includeBlockComments: boolean = fals
         } else if (includeBlockComments && code.startsWith('/*', i)) {
             const blockEnd = code.indexOf('*/', i + 2);
             if (blockEnd === -1) {
-                stripped += '/*';
+                line += '/*';
                 i += 2;
             } else {
                 i = blockEnd + 2;
             }
         } else {
-            stripped += ch;
+            line += ch;
             i++;
         }
     }
+    // An unclosed string runs to the end of the text, which is kept as typed.
+    lines.push(quote ? line.trimStart() : line.trim());
 
-    return stripped
-        .split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
-        .join('\n')
-        .trim();
+    return lines.filter(l => l.length > 0).join('\n');
 }
 
 export function parseDmApiCommand(command: string): DmApiCommand | null {

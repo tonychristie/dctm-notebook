@@ -66,6 +66,17 @@ suite('Command Parsing Test Suite', () => {
             assert.strictEqual(stripComments("-- don't run this\nselect 1 -- trailing"), 'select 1');
         });
 
+        test('keeps the spaces and blank lines inside a multi-line string, and trims the lines around it', () => {
+            assert.strictEqual(
+                stripComments("  update dm_document objects\n  set title = 'a\n  b\n\n' -- note\n\n  where 1=1"),
+                "update dm_document objects\nset title = 'a\n  b\n\n'\nwhere 1=1"
+            );
+        });
+
+        test('keeps the end of a string that is not closed as typed', () => {
+            assert.strictEqual(stripComments("select 'a\n  b  "), "select 'a\n  b  ");
+        });
+
         test('leaves a block comment with no closing marker in the text', () => {
             assert.strictEqual(
                 stripComments('select 1 /* not closed', true),

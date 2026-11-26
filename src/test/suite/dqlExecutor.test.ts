@@ -39,6 +39,15 @@ suite('DqlExecutor Test Suite', () => {
         assert.deepStrictEqual(queries, ["select object_name from dm_document where object_name = 'a -- b'"]);
     });
 
+    test('sends a multi-line string literal unchanged', async () => {
+        const { executor, connection, queries } = harness();
+        const query = "select object_name from dm_cabinet\nwhere 'a\n  b\n\nc' <> 'a'";
+
+        await executor.execute(`-- compare\n${query}`, connection);
+
+        assert.deepStrictEqual(queries, [query]);
+    });
+
     test('returns the query as the user typed it', async () => {
         const { executor, connection } = harness();
 

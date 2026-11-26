@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from '../connectionManager';
 import { RepositoryConnection } from '../repositoryConnection';
-import { DqlExecutor, DqlResult } from '../dqlExecutor';
+import { DqlExecutor, DqlResult, dqlStatement } from '../dqlExecutor';
 import { ApiExecutor, ApiMethodResponse } from '../apiExecutor';
 import { NotebookConnectionResult, resolveNotebookConnection } from './notebookConnection';
 import {
@@ -45,92 +45,36 @@ export async function executeCells<Cell>(
     }
 }
 
-/**
- * Notebook controller for executing DQL queries and API commands
- *
- * This controller handles execution of cells in .dctmbook notebooks,
- * connecting to Documentum via the DFC Bridge and rendering results inline.
- */
-export class DctmNotebookController {
-    readonly controllerId = 'dctm-notebook-controller';
-    readonly notebookType = 'dctmbook';
-    readonly label = 'Documentum Notebook';
-    readonly supportedLanguages = ['dql', 'dmapi'];
+export type CellExecution = Pick<vscode.NotebookCellExecution, 'replaceOutput' | 'end'>;
+export type CellDocument = Pick<vscode.TextDocument, 'getText' | 'languageId'>;
 
-    private readonly controller: vscode.NotebookController;
-    private executionOrder = 0;
-
-    private connectionManager: ConnectionManager;
-    private dqlExecutor: DqlExecutor;
-    private apiExecutor: ApiExecutor;
-
+export class NotebookCellRunner {
     constructor(
-        connectionManager: ConnectionManager,
-        dqlExecutor: DqlExecutor,
-        apiExecutor: ApiExecutor
-    ) {
-        this.connectionManager = connectionManager;
-        this.dqlExecutor = dqlExecutor;
-        this.apiExecutor = apiExecutor;
-
-        this.controller = vscode.notebooks.createNotebookController(
-            this.controllerId,
-            this.notebookType,
-            this.label
-        );
-
-        this.controller.supportedLanguages = this.supportedLanguages;
-        this.controller.supportsExecutionOrder = true;
-        this.controller.executeHandler = this.executeHandler.bind(this);
-    }
-
-    /**
-     * Execute handler for notebook cells
-     */
-    private async executeHandler(
-        cells: vscode.NotebookCell[],
-        notebook: vscode.NotebookDocument,
-        _controller: vscode.NotebookController
-    ): Promise<void> {
-        await executeCells(
-            cells,
-            () => resolveNotebookConnection(this.connectionManager, notebook),
-            (cell, connection) => this.executeCell(cell, connection),
-            (cell, message) => this.failCell(cell, message)
-        );
-    }
-
-    private startExecution(cell: vscode.NotebookCell): vscode.NotebookCellExecution {
-        const execution = this.controller.createNotebookCellExecution(cell);
-        execution.executionOrder = ++this.executionOrder;
-        execution.start(Date.now());
-        return execution;
-    }
-
-    private failCell(cell: vscode.NotebookCell, message: string): void {
-        const execution = this.startExecution(cell);
-        execution.replaceOutput([errorOutput(message)]);
-        execution.end(false, Date.now());
-    }
+        private readonly dqlExecutor: Pick<DqlExecutor, 'execute'>,
+        private readonly apiExecutor: Pick<ApiExecutor, 'execute'>
+    ) {}
 
     /**
      * Execute a single notebook cell
      */
-    private async executeCell(cell: vscode.NotebookCell, connection: RepositoryConnection): Promise<void> {
-        const execution = this.startExecution(cell);
-
+    async run(
+        execution: CellExecution,
+        document: CellDocument,
+        metadata: { [key: string]: unknown },
+        connection: RepositoryConnection
+    ): Promise<void> {
         try {
-            const content = cell.document.getText().trim();
+            const content = document.getText().trim();
             if (!content) {
                 execution.replaceOutput([]);
                 execution.end(true, Date.now());
                 return;
             }
 
-            const outputFormat = getOutputFormat(cell.metadata);
+            const outputFormat = getOutputFormat(metadata);
 
             // Execute based on language
-            const language = cell.document.languageId;
+            const language = document.languageId;
 
             if (language === 'dql') {
                 await this.executeDql(content, execution, outputFormat, connection);
@@ -157,19 +101,17 @@ export class DctmNotebookController {
      */
     private async executeDql(
         query: string,
-        execution: vscode.NotebookCellExecution,
+        execution: CellExecution,
         outputFormat: OutputFormat,
         connection: RepositoryConnection
     ): Promise<void> {
         try {
-            // Strip comments before execution (DQL supports block comments)
-            const cleanQuery = stripComments(query, true);
-            if (!cleanQuery) {
+            if (!dqlStatement(query)) {
                 execution.replaceOutput([]);
                 execution.end(true, Date.now());
                 return;
             }
-            const result = await this.dqlExecutor.execute(cleanQuery, connection);
+            const result = await this.dqlExecutor.execute(query, connection);
             const output = this.formatDqlOutput(result, outputFormat);
 
             execution.replaceOutput([output]);
@@ -221,7 +163,7 @@ export class DctmNotebookController {
      */
     private async executeApi(
         command: string,
-        execution: vscode.NotebookCellExecution,
+        execution: CellExecution,
         outputFormat: OutputFormat,
         connection: RepositoryConnection
     ): Promise<void> {
@@ -324,6 +266,73 @@ export class DctmNotebookController {
                 vscode.NotebookCellOutputItem.text(text, 'text/plain')
             ]);
         }
+    }
+}
+
+/**
+ * Notebook controller for executing DQL queries and API commands
+ *
+ * This controller handles execution of cells in .dctmbook notebooks,
+ * connecting to Documentum via the DFC Bridge and rendering results inline.
+ */
+export class DctmNotebookController {
+    readonly controllerId = 'dctm-notebook-controller';
+    readonly notebookType = 'dctmbook';
+    readonly label = 'Documentum Notebook';
+    readonly supportedLanguages = ['dql', 'dmapi'];
+
+    private readonly controller: vscode.NotebookController;
+    private readonly runner: NotebookCellRunner;
+    private executionOrder = 0;
+
+    private connectionManager: ConnectionManager;
+
+    constructor(
+        connectionManager: ConnectionManager,
+        dqlExecutor: DqlExecutor,
+        apiExecutor: ApiExecutor
+    ) {
+        this.connectionManager = connectionManager;
+        this.runner = new NotebookCellRunner(dqlExecutor, apiExecutor);
+
+        this.controller = vscode.notebooks.createNotebookController(
+            this.controllerId,
+            this.notebookType,
+            this.label
+        );
+
+        this.controller.supportedLanguages = this.supportedLanguages;
+        this.controller.supportsExecutionOrder = true;
+        this.controller.executeHandler = this.executeHandler.bind(this);
+    }
+
+    /**
+     * Execute handler for notebook cells
+     */
+    private async executeHandler(
+        cells: vscode.NotebookCell[],
+        notebook: vscode.NotebookDocument,
+        _controller: vscode.NotebookController
+    ): Promise<void> {
+        await executeCells(
+            cells,
+            () => resolveNotebookConnection(this.connectionManager, notebook),
+            (cell, connection) => this.runner.run(this.startExecution(cell), cell.document, cell.metadata, connection),
+            (cell, message) => this.failCell(cell, message)
+        );
+    }
+
+    private startExecution(cell: vscode.NotebookCell): vscode.NotebookCellExecution {
+        const execution = this.controller.createNotebookCellExecution(cell);
+        execution.executionOrder = ++this.executionOrder;
+        execution.start(Date.now());
+        return execution;
+    }
+
+    private failCell(cell: vscode.NotebookCell, message: string): void {
+        const execution = this.startExecution(cell);
+        execution.replaceOutput([errorOutput(message)]);
+        execution.end(false, Date.now());
     }
 
     /**

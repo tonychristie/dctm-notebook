@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
 import type { DocumentConnections } from './documentConnections';
-import { DqlExecutor } from './dqlExecutor';
+import { DqlExecutor, dqlStatement } from './dqlExecutor';
 import { RepositoryConnection } from './repositoryConnection';
 import { ResultsPanel, ResultsWorkspaces } from './resultsPanel';
 
@@ -44,7 +44,7 @@ export function registerExecuteDql(
             ? editor.document.getText()
             : editor.document.getText(selection);
 
-        if (!query.trim()) {
+        if (!dqlStatement(query)) {
             vscode.window.showWarningMessage('No DQL query to execute');
             return;
         }

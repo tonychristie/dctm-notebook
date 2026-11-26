@@ -226,6 +226,28 @@ suite('ConnectionWorkspace Test Suite', () => {
         assert.strictEqual(panels[0].reveals, 1);
     });
 
+    test('two show calls before either settles create one panel and return the same workspace', async () => {
+        const { workspaces, panels } = harness();
+
+        const [first, second] = await Promise.all([workspaces.show('conn1'), workspaces.show('conn1', 'dump')]);
+
+        assert.strictEqual(first, second);
+        assert.strictEqual(panels.length, 1);
+        assert.strictEqual(workspaces.get('conn1'), first);
+    });
+
+    test('after the panel of concurrent show calls is disposed, the next show creates a new panel', async () => {
+        const { workspaces, panels } = harness();
+        await Promise.all([workspaces.show('conn1'), workspaces.show('conn1')]);
+
+        panels[0].panel.dispose();
+        const next = await workspaces.show('conn1');
+
+        assert.strictEqual(panels.length, 2);
+        assert.strictEqual(next.panel, panels[1].panel);
+        assert.strictEqual(workspaces.get('conn1'), next);
+    });
+
     test('show of a restored tab that is not yet revived reveals the revived workspace and creates no panel', async () => {
         const restored = fakePanel('conn1');
         const activated: string[] = [];

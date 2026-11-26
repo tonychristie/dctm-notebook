@@ -9,6 +9,13 @@ export interface SchemaTypeCache {
 export function typeCacheSchema(typeCache: SchemaTypeCache): DqlSchema {
     return {
         typeNames: () => typeCache.getNames(),
-        attributes: async typeName => (await typeCache.fetchTypeDetails(typeName))?.attributes.map(a => a.name) ?? []
+        attributes: async typeName => {
+            try {
+                return (await typeCache.fetchTypeDetails(typeName))?.attributes.map(a => a.name) ?? [];
+            } catch {
+                // A failed lookup, for example on an expired session, must not empty the whole list.
+                return [];
+            }
+        }
     };
 }

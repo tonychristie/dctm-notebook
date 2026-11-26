@@ -114,13 +114,7 @@ export class DqlTab implements vscode.Disposable {
     private async complete(requestId: number, text: string, offset: number): Promise<void> {
         const connection = this.connections.getOpenConnection(this.connectionName);
         const schema = connection ? typeCacheSchema(connection.typeCache) : undefined;
-        let result: DqlCompletionResult | undefined;
-        try {
-            result = await completeDql(text, offset, schema);
-        } catch {
-            // A failed attribute lookup leaves the list empty rather than showing an error while typing.
-            result = undefined;
-        }
+        const result = await completeDql(text, offset, schema);
         this.post({ type: 'dqlCompletion', requestId, result });
     }
 

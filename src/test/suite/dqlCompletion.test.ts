@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import { completeDql, DqlCompletionItem, DqlSchema } from '../../dql/completion';
+import { typeCacheSchema } from '../../dql/typeCacheSchema';
 import { DQL_SERVER_FUNCTIONS } from '../../dql/vocabulary';
 
 const ATTRIBUTES: Record<string, string[]> = {
@@ -149,5 +150,20 @@ suite('DQL completion rules', () => {
         assert.deepStrictEqual(labelsOf(inSelect!.items, 'attribute'), []);
         assert.deepStrictEqual(labelsOf(inSelect!.items, 'keyword'), ['OBJECT', 'OBJECTS']);
         assert.deepStrictEqual(inFrom?.items, []);
+    });
+
+    test('a typeCacheSchema whose attribute lookup fails still offers the keywords and functions', async () => {
+        const failing = typeCacheSchema({
+            getNames: () => ['dm_document'],
+            fetchTypeDetails: async () => {
+                throw new Error('session expired');
+            }
+        });
+
+        const result = await complete('select | from dm_document', failing);
+
+        assert.deepStrictEqual(labelsOf(result!.items, 'attribute'), []);
+        assert.ok(labelsOf(result!.items, 'keyword').includes('WHERE'));
+        assert.ok(labelsOf(result!.items, 'function').includes('COUNT'));
     });
 });

@@ -353,6 +353,31 @@ suite('ConnectionWorkspace Test Suite', () => {
         assert.strictEqual(panels[0].disposed, true);
     });
 
+    test('the tabs are in the order DQL, API, Dump, Cabinets, Types, Users, Groups', async () => {
+        const { workspaces, panels } = harness();
+        await workspaces.show('conn1');
+
+        const tabs = Array.from(panels[0].panel.webview.html.matchAll(/role="tab"[^>]*data-tab="([a-z]+)"/g), match => match[1]);
+        assert.deepStrictEqual(tabs, ['dql', 'api', 'dump', 'cabinets', 'types', 'users', 'groups']);
+    });
+
+    test('a new workspace opens on the DQL tab', async () => {
+        const { workspaces, panels } = harness();
+        await workspaces.show('conn1');
+
+        await panels[0].send({ command: 'ready' });
+        assert.strictEqual(lastState(panels[0])?.activeTab, 'dql');
+    });
+
+    test('a restored panel with no saved tab opens on the DQL tab', async () => {
+        const { workspaces } = harness();
+        const restored = fakePanel('conn2');
+        workspaces.revive(restored.panel, { connectionName: 'conn2' });
+
+        await restored.send({ command: 'ready' });
+        assert.strictEqual(lastState(restored)?.activeTab, 'dql');
+    });
+
     test('showDump selects the Dump tab and remembers it for the next ready', async () => {
         const { workspaces, panels } = harness();
         await workspaces.showDump('conn1', { kind: 'object', objectId: '0900000180000001' });

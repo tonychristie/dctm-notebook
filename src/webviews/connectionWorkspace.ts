@@ -34,7 +34,7 @@ const entities: Record<EntityTabName, EntityTabView> = {
 };
 
 let connectionName = '';
-let activeTab: WorkspaceTab = 'cabinets';
+let activeTab: WorkspaceTab = 'dql';
 let connected = false;
 let loadedGeneration = 0;
 
@@ -56,6 +56,8 @@ function showTab(tab: WorkspaceTab): void {
     }
     if (connected && isEntityTab(tab)) {
         entities[tab].ensureLoaded();
+    } else if (connected && tab === 'cabinets') {
+        cabinets.ensureLoaded();
     }
     saveState();
 }
@@ -80,7 +82,7 @@ function applyState(state: WorkspaceState): void {
 
     if (state.connected && state.generation !== loadedGeneration) {
         loadedGeneration = state.generation;
-        cabinets.load();
+        cabinets.reset();
         Object.values(entities).forEach(view => view.reset());
     }
 

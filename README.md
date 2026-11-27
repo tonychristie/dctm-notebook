@@ -71,16 +71,39 @@ A REST connection:
 
 Click a connection in the Connections view to open its workspace, an editor tab titled with the connection name. When the connection is not open, it connects first and asks for the password. "Documentum: Open Workspace" in the Command Palette does the same for a connection you pick. Each connection has one workspace; clicking the connection again shows it. Several workspaces can be open at the same time, one per connection.
 
-The header shows the connection name, the repository and the user. Below it are the tabs.
+The header shows the connection name, the repository and the user. Below it are the tabs: DQL, API, Dump, Cabinets, Types, Users and Groups. A new workspace opens on the DQL tab.
 
 The header also has two notebook buttons:
 
 - **New DQL notebook** opens a new notebook with one empty DQL cell, bound to the workspace's connection.
 - **Open notebook** asks for a `.dctmbook` file. A notebook with no binding is bound to the workspace's connection and opened. A notebook bound to this connection is opened. A notebook bound to another connection asks whether to bind it to this one: Bind binds it and opens it, Open as is opens it with its binding unchanged.
 
+### DQL tab
+
+- A query box with DQL colouring and completion, on the workspace's connection. Keywords, functions and constants are coloured, and so are the connection's types where a type name is expected. Attribute names are plain.
+- Completion opens while you type, after a `.` and on Ctrl+Space. It offers the connection's types after `FROM`, `JOIN`, `INTO`, `UPDATE` and `TYPE`, the attributes of a type after `<type or alias>.`, and elsewhere the keywords, the DQL functions and the attributes of the query's types. A query is the lines around the cursor up to a blank line or a `;`.
+- Click Run, or press Ctrl+Enter (Cmd+Enter on macOS), to run the selection, or the whole query when nothing is selected.
+- Results show in the same grid as notebooks. Click an object ID to show it in the Dump tab.
+- The history below the results keeps the last 10 queries, with the time and the row count or Error. Click an entry to put its query in the box; it does not run.
+- The query text, the result and the history stay when the workspace is hidden, and the query text stays after a window reload.
+
+### API tab
+
+- Executes API methods on the workspace's connection. See [Using the API tab](#using-the-api-tab).
+- Execute API Method on a cabinet, folder or document in the Cabinets tab shows the API tab with the object ID filled in.
+- Click an object ID in a result to show it in the Dump tab.
+
+### Dump tab
+
+- Enter an object ID in the box and press Enter or click Dump. An object ID is 16 hexadecimal characters.
+- An object dump shows the object's attributes in groups, with a filter, Refresh, Copy Object ID, Collapse All and Expand All.
+- Type, user and group dumps show the type's attributes, the user's details and groups, and the group's members and parent groups, each with Generate DQL.
+- Click an object ID value, a supertype or child type, a user's group, a group's parent group or a group member to show it in the same tab. Back and Forward move through everything shown, objects, types, users and groups in one history.
+- Click an object ID in a notebook result to show it in the Dump tab of the notebook's connection. Click an object ID in the Execute DQL results to show it in the Dump tab of the connection the query ran on. The workspace opens when it is not open.
+
 ### Cabinets tab
 
-- A tree of the repository's cabinets, folders and documents. Folders are listed before documents, each by name. A folder's contents load when you first expand it.
+- A tree of the repository's cabinets, folders and documents. Folders are listed before documents, each by name. The cabinet list loads the first time you show the tab, and a folder's contents load when you first expand it.
 - Click a cabinet or folder to expand it. Click a document to show it in the Dump tab.
 - Refresh reloads the cabinet list.
 - Right-click an item for Dump, Execute API Method and, on a cabinet or folder, Refresh. A document also has Checkout, Checkin and Cancel Checkout.
@@ -92,29 +115,6 @@ The header also has two notebook buttons:
 - Type in the search box to show the names that contain the text, in any case. In Types, a search shows the matching types as a flat list; clear the box to see the tree again. The number of items shown is next to the Refresh button.
 - Click a type, user or group to show it in the Dump tab. In Types, click the arrow to expand a type.
 - Right-click an item for Dump and Generate DQL Query. Generate DQL Query opens the query in a new DQL document, linked to the workspace's connection.
-
-### DQL tab
-
-- A query box with DQL colouring and completion, on the workspace's connection. Keywords, functions and constants are coloured, and so are the connection's types where a type name is expected. Attribute names are plain.
-- Completion opens while you type, after a `.` and on Ctrl+Space. It offers the connection's types after `FROM`, `JOIN`, `INTO`, `UPDATE` and `TYPE`, the attributes of a type after `<type or alias>.`, and elsewhere the keywords, the DQL functions and the attributes of the query's types. A query is the lines around the cursor up to a blank line or a `;`.
-- Click Run, or press Ctrl+Enter (Cmd+Enter on macOS), to run the selection, or the whole query when nothing is selected.
-- Results show in the same grid as notebooks. Click an object ID to show it in the Dump tab.
-- The history below the results keeps the last 10 queries, with the time and the row count or Error. Click an entry to put its query in the box; it does not run.
-- The query text, the result and the history stay when the workspace is hidden, and the query text stays after a window reload.
-
-### Dump tab
-
-- Enter an object ID in the box and press Enter or click Dump. An object ID is 16 hexadecimal characters.
-- An object dump shows the object's attributes in groups, with a filter, Refresh, Copy Object ID, Collapse All and Expand All.
-- Type, user and group dumps show the type's attributes, the user's details and groups, and the group's members and parent groups, each with Generate DQL.
-- Click an object ID value, a supertype or child type, a user's group, a group's parent group or a group member to show it in the same tab. Back and Forward move through everything shown, objects, types, users and groups in one history.
-- Click an object ID in a notebook result to show it in the Dump tab of the notebook's connection. Click an object ID in the Execute DQL results to show it in the Dump tab of the connection the query ran on. The workspace opens when it is not open.
-
-### API tab
-
-- Executes API methods on the workspace's connection. See [Using the API tab](#using-the-api-tab).
-- Execute API Method on a cabinet, folder or document in the Cabinets tab shows the API tab with the object ID filled in.
-- Click an object ID in a result to show it in the Dump tab.
 
 ### Disconnects and reloads
 

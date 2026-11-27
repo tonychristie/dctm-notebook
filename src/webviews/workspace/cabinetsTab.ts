@@ -20,6 +20,7 @@ export class CabinetsTabView {
     private readonly tree: Tree<CabinetNode>;
     private readonly pending = new Map<number, PendingRequest>();
     private nextRequestId = 0;
+    private requested = false;
 
     constructor(root: HTMLElement, private readonly post: (message: object) => void) {
         this.tree = new Tree<CabinetNode>(root.querySelector<HTMLElement>('.tree-container')!, {
@@ -36,6 +37,18 @@ export class CabinetsTabView {
 
     load(): void {
         void this.tree.loadRoots(() => this.request({ command: 'loadCabinets' }));
+    }
+
+    ensureLoaded(): void {
+        if (!this.requested) {
+            this.requested = true;
+            this.load();
+        }
+    }
+
+    // A reopened connection has a new session, so the tab loads again the next time it is shown.
+    reset(): void {
+        this.requested = false;
     }
 
     refreshNode(nodeId: string): void {

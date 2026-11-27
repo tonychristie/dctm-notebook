@@ -1,412 +1,161 @@
 import * as assert from 'assert';
+import * as vscode from 'vscode';
+import { ApiExecutor } from '../../apiExecutor';
+import { DqlExecutor } from '../../dqlExecutor';
+import { CellExecution, NotebookCellRunner, errorOutput } from '../../notebook/notebookController';
+import { RepositoryConnection } from '../../repositoryConnection';
 
-/**
- * Tests for notebook controller helper functions
- *
- * Note: Full integration tests require a running VS Code instance and mock bridge.
- * These unit tests focus on the pure logic functions that can be tested in isolation.
- */
+class FakeExecution implements CellExecution {
+    outputs: vscode.NotebookCellOutput[] | undefined;
+    success: boolean | undefined;
+
+    async replaceOutput(out: vscode.NotebookCellOutput | readonly vscode.NotebookCellOutput[]): Promise<void> {
+        this.outputs = Array.isArray(out) ? [...out] : [out as vscode.NotebookCellOutput];
+    }
+
+    end(success: boolean | undefined): void {
+        this.success = success;
+    }
+}
+
+interface FakeBridgeOptions {
+    dqlError?: string;
+    rest?: boolean;
+}
+
+function harness(options: FakeBridgeOptions = {}) {
+    const calls: string[] = [];
+    const bridge = {
+        executeDql: async (_sessionId: string, query: string) => {
+            calls.push(`dql:${query}`);
+            if (options.dqlError) {
+                throw new Error(options.dqlError);
+            }
+            return { columns: ['object_name'], rows: [{ object_name: 'Temp' }], rowCount: 1, executionTime: 4 };
+        },
+        executeApi: async (_sessionId: string, _typeName: string, method: string, params: { args?: unknown[] }) => {
+            calls.push(`api:${method}(${(params.args ?? []).join(',')})`);
+            return { result: 'ok', resultType: 'boolean', executionTimeMs: 2 };
+        },
+        executeDmApi: async (_sessionId: string, apiType: string, command: string) => {
+            calls.push(`dmapi:${apiType}:${command}`);
+            return { result: 's0', resultType: 'string', executionTimeMs: 1 };
+        },
+        isRestSession: () => options.rest === true
+    };
+    const connection = { name: 'A', sessionId: 'session-1', bridge } as unknown as RepositoryConnection;
+    const runner = new NotebookCellRunner(new DqlExecutor(), new ApiExecutor());
+    return { runner, connection, calls };
+}
+
+function cellDocument(languageId: string, text: string) {
+    return { languageId, getText: () => text };
+}
+
+function outputMimes(execution: FakeExecution): string[] {
+    return (execution.outputs ?? []).flatMap(output => output.items.map(item => item.mime));
+}
+
+function errorMessageOf(execution: FakeExecution): string {
+    const item = execution.outputs![0].items[0];
+    return JSON.parse(new TextDecoder().decode(item.data)).message;
+}
+
 suite('NotebookController Test Suite', () => {
+    suite('errorOutput', () => {
+        const message = '[DQL_ERROR] DQL execution failed: syntax error';
 
-    suite('Comment stripping - DQL', () => {
-        // Test the logic that would be in stripDqlComments
-        function stripDqlComments(query: string): string {
-            // Remove block comments (/* ... */) - non-greedy match across lines
-            let stripped = query.replace(/\/\*[\s\S]*?\*\//g, '');
+        test('has one notebook error item', () => {
+            const output = errorOutput(message);
 
-            // Remove line comments (-- to end of line)
-            stripped = stripped.replace(/--.*$/gm, '');
-
-            // Clean up extra whitespace and empty lines
-            stripped = stripped
-                .split('\n')
-                .map(line => line.trim())
-                .filter(line => line.length > 0)
-                .join('\n');
-
-            return stripped.trim();
-        }
-
-        test('strips single line comment', () => {
-            const query = '-- this is a comment\nSELECT * FROM dm_document';
-            const result = stripDqlComments(query);
-            assert.strictEqual(result, 'SELECT * FROM dm_document');
+            assert.strictEqual(output.items.length, 1);
+            assert.strictEqual(output.items[0].mime, 'application/vnd.code.notebook.error');
         });
 
-        test('strips inline comment', () => {
-            const query = 'SELECT * FROM dm_document -- get all docs';
-            const result = stripDqlComments(query);
-            assert.strictEqual(result, 'SELECT * FROM dm_document');
-        });
+        test('item carries the message with an empty name and no stack', () => {
+            const output = errorOutput(message);
+            const data = JSON.parse(new TextDecoder().decode(output.items[0].data));
 
-        test('strips multiple line comments', () => {
-            const query = '-- comment 1\nSELECT *\n-- comment 2\nFROM dm_document';
-            const result = stripDqlComments(query);
-            assert.strictEqual(result, 'SELECT *\nFROM dm_document');
-        });
-
-        test('strips block comment single line', () => {
-            const query = 'SELECT /* comment */ * FROM dm_document';
-            const result = stripDqlComments(query);
-            assert.strictEqual(result, 'SELECT  * FROM dm_document');
-        });
-
-        test('strips block comment multi-line', () => {
-            const query = 'SELECT *\n/* this is a\nmulti-line comment */\nFROM dm_document';
-            const result = stripDqlComments(query);
-            assert.strictEqual(result, 'SELECT *\nFROM dm_document');
-        });
-
-        test('strips mixed comments', () => {
-            const query = '-- header comment\nSELECT * /* inline */ FROM dm_document -- trailing';
-            const result = stripDqlComments(query);
-            assert.strictEqual(result, 'SELECT *  FROM dm_document');
-        });
-
-        test('returns empty string for comment-only input', () => {
-            const query = '-- just a comment';
-            const result = stripDqlComments(query);
-            assert.strictEqual(result, '');
-        });
-
-        test('preserves query without comments', () => {
-            const query = 'SELECT r_object_id, object_name FROM dm_document';
-            const result = stripDqlComments(query);
-            assert.strictEqual(result, 'SELECT r_object_id, object_name FROM dm_document');
-        });
-
-        test('handles empty input', () => {
-            const result = stripDqlComments('');
-            assert.strictEqual(result, '');
-        });
-
-        test('handles whitespace-only input', () => {
-            const result = stripDqlComments('   \n\t\n   ');
-            assert.strictEqual(result, '');
+            assert.strictEqual(data.message, message);
+            assert.strictEqual(data.name, '');
+            assert.strictEqual('stack' in data, false);
         });
     });
 
-    suite('Comment stripping - dmAPI', () => {
-        // Test the logic that would be in stripDmApiComments
-        function stripDmApiComments(command: string): string {
-            // Remove line comments (-- to end of line)
-            let stripped = command.replace(/--.*$/gm, '');
+    suite('NotebookCellRunner', () => {
+        test('a DQL cell that returns rows ends with success and the result output', async () => {
+            const { runner, connection, calls } = harness();
+            const execution = new FakeExecution();
 
-            // Clean up extra whitespace and empty lines
-            stripped = stripped
-                .split('\n')
-                .map(line => line.trim())
-                .filter(line => line.length > 0)
-                .join('\n');
+            await runner.run(execution, cellDocument('dql', '-- cabinets\nselect object_name from dm_cabinet'), {}, connection);
 
-            return stripped.trim();
-        }
-
-        test('strips single line comment', () => {
-            const command = '-- this is a comment\ndmAPIGet("getservermap,session")';
-            const result = stripDmApiComments(command);
-            assert.strictEqual(result, 'dmAPIGet("getservermap,session")');
+            assert.strictEqual(execution.success, true);
+            assert.deepStrictEqual(outputMimes(execution), ['application/x-dctm-result', 'text/plain']);
+            assert.deepStrictEqual(calls, ['dql:select object_name from dm_cabinet']);
         });
 
-        test('strips inline comment', () => {
-            const command = 'dmAPIGet("getservermap,session") -- get server map';
-            const result = stripDmApiComments(command);
-            assert.strictEqual(result, 'dmAPIGet("getservermap,session")');
+        test('a DQL cell whose metadata asks for JSON ends with the JSON output', async () => {
+            const { runner, connection } = harness();
+            const execution = new FakeExecution();
+
+            await runner.run(execution, cellDocument('dql', 'select object_name from dm_cabinet'), { outputFormat: 'json' }, connection);
+
+            assert.strictEqual(execution.success, true);
+            assert.deepStrictEqual(outputMimes(execution), ['application/json', 'text/plain']);
         });
 
-        test('strips multiple line comments', () => {
-            const command = '-- Get the server map\n-- for the current session\ndmAPIGet("getservermap,session")';
-            const result = stripDmApiComments(command);
-            assert.strictEqual(result, 'dmAPIGet("getservermap,session")');
+        test('a DQL cell with only comments ends with success, no output and no bridge call', async () => {
+            const { runner, connection, calls } = harness();
+            const execution = new FakeExecution();
+
+            await runner.run(execution, cellDocument('dql', '-- nothing here\n/* or here */'), {}, connection);
+
+            assert.strictEqual(execution.success, true);
+            assert.deepStrictEqual(execution.outputs, []);
+            assert.deepStrictEqual(calls, []);
         });
 
-        test('returns empty string for comment-only input', () => {
-            const command = '-- just a comment';
-            const result = stripDmApiComments(command);
-            assert.strictEqual(result, '');
+        test('a DQL error ends with failure and an error output', async () => {
+            const { runner, connection } = harness({ dqlError: 'DM_QUERY_E_SYNTAX' });
+            const execution = new FakeExecution();
+
+            await runner.run(execution, cellDocument('dql', 'select from'), {}, connection);
+
+            assert.strictEqual(execution.success, false);
+            assert.strictEqual(errorMessageOf(execution), 'DM_QUERY_E_SYNTAX');
         });
 
-        test('preserves command without comments', () => {
-            const command = 'dmAPIGet("dump,session,0900000000000001")';
-            const result = stripDmApiComments(command);
-            assert.strictEqual(result, 'dmAPIGet("dump,session,0900000000000001")');
+        test('an API cell ends with success and its result output', async () => {
+            const { runner, connection, calls } = harness();
+            const execution = new FakeExecution();
+
+            await runner.run(execution, cellDocument('dmapi', 'getString object_name'), {}, connection);
+
+            assert.strictEqual(execution.success, true);
+            assert.deepStrictEqual(outputMimes(execution), ['application/x-dctm-result', 'text/plain']);
+            assert.deepStrictEqual(calls, ['api:getString(object_name)']);
         });
 
-        test('handles empty input', () => {
-            const result = stripDmApiComments('');
-            assert.strictEqual(result, '');
-        });
-    });
+        test('a dmAPI cell ends with success and its result output', async () => {
+            const { runner, connection, calls } = harness();
+            const execution = new FakeExecution();
 
-    suite('Output format metadata', () => {
-        // Test the logic for reading output format from metadata
-        function getOutputFormat(metadata: Record<string, unknown> | undefined): string {
-            return (metadata?.outputFormat as string) || 'html';
-        }
+            await runner.run(execution, cellDocument('dmapi', '-- session\ndmAPIGet("getsessionid,c")'), {}, connection);
 
-        test('returns html when metadata is undefined', () => {
-            const result = getOutputFormat(undefined);
-            assert.strictEqual(result, 'html');
+            assert.strictEqual(execution.success, true);
+            assert.deepStrictEqual(outputMimes(execution), ['application/x-dctm-result', 'text/plain']);
+            assert.deepStrictEqual(calls, ['dmapi:get:getsessionid,c']);
         });
 
-        test('returns html when outputFormat is not set', () => {
-            const result = getOutputFormat({});
-            assert.strictEqual(result, 'html');
-        });
+        test('a dmAPI cell on a REST session ends with failure', async () => {
+            const { runner, connection, calls } = harness({ rest: true });
+            const execution = new FakeExecution();
 
-        test('returns html when outputFormat is html', () => {
-            const result = getOutputFormat({ outputFormat: 'html' });
-            assert.strictEqual(result, 'html');
-        });
+            await runner.run(execution, cellDocument('dmapi', 'dmAPIGet("getsessionid,c")'), {}, connection);
 
-        test('returns json when outputFormat is json', () => {
-            const result = getOutputFormat({ outputFormat: 'json' });
-            assert.strictEqual(result, 'json');
-        });
-
-        test('preserves other metadata properties', () => {
-            const metadata = { outputFormat: 'json', customProp: 'value' };
-            const result = getOutputFormat(metadata);
-            assert.strictEqual(result, 'json');
-            assert.strictEqual(metadata.customProp, 'value');
-        });
-    });
-
-    suite('Output format toggle logic', () => {
-        // Test the toggle logic
-        function toggleFormat(currentFormat: string): string {
-            return currentFormat === 'html' ? 'json' : 'html';
-        }
-
-        test('toggles html to json', () => {
-            assert.strictEqual(toggleFormat('html'), 'json');
-        });
-
-        test('toggles json to html', () => {
-            assert.strictEqual(toggleFormat('json'), 'html');
-        });
-
-        test('unknown format toggles to html', () => {
-            assert.strictEqual(toggleFormat('unknown'), 'html');
-        });
-
-        test('empty string toggles to html', () => {
-            assert.strictEqual(toggleFormat(''), 'html');
-        });
-    });
-
-    suite('dmAPI command parsing', () => {
-        // Test the regex pattern for parsing dmAPI commands
-        function parseDmApiCommand(command: string): { type: string; args: string } | null {
-            const match = command.trim().match(/^dmAPI(Get|Exec|Set)\s*\(\s*["'](.+?)["']\s*\)$/i);
-            if (match) {
-                return { type: match[1].toLowerCase(), args: match[2] };
-            }
-            return null;
-        }
-
-        test('parses dmAPIGet with double quotes', () => {
-            const result = parseDmApiCommand('dmAPIGet("getservermap,session")');
-            assert.deepStrictEqual(result, { type: 'get', args: 'getservermap,session' });
-        });
-
-        test('parses dmAPIGet with single quotes', () => {
-            const result = parseDmApiCommand("dmAPIGet('getservermap,session')");
-            assert.deepStrictEqual(result, { type: 'get', args: 'getservermap,session' });
-        });
-
-        test('parses dmAPIExec', () => {
-            const result = parseDmApiCommand('dmAPIExec("save,session,0900000000000001")');
-            assert.deepStrictEqual(result, { type: 'exec', args: 'save,session,0900000000000001' });
-        });
-
-        test('parses dmAPISet', () => {
-            const result = parseDmApiCommand('dmAPISet("set,session,0900000000000001,object_name,newname")');
-            assert.deepStrictEqual(result, { type: 'set', args: 'set,session,0900000000000001,object_name,newname' });
-        });
-
-        test('handles case insensitivity', () => {
-            const result = parseDmApiCommand('DMAPIGET("getservermap,session")');
-            assert.deepStrictEqual(result, { type: 'get', args: 'getservermap,session' });
-        });
-
-        test('handles mixed case', () => {
-            const result = parseDmApiCommand('DmApiGet("getservermap,session")');
-            assert.deepStrictEqual(result, { type: 'get', args: 'getservermap,session' });
-        });
-
-        test('handles whitespace around parentheses', () => {
-            const result = parseDmApiCommand('dmAPIGet(  "getservermap,session"  )');
-            assert.deepStrictEqual(result, { type: 'get', args: 'getservermap,session' });
-        });
-
-        test('returns null for non-dmAPI command', () => {
-            const result = parseDmApiCommand('getString attr_name');
-            assert.strictEqual(result, null);
-        });
-
-        test('returns null for malformed command', () => {
-            const result = parseDmApiCommand('dmAPIGet(getservermap,session)');
-            assert.strictEqual(result, null);
-        });
-
-        test('returns null for empty string', () => {
-            const result = parseDmApiCommand('');
-            assert.strictEqual(result, null);
-        });
-    });
-
-    suite('HTML escaping', () => {
-        // Test HTML escape logic used in output formatting
-        function escapeHtml(text: string): string {
-            return text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        }
-
-        test('escapes ampersand', () => {
-            assert.strictEqual(escapeHtml('foo & bar'), 'foo &amp; bar');
-        });
-
-        test('escapes less than', () => {
-            assert.strictEqual(escapeHtml('a < b'), 'a &lt; b');
-        });
-
-        test('escapes greater than', () => {
-            assert.strictEqual(escapeHtml('a > b'), 'a &gt; b');
-        });
-
-        test('escapes double quote', () => {
-            assert.strictEqual(escapeHtml('say "hello"'), 'say &quot;hello&quot;');
-        });
-
-        test('escapes single quote', () => {
-            assert.strictEqual(escapeHtml("it's fine"), 'it&#039;s fine');
-        });
-
-        test('escapes multiple characters', () => {
-            assert.strictEqual(escapeHtml('<a href="test">link</a>'), '&lt;a href=&quot;test&quot;&gt;link&lt;/a&gt;');
-        });
-
-        test('handles empty string', () => {
-            assert.strictEqual(escapeHtml(''), '');
-        });
-
-        test('preserves safe characters', () => {
-            assert.strictEqual(escapeHtml('Hello World 123'), 'Hello World 123');
-        });
-    });
-
-    suite('Value formatting', () => {
-        // Test the formatValue logic used for displaying API results
-        function formatValue(value: unknown): string {
-            if (value === null || value === undefined) {
-                return 'null';
-            }
-            if (typeof value === 'object') {
-                return JSON.stringify(value, null, 2);
-            }
-            return String(value);
-        }
-
-        test('formats null as "null"', () => {
-            assert.strictEqual(formatValue(null), 'null');
-        });
-
-        test('formats undefined as "null"', () => {
-            assert.strictEqual(formatValue(undefined), 'null');
-        });
-
-        test('formats string as-is', () => {
-            assert.strictEqual(formatValue('hello'), 'hello');
-        });
-
-        test('formats number as string', () => {
-            assert.strictEqual(formatValue(42), '42');
-        });
-
-        test('formats boolean as string', () => {
-            assert.strictEqual(formatValue(true), 'true');
-        });
-
-        test('formats object as pretty JSON', () => {
-            const obj = { name: 'test', value: 123 };
-            const result = formatValue(obj);
-            assert.ok(result.includes('"name": "test"'));
-            assert.ok(result.includes('"value": 123'));
-        });
-
-        test('formats array as pretty JSON', () => {
-            const arr = [1, 2, 3];
-            const result = formatValue(arr);
-            assert.strictEqual(result, '[\n  1,\n  2,\n  3\n]');
-        });
-    });
-
-    suite('Object ID link formatting', () => {
-        // Test the formatResultWithObjectIdLinks logic
-        function formatResultWithObjectIdLinks(text: string): string {
-            return text.replace(/\b([0-9a-f]{16})\b/gi, (match) => {
-                return `<span class="object-id" data-object-id="${match}">${match}</span>`;
-            });
-        }
-
-        test('wraps single object ID with clickable span', () => {
-            const input = '0900000000000001';
-            const result = formatResultWithObjectIdLinks(input);
-            assert.strictEqual(
-                result,
-                '<span class="object-id" data-object-id="0900000000000001">0900000000000001</span>'
-            );
-        });
-
-        test('wraps multiple object IDs in text', () => {
-            const input = 'Parent: 0900000000000001, Child: 0900000000000002';
-            const result = formatResultWithObjectIdLinks(input);
-            assert.ok(result.includes('<span class="object-id" data-object-id="0900000000000001">0900000000000001</span>'));
-            assert.ok(result.includes('<span class="object-id" data-object-id="0900000000000002">0900000000000002</span>'));
-        });
-
-        test('preserves text without object IDs', () => {
-            const input = 'This is just plain text without any IDs';
-            const result = formatResultWithObjectIdLinks(input);
-            assert.strictEqual(result, input);
-        });
-
-        test('handles uppercase object IDs', () => {
-            const input = 'ABCDEF0123456789';
-            const result = formatResultWithObjectIdLinks(input);
-            assert.strictEqual(
-                result,
-                '<span class="object-id" data-object-id="ABCDEF0123456789">ABCDEF0123456789</span>'
-            );
-        });
-
-        test('does not match 15-character hex strings', () => {
-            const input = '090000000000001';
-            const result = formatResultWithObjectIdLinks(input);
-            assert.strictEqual(result, input);
-        });
-
-        test('does not match 17-character hex strings', () => {
-            const input = '09000000000000001';
-            const result = formatResultWithObjectIdLinks(input);
-            assert.strictEqual(result, input);
-        });
-
-        test('does not match partial hex strings without word boundary', () => {
-            const input = 'prefix0900000000000001suffix';
-            const result = formatResultWithObjectIdLinks(input);
-            assert.strictEqual(result, input);
-        });
-
-        test('handles empty string', () => {
-            const input = '';
-            const result = formatResultWithObjectIdLinks(input);
-            assert.strictEqual(result, '');
+            assert.strictEqual(execution.success, false);
+            assert.match(errorMessageOf(execution), /not available with REST connections/);
+            assert.deepStrictEqual(calls, []);
         });
     });
 });

@@ -2,7 +2,7 @@
   "name": "dctm-notebook",
   "displayName": "DCTM Notebook",
   "description": "VS Code notebook interface for DQL queries with REST and DFC connectivity",
-  "version": "1.0.4",
+  "version": "2.0.0",
   "publisher": "spirecentral",
   "icon": "resources/icon.png",
   "engines": {
@@ -19,7 +19,9 @@
     "content management",
     "ecm"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onWebviewPanel:dctmConnectionWorkspace"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -77,6 +79,11 @@
         "configuration": "./language-configuration.json"
       }
     ],
+    "configurationDefaults": {
+      "[dql]": {
+        "editor.wordBasedSuggestions": "off"
+      }
+    },
     "grammars": [
       {
         "language": "dql",
@@ -116,8 +123,39 @@
         "category": "Documentum"
       },
       {
-        "command": "dctm.refreshObjectBrowser",
-        "title": "Refresh Object Browser",
+        "command": "dctm.linkConnection",
+        "title": "Link to Connection",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.openWorkspace",
+        "title": "Open Workspace",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.workspace.dump",
+        "title": "Dump",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.workspace.refreshFolder",
+        "title": "Refresh",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.workspace.generateQuery",
+        "title": "Generate DQL Query",
+        "category": "Documentum"
+      },
+      {
+        "command": "dctm.manageConnections",
+        "title": "Manage Connections",
+        "category": "Documentum",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "dctm.refreshConnections",
+        "title": "Refresh Connections",
         "category": "Documentum",
         "icon": "$(refresh)"
       },
@@ -132,35 +170,6 @@
         "title": "Disconnect",
         "category": "Documentum",
         "icon": "$(debug-disconnect)"
-      },
-      {
-        "command": "dctm.switchUser",
-        "title": "Switch User",
-        "category": "Documentum",
-        "icon": "$(account)"
-      },
-      {
-        "command": "dctm.switchUserFromTree",
-        "title": "Switch User",
-        "category": "Documentum",
-        "icon": "$(account)"
-      },
-      {
-        "command": "dctm.showObjectProperties",
-        "title": "Show Properties",
-        "category": "Documentum"
-      },
-      {
-        "command": "dctm.refreshFolder",
-        "title": "Refresh",
-        "category": "Documentum",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "dctm.openApiPanel",
-        "title": "Open API Panel",
-        "category": "Documentum",
-        "icon": "$(terminal)"
       },
       {
         "command": "dctm.executeApiOnObject",
@@ -180,108 +189,6 @@
       {
         "command": "dctm.cancelCheckout",
         "title": "Cancel Checkout",
-        "category": "Documentum"
-      },
-      {
-        "command": "dctm.refreshTypeBrowser",
-        "title": "Refresh Type Browser",
-        "category": "Documentum",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "dctm.openTypePanel",
-        "title": "Open Type Details",
-        "category": "Documentum",
-        "icon": "$(symbol-class)"
-      },
-      {
-        "command": "dctm.searchTypes",
-        "title": "Search Types",
-        "category": "Documentum",
-        "icon": "$(search)"
-      },
-      {
-        "command": "dctm.clearTypeSearch",
-        "title": "Clear Type Search",
-        "category": "Documentum",
-        "icon": "$(clear-all)"
-      },
-      {
-        "command": "dctm.showTypeDetails",
-        "title": "Show Type Details",
-        "category": "Documentum"
-      },
-      {
-        "command": "dctm.generateTypeQuery",
-        "title": "Generate DQL Query",
-        "category": "Documentum"
-      },
-      {
-        "command": "dctm.refreshUserBrowser",
-        "title": "Refresh User Browser",
-        "category": "Documentum",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "dctm.openUserPanel",
-        "title": "Open User Details",
-        "category": "Documentum",
-        "icon": "$(person)"
-      },
-      {
-        "command": "dctm.searchUsers",
-        "title": "Search Users",
-        "category": "Documentum",
-        "icon": "$(search)"
-      },
-      {
-        "command": "dctm.clearUserSearch",
-        "title": "Clear User Search",
-        "category": "Documentum",
-        "icon": "$(clear-all)"
-      },
-      {
-        "command": "dctm.showUserDetails",
-        "title": "Show User Details",
-        "category": "Documentum"
-      },
-      {
-        "command": "dctm.generateUserQuery",
-        "title": "Generate DQL Query",
-        "category": "Documentum"
-      },
-      {
-        "command": "dctm.refreshGroupBrowser",
-        "title": "Refresh Group Browser",
-        "category": "Documentum",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "dctm.openGroupPanel",
-        "title": "Open Group Details",
-        "category": "Documentum",
-        "icon": "$(organization)"
-      },
-      {
-        "command": "dctm.searchGroups",
-        "title": "Search Groups",
-        "category": "Documentum",
-        "icon": "$(search)"
-      },
-      {
-        "command": "dctm.clearGroupSearch",
-        "title": "Clear Group Search",
-        "category": "Documentum",
-        "icon": "$(clear-all)"
-      },
-      {
-        "command": "dctm.showGroupDetails",
-        "title": "Show Group Details",
-        "category": "Documentum"
-      },
-      {
-        "command": "dctm.generateGroupQuery",
-        "title": "Generate DQL Query",
         "category": "Documentum"
       },
       {
@@ -309,12 +216,6 @@
         "icon": "$(symbol-misc)"
       },
       {
-        "command": "dctm.dumpObject",
-        "title": "Dump Object",
-        "category": "Documentum",
-        "icon": "$(symbol-property)"
-      },
-      {
         "command": "dctm.notebook.bindConnection",
         "title": "Bind to Connection",
         "category": "Documentum Notebook",
@@ -325,66 +226,21 @@
         "title": "Unbind Connection",
         "category": "Documentum Notebook",
         "icon": "$(link-external)"
-      },
-      {
-        "command": "dctm.notebook.connectNotebook",
-        "title": "Connect Notebook",
-        "category": "Documentum Notebook",
-        "icon": "$(plug)"
-      },
-      {
-        "command": "dctm.notebook.disconnectNotebook",
-        "title": "Disconnect Notebook",
-        "category": "Documentum Notebook",
-        "icon": "$(debug-disconnect)"
       }
     ],
     "views": {
       "documentum": [
         {
-          "id": "documentumExplorer",
-          "name": "Explorer",
-          "contextualTitle": "Documentum Explorer"
-        },
-        {
-          "id": "documentumTypeBrowser",
-          "name": "Type Browser",
-          "contextualTitle": "Documentum Types"
-        },
-        {
-          "id": "documentumUserBrowser",
-          "name": "User Browser",
-          "contextualTitle": "Documentum Users"
-        },
-        {
-          "id": "documentumGroupBrowser",
-          "name": "Group Browser",
-          "contextualTitle": "Documentum Groups"
-        },
-        {
-          "id": "documentumObjectDump",
-          "type": "webview",
-          "name": "Object Dump",
-          "contextualTitle": "Documentum Object Dump"
+          "id": "documentumConnections",
+          "name": "Connections",
+          "contextualTitle": "Documentum Connections"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "documentumExplorer",
-        "contents": "No Documentum connections configured.\n[Add Connection](command:workbench.action.openSettings?%22documentum.connections%22)"
-      },
-      {
-        "view": "documentumTypeBrowser",
-        "contents": "Connect to a repository to browse types.\n[Connect](command:dctm.connect)"
-      },
-      {
-        "view": "documentumUserBrowser",
-        "contents": "Connect to a repository to browse users.\n[Connect](command:dctm.connect)"
-      },
-      {
-        "view": "documentumGroupBrowser",
-        "contents": "Connect to a repository to browse groups.\n[Connect](command:dctm.connect)"
+        "view": "documentumConnections",
+        "contents": "No Documentum connections configured.\n[Add Connection](command:dctm.manageConnections?%7B%22newConnection%22%3Atrue%7D)"
       }
     ],
     "configuration": {
@@ -393,7 +249,7 @@
         "documentum.connections": {
           "type": "array",
           "default": [],
-          "description": "List of Documentum connection configurations",
+          "description": "Documentum connections. Use the Documentum: Manage Connections command to add, edit or delete them.",
           "items": {
             "type": "object",
             "properties": {
@@ -408,24 +264,20 @@
                   "rest"
                 ],
                 "default": "dfc",
-                "description": "Connection type (DFC primary, REST secondary)"
-              },
-              "dfcProfile": {
-                "type": "string",
-                "description": "DFC profile name (for DFC connections)"
+                "description": "dfc connects through the DFC Bridge and needs docbroker and port. rest connects through the REST Bridge and needs endpoint."
               },
               "endpoint": {
                 "type": "string",
-                "description": "REST API endpoint URL (for REST connections)"
+                "description": "REST only, required. REST API endpoint URL."
               },
               "docbroker": {
                 "type": "string",
-                "description": "Docbroker hostname (for DFC connections)"
+                "description": "DFC only, required. Docbroker host name or IP address."
               },
               "port": {
                 "type": "number",
                 "default": 1489,
-                "description": "Docbroker port (for DFC connections)"
+                "description": "DFC only, required. Docbroker port."
               },
               "repository": {
                 "type": "string",
@@ -440,36 +292,59 @@
               "name",
               "type",
               "repository"
-            ]
-          }
-        },
-        "documentum.defaultConnection": {
-          "type": "string",
-          "default": "",
-          "description": "Name of the default connection to use"
-        },
-        "documentum.dfc.profiles": {
-          "type": "object",
-          "default": {},
-          "description": "DFC profile configurations",
-          "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "javaHome": {
-                "type": "string",
-                "description": "Path to Java installation"
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "dfc"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "docbroker"
+                  ]
+                }
               },
-              "dfcPath": {
-                "type": "string",
-                "description": "Path to DFC installation directory"
-              },
-              "dfcProperties": {
-                "type": "string",
-                "description": "Path to dfc.properties file"
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "rest"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "endpoint"
+                  ]
+                }
               }
-            },
-            "required": [
-              "dfcPath"
+            ],
+            "defaultSnippets": [
+              {
+                "label": "DFC connection",
+                "description": "A connection through the DFC Bridge",
+                "body": {
+                  "name": "${1:name}",
+                  "type": "dfc",
+                  "repository": "${2:repository}",
+                  "docbroker": "${3:docbroker}",
+                  "port": 1489
+                }
+              },
+              {
+                "label": "REST connection",
+                "description": "A connection through the REST Bridge",
+                "body": {
+                  "name": "${1:name}",
+                  "type": "rest",
+                  "repository": "${2:repository}",
+                  "endpoint": "${3:http://host:8080/dctm-rest}"
+                }
+              }
             ]
           }
         },
@@ -488,10 +363,11 @@
           "default": 9877,
           "description": "Port for REST Bridge microservice (REST connections)"
         },
-        "documentum.panels.reuseWindow": {
-          "type": "boolean",
-          "default": false,
-          "description": "Reuse existing detail panels (users, groups, types, objects). When true, clicking an entity replaces the current panel content."
+        "documentum.bridge.queryTimeout": {
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "description": "Timeout in seconds for DQL queries, dmAPI commands and API method calls. 0 means no timeout."
         }
       }
     },
@@ -501,145 +377,72 @@
           "command": "dctm.executeDql",
           "when": "editorLangId == dql",
           "group": "documentum"
+        },
+        {
+          "command": "dctm.linkConnection",
+          "when": "editorLangId == dql",
+          "group": "documentum"
         }
       ],
       "view/title": [
         {
-          "command": "dctm.openApiPanel",
-          "when": "view == documentumExplorer",
-          "group": "navigation@1"
-        },
-        {
-          "command": "dctm.refreshObjectBrowser",
-          "when": "view == documentumExplorer",
+          "command": "dctm.refreshConnections",
+          "when": "view == documentumConnections",
           "group": "navigation@2"
         },
         {
-          "command": "dctm.refreshTypeBrowser",
-          "when": "view == documentumTypeBrowser",
-          "group": "navigation"
-        },
-        {
-          "command": "dctm.searchTypes",
-          "when": "view == documentumTypeBrowser",
-          "group": "navigation"
-        },
-        {
-          "command": "dctm.clearTypeSearch",
-          "when": "view == documentumTypeBrowser && dctm.typeBrowserFiltered",
-          "group": "navigation"
-        },
-        {
-          "command": "dctm.refreshUserBrowser",
-          "when": "view == documentumUserBrowser",
-          "group": "navigation"
-        },
-        {
-          "command": "dctm.searchUsers",
-          "when": "view == documentumUserBrowser",
-          "group": "navigation"
-        },
-        {
-          "command": "dctm.clearUserSearch",
-          "when": "view == documentumUserBrowser && dctm.userBrowserFiltered",
-          "group": "navigation"
-        },
-        {
-          "command": "dctm.refreshGroupBrowser",
-          "when": "view == documentumGroupBrowser",
-          "group": "navigation"
-        },
-        {
-          "command": "dctm.searchGroups",
-          "when": "view == documentumGroupBrowser",
-          "group": "navigation"
-        },
-        {
-          "command": "dctm.clearGroupSearch",
-          "when": "view == documentumGroupBrowser && dctm.groupBrowserFiltered",
-          "group": "navigation"
+          "command": "dctm.manageConnections",
+          "when": "view == documentumConnections",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
         {
           "command": "dctm.connectFromTree",
-          "when": "view == documentumExplorer && viewItem == connection-disconnected",
+          "when": "view == documentumConnections && viewItem == connection-disconnected",
           "group": "inline"
         },
         {
           "command": "dctm.disconnectFromTree",
-          "when": "view == documentumExplorer && viewItem == connection-connected",
+          "when": "view == documentumConnections && viewItem == connection-connected",
           "group": "inline"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "dctm.workspace.dump",
+          "when": "webviewId == 'dctmConnectionWorkspace' && webviewSection =~ /^(cabinet|folder|document|type|user|group)$/",
+          "group": "1_dump"
         },
         {
-          "command": "dctm.switchUserFromTree",
-          "when": "view == documentumExplorer && viewItem == connection-connected",
-          "group": "1_connection"
-        },
-        {
-          "command": "dctm.showObjectProperties",
-          "when": "view == documentumExplorer && viewItem =~ /^(document|folder|cabinet)$/",
-          "group": "1_properties"
-        },
-        {
-          "command": "dctm.refreshFolder",
-          "when": "view == documentumExplorer && viewItem =~ /^(folder|cabinet|cabinets-container)$/",
-          "group": "2_actions"
+          "command": "dctm.workspace.generateQuery",
+          "when": "webviewId == 'dctmConnectionWorkspace' && webviewSection =~ /^(type|user|group)$/",
+          "group": "2_query"
         },
         {
           "command": "dctm.executeApiOnObject",
-          "when": "view == documentumExplorer && viewItem =~ /^(document|folder|cabinet)$/",
-          "group": "3_api"
+          "when": "webviewId == 'dctmConnectionWorkspace' && webviewSection =~ /^(cabinet|folder|document)$/",
+          "group": "2_api"
         },
         {
-          "command": "dctm.dumpObject",
-          "when": "view == documentumExplorer && viewItem =~ /^(document|folder|cabinet)$/",
-          "group": "3_api"
+          "command": "dctm.workspace.refreshFolder",
+          "when": "webviewId == 'dctmConnectionWorkspace' && webviewSection =~ /^(cabinet|folder)$/",
+          "group": "3_refresh"
         },
         {
           "command": "dctm.checkout",
-          "when": "view == documentumExplorer && viewItem == document",
-          "group": "4_version"
+          "when": "webviewId == 'dctmConnectionWorkspace' && webviewSection == 'document'",
+          "group": "4_version@1"
         },
         {
           "command": "dctm.checkin",
-          "when": "view == documentumExplorer && viewItem == document",
-          "group": "4_version"
+          "when": "webviewId == 'dctmConnectionWorkspace' && webviewSection == 'document'",
+          "group": "4_version@2"
         },
         {
           "command": "dctm.cancelCheckout",
-          "when": "view == documentumExplorer && viewItem == document",
-          "group": "4_version"
-        },
-        {
-          "command": "dctm.showTypeDetails",
-          "when": "view == documentumTypeBrowser && viewItem == type",
-          "group": "1_info"
-        },
-        {
-          "command": "dctm.generateTypeQuery",
-          "when": "view == documentumTypeBrowser && viewItem == type",
-          "group": "2_actions"
-        },
-        {
-          "command": "dctm.showUserDetails",
-          "when": "view == documentumUserBrowser && viewItem == user",
-          "group": "1_info"
-        },
-        {
-          "command": "dctm.generateUserQuery",
-          "when": "view == documentumUserBrowser && viewItem == user",
-          "group": "2_actions"
-        },
-        {
-          "command": "dctm.showGroupDetails",
-          "when": "view == documentumGroupBrowser && viewItem == group",
-          "group": "1_info"
-        },
-        {
-          "command": "dctm.generateGroupQuery",
-          "when": "view == documentumGroupBrowser && viewItem == group",
-          "group": "2_actions"
+          "when": "webviewId == 'dctmConnectionWorkspace' && webviewSection == 'document'",
+          "group": "4_version@3"
         }
       ],
       "notebook/cell/title": [
@@ -659,19 +462,45 @@
           "command": "dctm.notebook.unbindConnection",
           "when": "notebookType == dctmbook && dctm.notebookBound",
           "group": "navigation@2"
-        },
-        {
-          "command": "dctm.notebook.connectNotebook",
-          "when": "notebookType == dctmbook && dctm.notebookBound && !dctm.notebookConnected",
-          "group": "navigation@3"
-        },
-        {
-          "command": "dctm.notebook.disconnectNotebook",
-          "when": "notebookType == dctmbook && dctm.notebookConnected",
-          "group": "navigation@4"
         }
       ],
       "commandPalette": [
+        {
+          "command": "dctm.linkConnection",
+          "when": "editorLangId == dql"
+        },
+        {
+          "command": "dctm.workspace.dump",
+          "when": "false"
+        },
+        {
+          "command": "dctm.workspace.refreshFolder",
+          "when": "false"
+        },
+        {
+          "command": "dctm.workspace.generateQuery",
+          "when": "false"
+        },
+        {
+          "command": "dctm.connectFromTree",
+          "when": "false"
+        },
+        {
+          "command": "dctm.disconnectFromTree",
+          "when": "false"
+        },
+        {
+          "command": "dctm.checkout",
+          "when": "false"
+        },
+        {
+          "command": "dctm.checkin",
+          "when": "false"
+        },
+        {
+          "command": "dctm.cancelCheckout",
+          "when": "false"
+        },
         {
           "command": "dctm.notebook.bindConnection",
           "when": "notebookType == dctmbook && !dctm.notebookBound"
@@ -679,14 +508,6 @@
         {
           "command": "dctm.notebook.unbindConnection",
           "when": "notebookType == dctmbook && dctm.notebookBound"
-        },
-        {
-          "command": "dctm.notebook.connectNotebook",
-          "when": "notebookType == dctmbook && dctm.notebookBound && !dctm.notebookConnected"
-        },
-        {
-          "command": "dctm.notebook.disconnectNotebook",
-          "when": "notebookType == dctmbook && dctm.notebookConnected"
         }
       ]
     },
@@ -704,10 +525,11 @@
     "compile": "npm run check-types && node esbuild.js",
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
-    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "watch:tsc": "tsc -b --watch --noEmit tsconfig.json tsconfig.renderer.json tsconfig.webviews.json",
     "package": "npm run check-types && node esbuild.js --production",
-    "check-types": "tsc --noEmit",
-    "pretest": "npm run compile && npm run lint",
+    "check-types": "tsc --noEmit && tsc --noEmit -p tsconfig.webviews.json && tsc --noEmit -p tsconfig.renderer.json",
+    "compile-tests": "node -e \"require('fs').rmSync('out-test', { recursive: true, force: true })\" && tsc -p . --outDir out-test",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "vscode-test"
   },
@@ -718,6 +540,7 @@
     "@types/vscode-notebook-renderer": "^1.72.4",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
+    "@vscode/codicons": "^0.0.46-24",
     "@vscode/test-cli": "^0.0.4",
     "@vscode/test-electron": "^2.3.8",
     "esbuild": "^0.27.2",
@@ -726,6 +549,13 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.4",
+    "@codemirror/commands": "^6.11.2",
+    "@codemirror/lang-sql": "^6.10.0",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.44.0",
+    "@lezer/highlight": "^1.2.5",
     "axios": "^1.6.2",
     "exceljs": "^4.4.0"
   },

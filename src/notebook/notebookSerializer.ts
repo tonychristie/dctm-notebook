@@ -123,24 +123,3 @@ export class DctmNotebookSerializer implements vscode.NotebookSerializer {
         return new TextEncoder().encode(text);
     }
 }
-
-/**
- * Supported languages in .dctmbook cells
- */
-export const NOTEBOOK_LANGUAGES = ['dql', 'dmapi', 'markdown'];
-
-/**
- * Get display name for a language
- */
-export function getLanguageDisplayName(language: string): string {
-    switch (language) {
-        case 'dql':
-            return 'DQL Query';
-        case 'dmapi':
-            return 'API Command';
-        case 'markdown':
-            return 'Markdown';
-        default:
-            return language;
-    }
-}

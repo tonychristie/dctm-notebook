@@ -1,0 +1,420 @@
+.dump-content {
+    font-family: var(--vscode-font-family);
+    font-size: 13px;
+    padding: 0;
+    margin: 0;
+    color: var(--vscode-foreground);
+    background: var(--vscode-editor-background);
+}
+
+.dump-content .loader {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 48px 0;
+}
+
+.dump-content .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--vscode-editor-foreground);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 16px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.dump-content .error-page {
+    padding: 20px;
+}
+
+.dump-content .error {
+    background: var(--vscode-inputValidation-errorBackground);
+    border: 1px solid var(--vscode-inputValidation-errorBorder);
+    padding: 16px;
+    border-radius: 4px;
+}
+
+.dump-content .error-title {
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.dump-content .error button {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 2px;
+    cursor: pointer;
+    margin-top: 16px;
+}
+
+.dump-content .error button:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+
+.dump-content .header {
+    background: var(--vscode-sideBar-background);
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.dump-content .header-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dump-content .header-title .codicon {
+    font-size: 18px;
+}
+
+.dump-content .header-info {
+    color: var(--vscode-descriptionForeground);
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+
+.dump-content .header-info a {
+    color: var(--vscode-textLink-foreground);
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.dump-content .header-info a:hover {
+    text-decoration: underline;
+}
+
+.dump-content .header-info .object-id {
+    color: var(--vscode-textLink-foreground);
+}
+
+.dump-content .header-badges {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.dump-content .badge {
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+}
+
+.dump-content .badge.private {
+    background: var(--vscode-editorWarning-foreground);
+}
+
+.dump-content .badge.dynamic {
+    background: var(--vscode-editorInfo-foreground);
+}
+
+.dump-content .header-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.dump-content .header-actions button {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: none;
+    padding: 4px 10px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.dump-content .header-actions button:hover:not(:disabled) {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.dump-content .header-actions button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.dump-content .header-actions button.primary {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}
+
+.dump-content .header-actions button.primary:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+
+.dump-content .toggle-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+}
+
+.dump-content .toggle-container input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+}
+
+.dump-content .filter-bar {
+    margin-top: 8px;
+}
+
+.dump-content .filter-bar input {
+    width: 100%;
+    padding: 6px 10px;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 2px;
+    font-size: 12px;
+    box-sizing: border-box;
+}
+
+.dump-content .filter-bar input:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+}
+
+.dump-content .content {
+    padding: 16px;
+}
+
+.dump-content .group,
+.dump-content .groups-section,
+.dump-content .members-section,
+.dump-content .child-types-section {
+    margin-bottom: 24px;
+}
+
+.dump-content .group-header {
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--vscode-descriptionForeground);
+    padding: 8px 0;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.dump-content .group-header:hover {
+    color: var(--vscode-foreground);
+}
+
+.dump-content .group-header .count {
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    margin-left: 8px;
+}
+
+.dump-content .group-header .toggle {
+    margin-right: 8px;
+}
+
+.dump-content .group-content {
+    display: block;
+}
+
+.dump-content .group-content.collapsed {
+    display: none;
+}
+
+.dump-content .group-tags,
+.dump-content .member-tags,
+.dump-content .child-types {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.dump-content .member-tags {
+    margin-bottom: 8px;
+}
+
+.dump-content .group-tag,
+.dump-content .member-tag,
+.dump-content .child-type {
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.dump-content .group-tag:hover,
+.dump-content .member-tag:hover,
+.dump-content .child-type:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.dump-content .member-tag.user {
+    background: var(--vscode-editor-selectionBackground);
+}
+
+.dump-content .member-tag.group {
+    background: var(--vscode-editor-inactiveSelectionBackground);
+}
+
+.dump-content .subsection-label {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    margin-bottom: 6px;
+    margin-top: 12px;
+}
+
+.dump-content .subsection-label:first-child {
+    margin-top: 0;
+}
+
+.dump-content .no-groups,
+.dump-content .no-members {
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+}
+
+.dump-content .attribute {
+    display: flex;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    align-items: flex-start;
+}
+
+.dump-content .attribute:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.dump-content .attribute.hidden {
+    display: none;
+}
+
+.dump-content .attr-name {
+    width: 200px;
+    flex-shrink: 0;
+    font-weight: 500;
+    color: var(--vscode-symbolIcon-propertyForeground);
+    padding-right: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dump-content .attr-name[data-action] {
+    cursor: pointer;
+}
+
+.dump-content .attr-name[data-action]:hover {
+    text-decoration: underline;
+}
+
+.dump-content .attr-type {
+    width: 100px;
+    flex-shrink: 0;
+    color: var(--vscode-descriptionForeground);
+    font-size: 12px;
+    padding-right: 12px;
+}
+
+.dump-content .attr-value {
+    flex-grow: 1;
+    word-break: break-word;
+    cursor: pointer;
+}
+
+.dump-content .attr-value:hover {
+    text-decoration: underline;
+}
+
+/* The Object Dump puts these classes on a span inside .attr-value. */
+.dump-content .attr-value.null,
+.dump-content .attr-value .null {
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+}
+
+.dump-content .attr-value.object-id,
+.dump-content .attr-value .object-id {
+    color: var(--vscode-textLink-foreground);
+    cursor: pointer;
+}
+
+.dump-content .attr-value.object-id:hover,
+.dump-content .attr-value .object-id:hover {
+    text-decoration: underline;
+    color: var(--vscode-textLink-activeForeground);
+}
+
+.dump-content .attr-details {
+    flex-grow: 1;
+    display: flex;
+    gap: 8px;
+    font-size: 11px;
+}
+
+.dump-content .attr-badge {
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+}
+
+.dump-content .attr-badge.repeating {
+    background: var(--vscode-editorWarning-foreground);
+}
+
+.dump-content .repeating-values {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.dump-content .repeating-value {
+    display: flex;
+    gap: 8px;
+}
+
+.dump-content .repeating-index {
+    color: var(--vscode-descriptionForeground);
+    font-size: 10px;
+    min-width: 24px;
+}
+
+.dump-content .copy-notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--vscode-notifications-background);
+    color: var(--vscode-notifications-foreground);
+    padding: 8px 16px;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.dump-content .copy-notification.show {
+    opacity: 1;
+}

@@ -6,9 +6,7 @@
       "ES2022",
       "DOM"
     ],
-    "sourceMap": true,
-    "outDir": "out/notebook",
-    "rootDir": "src/notebook",
+    "noEmit": true,
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -16,6 +14,8 @@
     "moduleResolution": "bundler"
   },
   "include": [
-    "src/notebook/renderer.ts"
+    "src/notebook/renderer.ts",
+    "src/notebook/css.d.ts",
+    "src/results/**/*.ts"
   ]
 }

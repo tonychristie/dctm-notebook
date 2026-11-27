@@ -1,751 +1,903 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import * as vscode from 'vscode';
+import { ConnectionManager, Credentials, DocumentumConnection } from '../../connectionManager';
+import { describeConnection } from '../../connectionForm';
+import { DctmBridge, DfcConnectParams } from '../../dctmBridge';
+import {
+    NOT_BOUND_MESSAGE,
+    bindNotebook,
+    openNotebookAction,
+    resolveNotebookConnection
+} from '../../notebook/notebookConnection';
+import { dumpFromNotebook } from '../../notebook';
+import { executeCells } from '../../notebook/notebookController';
+import { DumpTarget } from '../../workspace/dumpTab';
+import { DocumentConnections } from '../../documentConnections';
+import { documentConnection } from '../../executeDql';
 
-/**
- * Tests for notebook connection management functionality.
- *
- * These tests cover:
- * - connectNotebook() / disconnectNotebook()
- * - getEffectiveConnection() fallback logic
- * - hasNotebookConnection()
- * - Multiple concurrent notebook sessions
- * - Session cleanup
- *
- * Note: These are unit tests that mock the DctmBridge.
- * Full integration tests require a running bridge instance.
- */
+class FakeBridge {
+    ensureRunningCalls: ('dfc' | 'rest')[] = [];
+    connectCalls: DfcConnectParams[] = [];
+    disconnectCalls: string[] = [];
+    failConnect = false;
+    failDisconnect = false;
+    connectGate: Promise<void> | undefined;
 
-// Types from connectionManager
-interface DocumentumConnection {
-    name: string;
-    type: 'dfc' | 'rest';
-    docbroker?: string;
-    port?: number;
-    dfcProfile?: string;
-    endpoint?: string;
-    repository: string;
-    username?: string;
-}
-
-interface ActiveConnection {
-    config: DocumentumConnection;
-    sessionId: string;
-    username: string;
-}
-
-/**
- * Mock DctmBridge for testing without actual Documentum connection
- */
-class MockDctmBridge {
-    private sessionCounter = 0;
-    private activeSessions: Map<string, boolean> = new Map();
-    public lastConnectionType: 'dfc' | 'rest' | null = null;
-
-    async ensureRunning(_profile?: unknown, connectionType: 'dfc' | 'rest' = 'dfc'): Promise<void> {
-        // Track the connection type for verification in tests
-        this.lastConnectionType = connectionType;
+    async ensureRunning(connectionType: 'dfc' | 'rest'): Promise<void> {
+        this.ensureRunningCalls.push(connectionType);
     }
 
-    async connect(_params: {
-        docbroker?: string;
-        port?: number;
-        endpoint?: string;
-        repository: string;
-        username: string;
-        password: string;
-    }): Promise<string> {
-        const sessionId = `mock-session-${++this.sessionCounter}`;
-        this.activeSessions.set(sessionId, true);
-        return sessionId;
+    async connect(params: DfcConnectParams): Promise<string> {
+        this.connectCalls.push(params);
+        await this.connectGate;
+        if (this.failConnect) {
+            throw new Error('authentication failed');
+        }
+        return `session-${this.connectCalls.length}`;
     }
 
     async disconnect(sessionId: string): Promise<void> {
-        this.activeSessions.delete(sessionId);
+        this.disconnectCalls.push(sessionId);
+        if (this.failDisconnect) {
+            throw new Error('bridge unavailable');
+        }
     }
 
-    isSessionActive(sessionId: string): boolean {
-        return this.activeSessions.has(sessionId);
+    async getTypes(): Promise<unknown[]> {
+        return [];
     }
 
-    getActiveSessionCount(): number {
-        return this.activeSessions.size;
+    async getUsers(): Promise<unknown[]> {
+        return [];
+    }
+
+    async getGroups(): Promise<unknown[]> {
+        return [];
     }
 }
 
-/**
- * Simplified ConnectionManager for testing notebook connection logic.
- * Mirrors the actual implementation but uses mock bridge.
- */
-class TestableConnectionManager {
-    private activeConnection: ActiveConnection | null = null;
-    private notebookConnections: Map<string, ActiveConnection> = new Map();
-    private mockBridge: MockDctmBridge;
-    private savedConnections: DocumentumConnection[];
+interface PickCall {
+    labels: string[];
+    descriptions: (string | undefined)[];
+}
 
-    constructor(connections: DocumentumConnection[] = []) {
-        this.mockBridge = new MockDctmBridge();
-        this.savedConnections = connections;
+class TestConnectionManager extends ConnectionManager {
+    prompts: { name: string }[] = [];
+    answers: (Credentials | undefined)[] = [];
+    pickCalls: PickCall[] = [];
+    pickAnswers: (string | undefined)[] = [];
+
+    constructor(bridge: FakeBridge, private connections: DocumentumConnection[]) {
+        super(bridge as unknown as DctmBridge);
+        void this.updateConnections(connections);
     }
 
-    getMockBridge(): MockDctmBridge {
-        return this.mockBridge;
-    }
-
+    // The base constructor reads the list before this.connections is assigned.
     getConnections(): DocumentumConnection[] {
-        return this.savedConnections;
+        return this.connections ?? [];
     }
 
-    setActiveConnection(connection: ActiveConnection | null): void {
-        this.activeConnection = connection;
+    async changeConnections(connections: DocumentumConnection[]): Promise<void> {
+        this.connections = connections;
+        await this.updateConnections(connections);
     }
 
-    getActiveConnection(): ActiveConnection | null {
-        return this.activeConnection;
+    protected async promptCredentials(config: DocumentumConnection): Promise<Credentials | undefined> {
+        this.prompts.push({ name: config.name });
+        return this.answers.length > 0 ? this.answers.shift() : { username: 'user', password: 'pass' };
     }
 
-    async connectNotebook(
-        notebookUri: string,
-        connectionName: string,
-        username: string,
-        password: string
-    ): Promise<string> {
-        const connection = this.savedConnections.find(c => c.name === connectionName);
-        if (!connection) {
-            throw new Error(`Connection "${connectionName}" not found`);
-        }
-
-        // Ensure bridge is running - route to appropriate bridge based on connection type
-        await this.mockBridge.ensureRunning(undefined, connection.type);
-
-        // Route to DFC or REST based on connection type
-        const sessionId = await this.mockBridge.connect(
-            connection.type === 'rest'
-                ? {
-                    endpoint: connection.endpoint,
-                    repository: connection.repository,
-                    username,
-                    password
-                }
-                : {
-                    docbroker: connection.docbroker || '',
-                    port: connection.port || 1489,
-                    repository: connection.repository,
-                    username,
-                    password
-                }
-        );
-
-        const activeConnection: ActiveConnection = {
-            config: connection,
-            sessionId,
-            username
-        };
-
-        this.notebookConnections.set(notebookUri, activeConnection);
-        return sessionId;
-    }
-
-    async disconnectNotebook(notebookUri: string): Promise<void> {
-        const connection = this.notebookConnections.get(notebookUri);
-        if (connection) {
-            await this.mockBridge.disconnect(connection.sessionId);
-            this.notebookConnections.delete(notebookUri);
-        }
-    }
-
-    getNotebookConnection(notebookUri: string): ActiveConnection | null {
-        return this.notebookConnections.get(notebookUri) || null;
-    }
-
-    hasNotebookConnection(notebookUri: string): boolean {
-        return this.notebookConnections.has(notebookUri);
-    }
-
-    getEffectiveConnection(notebookUri?: string): ActiveConnection | null {
-        if (notebookUri) {
-            const notebookConnection = this.notebookConnections.get(notebookUri);
-            if (notebookConnection) {
-                return notebookConnection;
-            }
-        }
-        return this.activeConnection;
-    }
-
-    getAllNotebookConnections(): Map<string, ActiveConnection> {
-        return new Map(this.notebookConnections);
-    }
-
-    async disconnectAllNotebooks(): Promise<void> {
-        const uris = Array.from(this.notebookConnections.keys());
-        await Promise.all(uris.map(uri => this.disconnectNotebook(uri)));
+    protected showQuickPick<T extends vscode.QuickPickItem>(items: T[]): Thenable<T | undefined> {
+        this.pickCalls.push({ labels: items.map(i => i.label), descriptions: items.map(i => i.description) });
+        const answer = this.pickAnswers.shift();
+        return Promise.resolve(items.find(item => (item as { connectionName?: string }).connectionName === answer));
     }
 }
 
-suite('Notebook Connections Test Suite', () => {
-    const testConnections: DocumentumConnection[] = [
-        {
-            name: 'dev-docbase',
-            type: 'dfc',
-            docbroker: 'devserver',
-            port: 1489,
-            repository: 'dev_repo'
-        },
-        {
-            name: 'prod-docbase',
-            type: 'dfc',
-            docbroker: 'prodserver',
-            port: 1489,
-            repository: 'prod_repo'
-        },
-        {
-            name: 'test-docbase',
-            type: 'dfc',
-            docbroker: 'testserver',
-            port: 1490,
-            repository: 'test_repo'
-        },
-        {
-            name: 'rest-docbase',
-            type: 'rest',
-            endpoint: 'http://rest.example.com/dctm-rest',
-            repository: 'rest_repo'
+class FakeMemento implements vscode.Memento {
+    private readonly values = new Map<string, unknown>();
+
+    keys(): readonly string[] {
+        return [...this.values.keys()];
+    }
+
+    get<T>(key: string, defaultValue?: T): T | undefined {
+        return this.values.has(key) ? this.values.get(key) as T : defaultValue;
+    }
+
+    async update(key: string, value: unknown): Promise<void> {
+        this.values.set(key, value);
+    }
+}
+
+async function notebookWith(metadata: { [key: string]: unknown }): Promise<vscode.NotebookDocument> {
+    const data = new vscode.NotebookData([
+        new vscode.NotebookCellData(vscode.NotebookCellKind.Code, 'select 1 from dm_server_config', 'dql')
+    ]);
+    data.metadata = metadata;
+    return vscode.workspace.openNotebookDocument('dctmbook', data);
+}
+
+function fileDocument(path: string): vscode.TextDocument {
+    return { uri: vscode.Uri.file(path) } as vscode.TextDocument;
+}
+
+const restConnection: DocumentumConnection = {
+    name: 'Rest',
+    type: 'rest',
+    endpoint: 'http://dctm:8080/dctm-rest',
+    repository: 'repo'
+};
+
+const dfcConnection: DocumentumConnection = {
+    name: 'Dfc',
+    type: 'dfc',
+    docbroker: 'broker',
+    port: 1500,
+    repository: 'repo'
+};
+
+const defaultsConnection: DocumentumConnection = {
+    name: 'Defaults',
+    type: 'dfc',
+    repository: 'repo'
+};
+
+suite('Connection Manager Test Suite', () => {
+    let bridge: FakeBridge;
+    let manager: TestConnectionManager;
+    let openConnectionsEvents: number;
+    let connectionsEvents: number;
+
+    setup(() => {
+        bridge = new FakeBridge();
+        manager = new TestConnectionManager(bridge, [restConnection, dfcConnection, defaultsConnection]);
+        openConnectionsEvents = 0;
+        connectionsEvents = 0;
+        manager.onDidChangeOpenConnections(() => openConnectionsEvents++);
+        manager.onDidChangeConnections(() => connectionsEvents++);
+    });
+
+    teardown(() => {
+        manager.dispose();
+    });
+
+    suite('openConnection', () => {
+        test('rejects for an unknown connection', async () => {
+            await assert.rejects(manager.openConnection('Missing'));
+            assert.strictEqual(bridge.connectCalls.length, 0);
+        });
+
+        test('ensures the bridge for the connection type is running', async () => {
+            await manager.openConnection('Rest');
+            await manager.openConnection('Dfc');
+
+            assert.deepStrictEqual(bridge.ensureRunningCalls, ['rest', 'dfc']);
+        });
+
+        test('passes REST parameters to connect', async () => {
+            await manager.openConnection('Rest');
+
+            assert.deepStrictEqual(bridge.connectCalls[0], {
+                endpoint: 'http://dctm:8080/dctm-rest',
+                repository: 'repo',
+                username: 'user',
+                password: 'pass'
+            });
+        });
+
+        test('passes DFC parameters to connect', async () => {
+            await manager.openConnection('Dfc');
+
+            assert.deepStrictEqual(bridge.connectCalls[0], {
+                docbroker: 'broker',
+                port: 1500,
+                repository: 'repo',
+                username: 'user',
+                password: 'pass'
+            });
+        });
+
+        test('defaults the DFC docbroker to empty and the port to 1489', async () => {
+            await manager.openConnection('Defaults');
+
+            assert.strictEqual(bridge.connectCalls[0].docbroker, '');
+            assert.strictEqual(bridge.connectCalls[0].port, 1489);
+        });
+
+        test('two sequential calls make one bridge connect and one prompt, and return the same connection', async () => {
+            const first = await manager.openConnection('Rest');
+            const second = await manager.openConnection('Rest');
+
+            assert.strictEqual(bridge.connectCalls.length, 1);
+            assert.strictEqual(manager.prompts.length, 1);
+            assert.ok(first);
+            assert.strictEqual(second, first);
+        });
+
+        test('two concurrent calls make one bridge connect and one prompt, and return the same connection', async () => {
+            const [first, second] = await Promise.all([
+                manager.openConnection('Rest'),
+                manager.openConnection('Rest')
+            ]);
+
+            assert.strictEqual(bridge.connectCalls.length, 1);
+            assert.strictEqual(manager.prompts.length, 1);
+            assert.ok(first);
+            assert.strictEqual(second, first);
+        });
+
+        test('resolves to undefined and makes no bridge call when the prompt is cancelled', async () => {
+            manager.answers = [undefined];
+
+            const connection = await manager.openConnection('Rest');
+
+            assert.strictEqual(connection, undefined);
+            assert.strictEqual(bridge.connectCalls.length, 0);
+            assert.strictEqual(bridge.ensureRunningCalls.length, 0);
+        });
+
+        test('prompts again when a connect with stored credentials fails', async () => {
+            await manager.openConnection('Rest');
+            await manager.disconnect('Rest');
+            bridge.failConnect = true;
+
+            await assert.rejects(manager.openConnection('Rest'));
+            assert.strictEqual(manager.prompts.length, 1);
+
+            bridge.failConnect = false;
+            await manager.openConnection('Rest');
+
+            assert.strictEqual(manager.prompts.length, 2);
+        });
+    });
+
+    suite('connect', () => {
+        test('opens the named connection without the pick and fires the open connections event', async () => {
+            const connection = await manager.connect('Rest');
+
+            assert.strictEqual(connection, manager.getOpenConnection('Rest'));
+            assert.strictEqual(openConnectionsEvents, 1);
+            assert.deepStrictEqual(manager.pickCalls, []);
+        });
+
+        test('connecting an open connection makes no bridge call', async () => {
+            await manager.connect('Rest');
+            await manager.connect('Dfc');
+
+            await manager.connect('Rest');
+
+            assert.strictEqual(bridge.connectCalls.length, 2);
+            assert.strictEqual(manager.prompts.length, 2);
+        });
+
+        test('connecting a second connection leaves the first one open', async () => {
+            await manager.connect('Rest');
+            await manager.connect('Dfc');
+
+            assert.deepStrictEqual(manager.getOpenConnections().map(c => c.name), ['Rest', 'Dfc']);
+            assert.deepStrictEqual(bridge.disconnectCalls, []);
+        });
+
+        test('with no name shows every connection with the open ones first, while one is open', async () => {
+            await manager.connect('Dfc');
+            manager.pickAnswers = ['Rest'];
+
+            const connection = await manager.connect();
+
+            assert.strictEqual(connection?.name, 'Rest');
+            assert.deepStrictEqual(manager.pickCalls, [{
+                labels: ['Dfc', 'Rest', 'Defaults'],
+                descriptions: ['connected', 'http://dctm:8080/dctm-rest', 'DFC']
+            }]);
+        });
+    });
+
+    suite('pickConnection', () => {
+        test('returns the only open connection without showing the pick', async () => {
+            const open = await manager.connect('Dfc');
+
+            assert.strictEqual(await manager.pickConnection(), open);
+            assert.deepStrictEqual(manager.pickCalls, []);
+        });
+
+        test('with two open connections shows the pick with the open ones first', async () => {
+            await manager.connect('Dfc');
+            await manager.connect('Defaults');
+            manager.pickAnswers = ['Defaults'];
+
+            const connection = await manager.pickConnection();
+
+            assert.strictEqual(connection, manager.getOpenConnection('Defaults'));
+            assert.deepStrictEqual(manager.pickCalls[0].labels, ['Dfc', 'Defaults', 'Rest']);
+        });
+
+        test('with no open connection shows the pick and connects the one picked', async () => {
+            manager.pickAnswers = ['Rest'];
+
+            const connection = await manager.pickConnection();
+
+            assert.strictEqual(connection, manager.getOpenConnection('Rest'));
+            assert.deepStrictEqual(manager.pickCalls[0].labels, ['Rest', 'Dfc', 'Defaults']);
+        });
+
+        test('a cancelled pick connects nothing', async () => {
+            manager.pickAnswers = [undefined];
+
+            assert.strictEqual(await manager.pickConnection(), undefined);
+            assert.deepStrictEqual(bridge.connectCalls, []);
+        });
+    });
+
+    suite('disconnect', () => {
+        test('reconnects with the stored credentials and does not prompt on the next open', async () => {
+            await manager.openConnection('Rest');
+            await manager.disconnect('Rest');
+
+            const reopened = await manager.openConnection('Rest');
+
+            assert.ok(reopened);
+            assert.strictEqual(manager.prompts.length, 1);
+            assert.strictEqual(bridge.connectCalls.length, 2);
+        });
+
+        test('closes only the named session and fires the open connections event', async () => {
+            await manager.connect('Rest');
+            await manager.connect('Dfc');
+            const dfcSession = manager.getOpenConnection('Dfc')?.sessionId;
+            openConnectionsEvents = 0;
+
+            await manager.disconnect('Dfc');
+
+            assert.deepStrictEqual(bridge.disconnectCalls, [dfcSession]);
+            assert.ok(manager.getOpenConnection('Rest'));
+            assert.strictEqual(manager.getOpenConnection('Dfc'), undefined);
+            assert.strictEqual(openConnectionsEvents, 1);
+        });
+
+        test('with no name and one open connection disconnects it without the pick', async () => {
+            await manager.connect('Rest');
+
+            await manager.disconnect();
+
+            assert.strictEqual(manager.getOpenConnection('Rest'), undefined);
+            assert.deepStrictEqual(manager.pickCalls, []);
+        });
+
+        test('with no name and two open connections asks which open connection to disconnect', async () => {
+            await manager.connect('Rest');
+            await manager.connect('Defaults');
+            manager.pickAnswers = ['Defaults'];
+
+            await manager.disconnect();
+
+            assert.deepStrictEqual(manager.pickCalls[0].labels, ['Rest', 'Defaults']);
+            assert.ok(manager.getOpenConnection('Rest'));
+            assert.strictEqual(manager.getOpenConnection('Defaults'), undefined);
+        });
+
+        test('with no name and no open connection shows no pick and disconnects nothing', async () => {
+            await manager.disconnect();
+
+            assert.deepStrictEqual(manager.pickCalls, []);
+            assert.deepStrictEqual(bridge.disconnectCalls, []);
+        });
+
+        test('removes the connection when the bridge disconnect fails', async () => {
+            await manager.openConnection('Rest');
+            bridge.failDisconnect = true;
+
+            await manager.disconnect('Rest');
+
+            assert.strictEqual(manager.getOpenConnection('Rest'), undefined);
+        });
+
+        test('disconnectAll closes every open session', async () => {
+            const first = await manager.openConnection('Rest');
+            const second = await manager.openConnection('Dfc');
+
+            await manager.disconnectAll();
+
+            assert.deepStrictEqual(bridge.disconnectCalls.sort(), [first?.sessionId, second?.sessionId].sort());
+            assert.strictEqual(manager.getOpenConnection('Rest'), undefined);
+            assert.strictEqual(manager.getOpenConnection('Dfc'), undefined);
+        });
+    });
+
+    suite('settings change', () => {
+        test('closes removed and changed open connections, leaves an unchanged one open and fires the event', async () => {
+            await manager.openConnection('Rest');
+            await manager.openConnection('Dfc');
+            const defaults = await manager.openConnection('Defaults');
+            const restSession = manager.getOpenConnection('Rest')?.sessionId;
+            const dfcSession = manager.getOpenConnection('Dfc')?.sessionId;
+
+            await manager.changeConnections([{ ...dfcConnection, docbroker: 'other' }, defaultsConnection]);
+
+            assert.deepStrictEqual(bridge.disconnectCalls.sort(), [restSession, dfcSession].sort());
+            assert.strictEqual(manager.getOpenConnection('Rest'), undefined);
+            assert.strictEqual(manager.getOpenConnection('Dfc'), undefined);
+            assert.strictEqual(manager.getOpenConnection('Defaults'), defaults);
+            assert.strictEqual(connectionsEvents, 1);
+        });
+
+        test('clears the credentials of a changed connection that is not open, and keeps those of an unchanged one', async () => {
+            await manager.openConnection('Rest');
+            await manager.openConnection('Dfc');
+            await manager.disconnectAll();
+
+            await manager.changeConnections([{ ...restConnection, username: 'other' }, dfcConnection, defaultsConnection]);
+            await manager.openConnection('Rest');
+            await manager.openConnection('Dfc');
+
+            assert.deepStrictEqual(manager.prompts.map(p => p.name), ['Rest', 'Dfc', 'Rest']);
+        });
+    });
+
+    suite('settings change while a connect is in progress', () => {
+        const changedMessage = 'Connection "Rest" was changed in settings. Connect again to use the new settings.';
+
+        async function heldOpen(): Promise<{ opening: Promise<unknown>; release: () => void }> {
+            let release: () => void = () => undefined;
+            bridge.connectGate = new Promise<void>(resolve => {
+                release = resolve;
+            });
+            const opening = manager.openConnection('Rest');
+            while (bridge.connectCalls.length === 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+            return { opening, release };
         }
-    ];
 
-    suite('connectNotebook()', () => {
-        test('creates new session for notebook', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/test.dctmbook';
+        test('a changed connection makes the open reject, disconnects the session and keeps no credentials', async () => {
+            const { opening, release } = await heldOpen();
 
-            const sessionId = await manager.connectNotebook(
-                notebookUri,
-                'dev-docbase',
-                'testuser',
-                'testpass'
-            );
+            await manager.changeConnections([{ ...restConnection, repository: 'other' }, dfcConnection, defaultsConnection]);
+            release();
 
-            assert.ok(sessionId, 'Should return session ID');
-            assert.ok(sessionId.startsWith('mock-session-'), 'Should be mock session ID');
+            await assert.rejects(opening, { message: changedMessage });
+            assert.deepStrictEqual(bridge.disconnectCalls, ['session-1']);
+            assert.strictEqual(manager.getOpenConnection('Rest'), undefined);
+            bridge.connectGate = undefined;
+            await manager.openConnection('Rest');
+            assert.deepStrictEqual(manager.prompts.map(p => p.name), ['Rest', 'Rest']);
         });
 
-        test('stores connection in notebook connections map', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/test.dctmbook';
+        test('a removed connection makes the open reject, disconnects the session and keeps no credentials', async () => {
+            const { opening, release } = await heldOpen();
 
-            await manager.connectNotebook(notebookUri, 'dev-docbase', 'testuser', 'testpass');
+            await manager.changeConnections([dfcConnection, defaultsConnection]);
+            release();
 
-            assert.ok(manager.hasNotebookConnection(notebookUri), 'Should have notebook connection');
-            const conn = manager.getNotebookConnection(notebookUri);
-            assert.ok(conn, 'Should retrieve connection');
-            assert.strictEqual(conn!.config.name, 'dev-docbase');
-            assert.strictEqual(conn!.username, 'testuser');
+            await assert.rejects(opening, { message: changedMessage });
+            assert.deepStrictEqual(bridge.disconnectCalls, ['session-1']);
+            assert.strictEqual(manager.getOpenConnection('Rest'), undefined);
+            bridge.connectGate = undefined;
+            await manager.changeConnections([restConnection, dfcConnection, defaultsConnection]);
+            await manager.openConnection('Rest');
+            assert.deepStrictEqual(manager.prompts.map(p => p.name), ['Rest', 'Rest']);
         });
 
-        test('throws error for unknown connection name', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/test.dctmbook';
+        test('a failed disconnect of the unused session still rejects with the settings error', async () => {
+            const { opening, release } = await heldOpen();
+            bridge.failDisconnect = true;
+
+            await manager.changeConnections([dfcConnection, defaultsConnection]);
+            release();
+
+            await assert.rejects(opening, { message: changedMessage });
+        });
+    });
+
+    suite('testConnection', () => {
+        test('connects with the given values and disconnects, leaving no open connection', async () => {
+            await manager.testConnection(dfcConnection, { username: 'tester', password: 'secret' });
+
+            assert.deepStrictEqual(bridge.ensureRunningCalls, ['dfc']);
+            assert.deepStrictEqual(bridge.connectCalls, [{
+                docbroker: 'broker',
+                port: 1500,
+                repository: 'repo',
+                username: 'tester',
+                password: 'secret'
+            }]);
+            assert.deepStrictEqual(bridge.disconnectCalls, ['session-1']);
+            assert.strictEqual(manager.getOpenConnection('Dfc'), undefined);
+            assert.strictEqual(openConnectionsEvents, 0);
+        });
+
+        test('rejects with the bridge error and does not disconnect when connect fails', async () => {
+            bridge.failConnect = true;
 
             await assert.rejects(
-                async () => {
-                    await manager.connectNotebook(
-                        notebookUri,
-                        'nonexistent-connection',
-                        'user',
-                        'pass'
-                    );
-                },
-                /Connection "nonexistent-connection" not found/
+                manager.testConnection(restConnection, { username: 'tester', password: 'secret' }),
+                /authentication failed/
             );
-        });
-
-        test('can connect multiple notebooks to same connection', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebook1 = 'file:///notebooks/test1.dctmbook';
-            const notebook2 = 'file:///notebooks/test2.dctmbook';
-
-            const session1 = await manager.connectNotebook(notebook1, 'dev-docbase', 'user1', 'pass1');
-            const session2 = await manager.connectNotebook(notebook2, 'dev-docbase', 'user2', 'pass2');
-
-            assert.ok(session1 !== session2, 'Sessions should be different');
-            assert.ok(manager.hasNotebookConnection(notebook1));
-            assert.ok(manager.hasNotebookConnection(notebook2));
-
-            const conn1 = manager.getNotebookConnection(notebook1);
-            const conn2 = manager.getNotebookConnection(notebook2);
-            assert.strictEqual(conn1!.username, 'user1');
-            assert.strictEqual(conn2!.username, 'user2');
-        });
-
-        test('can connect notebooks to different connections', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebook1 = 'file:///notebooks/dev.dctmbook';
-            const notebook2 = 'file:///notebooks/prod.dctmbook';
-
-            await manager.connectNotebook(notebook1, 'dev-docbase', 'devuser', 'pass');
-            await manager.connectNotebook(notebook2, 'prod-docbase', 'produser', 'pass');
-
-            const conn1 = manager.getNotebookConnection(notebook1);
-            const conn2 = manager.getNotebookConnection(notebook2);
-
-            assert.strictEqual(conn1!.config.name, 'dev-docbase');
-            assert.strictEqual(conn2!.config.name, 'prod-docbase');
-            assert.strictEqual(conn1!.config.repository, 'dev_repo');
-            assert.strictEqual(conn2!.config.repository, 'prod_repo');
+            assert.deepStrictEqual(bridge.disconnectCalls, []);
         });
     });
 
-    suite('disconnectNotebook()', () => {
-        test('removes notebook from connections map', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/test.dctmbook';
-
-            await manager.connectNotebook(notebookUri, 'dev-docbase', 'user', 'pass');
-            assert.ok(manager.hasNotebookConnection(notebookUri), 'Should be connected');
-
-            await manager.disconnectNotebook(notebookUri);
-            assert.ok(!manager.hasNotebookConnection(notebookUri), 'Should be disconnected');
+    suite('describeConnection', () => {
+        test('returns the endpoint for a REST connection', () => {
+            assert.strictEqual(describeConnection(restConnection), 'http://dctm:8080/dctm-rest');
         });
 
-        test('disconnects session on bridge', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/test.dctmbook';
-
-            const sessionId = await manager.connectNotebook(notebookUri, 'dev-docbase', 'user', 'pass');
-            assert.ok(manager.getMockBridge().isSessionActive(sessionId), 'Session should be active');
-
-            await manager.disconnectNotebook(notebookUri);
-            assert.ok(!manager.getMockBridge().isSessionActive(sessionId), 'Session should be inactive');
+        test('returns REST for a REST connection without an endpoint', () => {
+            assert.strictEqual(describeConnection({ ...restConnection, endpoint: undefined }), 'REST');
         });
 
-        test('handles disconnect of non-connected notebook gracefully', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/never-connected.dctmbook';
-
-            // Should not throw
-            await manager.disconnectNotebook(notebookUri);
-            assert.ok(!manager.hasNotebookConnection(notebookUri));
+        test('returns docbroker:port for a DFC connection', () => {
+            assert.strictEqual(describeConnection(dfcConnection), 'broker:1500');
         });
 
-        test('does not affect other notebook connections', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebook1 = 'file:///notebooks/test1.dctmbook';
-            const notebook2 = 'file:///notebooks/test2.dctmbook';
+        test('defaults the port to 1489 for a DFC connection without a port', () => {
+            assert.strictEqual(describeConnection({ ...dfcConnection, port: undefined }), 'broker:1489');
+        });
 
-            await manager.connectNotebook(notebook1, 'dev-docbase', 'user1', 'pass');
-            await manager.connectNotebook(notebook2, 'prod-docbase', 'user2', 'pass');
+        test('returns DFC for a DFC connection without a docbroker', () => {
+            assert.strictEqual(describeConnection(defaultsConnection), 'DFC');
+        });
+    });
+});
 
-            await manager.disconnectNotebook(notebook1);
+suite('Notebook Connection Resolution Test Suite', () => {
+    let bridge: FakeBridge;
+    let manager: TestConnectionManager;
 
-            assert.ok(!manager.hasNotebookConnection(notebook1), 'Notebook 1 should be disconnected');
-            assert.ok(manager.hasNotebookConnection(notebook2), 'Notebook 2 should still be connected');
+    setup(async () => {
+        bridge = new FakeBridge();
+        manager = new TestConnectionManager(bridge, [restConnection, dfcConnection]);
+        await manager.connect('Dfc');
+    });
+
+    teardown(() => {
+        manager.dispose();
+    });
+
+    test('a bound notebook resolves to its bound connection while another connection is open', async () => {
+        const notebook = await notebookWith({ connection: 'Rest' });
+
+        const { connection } = await resolveNotebookConnection(manager, notebook);
+
+        assert.strictEqual(connection, manager.getOpenConnection('Rest'));
+    });
+
+    test('a bound notebook whose prompt is cancelled resolves to no connection', async () => {
+        const notebook = await notebookWith({ connection: 'Rest' });
+        manager.answers = [undefined];
+
+        const { connection, error } = await resolveNotebookConnection(manager, notebook);
+
+        assert.strictEqual(connection, undefined);
+        assert.ok(error);
+        assert.deepStrictEqual(manager.prompts.map(p => p.name), ['Dfc', 'Rest']);
+    });
+
+    test('an unbound notebook binds the picked connection and resolves to it', async () => {
+        const notebook = await notebookWith({ author: 'test' });
+        const offered: (string | undefined)[] = [];
+
+        const { connection } = await resolveNotebookConnection(manager, notebook, async current => {
+            offered.push(current);
+            return 'Rest';
+        });
+
+        assert.deepStrictEqual(offered, [undefined]);
+        assert.strictEqual(connection, manager.getOpenConnection('Rest'));
+        assert.strictEqual(notebook.metadata.connection, 'Rest');
+        assert.strictEqual(notebook.metadata.author, 'test');
+    });
+
+    test('an unbound notebook whose picker is cancelled reports that it is not bound', async () => {
+        const notebook = await notebookWith({});
+
+        const { connection, error } = await resolveNotebookConnection(manager, notebook, async () => undefined);
+
+        assert.strictEqual(connection, undefined);
+        assert.strictEqual(error, NOT_BOUND_MESSAGE);
+        assert.strictEqual(notebook.metadata.connection, undefined);
+    });
+
+    test('Run All on an unbound notebook asks once and ends every cell with the not-bound error', async () => {
+        const data = new vscode.NotebookData(['select 1', 'select 2', 'select 3'].map(query =>
+            new vscode.NotebookCellData(vscode.NotebookCellKind.Code, query, 'dql')
+        ));
+        const notebook = await vscode.workspace.openNotebookDocument('dctmbook', data);
+        let picks = 0;
+        const executed: number[] = [];
+        const failed: [number, string][] = [];
+
+        await executeCells(
+            notebook.getCells(),
+            () => resolveNotebookConnection(manager, notebook, async () => { picks++; return undefined; }),
+            async cell => { executed.push(cell.index); },
+            (cell, message) => failed.push([cell.index, message])
+        );
+
+        assert.strictEqual(picks, 1);
+        assert.deepStrictEqual(executed, []);
+        assert.deepStrictEqual(failed, [[0, NOT_BOUND_MESSAGE], [1, NOT_BOUND_MESSAGE], [2, NOT_BOUND_MESSAGE]]);
+    });
+
+    test('Run All on an unbound notebook binds once and runs every cell on the picked connection', async () => {
+        const data = new vscode.NotebookData(['select 1', 'select 2'].map(query =>
+            new vscode.NotebookCellData(vscode.NotebookCellKind.Code, query, 'dql')
+        ));
+        const notebook = await vscode.workspace.openNotebookDocument('dctmbook', data);
+        let picks = 0;
+        const executed: [number, string][] = [];
+
+        await executeCells(
+            notebook.getCells(),
+            () => resolveNotebookConnection(manager, notebook, async () => { picks++; return 'Rest'; }),
+            async (cell, connection) => { executed.push([cell.index, connection.name]); },
+            () => assert.fail('no cell should fail')
+        );
+
+        assert.strictEqual(picks, 1);
+        assert.deepStrictEqual(executed, [[0, 'Rest'], [1, 'Rest']]);
+        assert.strictEqual(notebook.metadata.connection, 'Rest');
+    });
+
+    test('a binding that is not in the configured connections is reported as not found', async () => {
+        const notebook = await notebookWith({ connection: 'Missing' });
+
+        const { connection, error } = await resolveNotebookConnection(manager, notebook);
+
+        assert.strictEqual(connection, undefined);
+        assert.ok(error);
+        assert.strictEqual(manager.prompts.length, 1);
+        assert.strictEqual(bridge.connectCalls.length, 1);
+    });
+
+    test('an object ID clicked in a bound notebook opens the Dump tab of the bound connection', async () => {
+        const dumps: [string, DumpTarget][] = [];
+        const workspaces = { showDump: async (name: string, target: DumpTarget) => { dumps.push([name, target]); } };
+        const notebook = await notebookWith({ connection: 'Rest' });
+
+        await dumpFromNotebook(manager, workspaces, notebook, '0900000180000001');
+
+        assert.deepStrictEqual(dumps, [['Rest', { kind: 'object', objectId: '0900000180000001' }]]);
+    });
+});
+
+suite('DQL Document Connection Test Suite', () => {
+    let bridge: FakeBridge;
+    let manager: TestConnectionManager;
+    let documents: DocumentConnections;
+
+    setup(() => {
+        bridge = new FakeBridge();
+        manager = new TestConnectionManager(bridge, [restConnection, dfcConnection]);
+        documents = new DocumentConnections(new FakeMemento());
+    });
+
+    teardown(() => {
+        documents.dispose();
+        manager.dispose();
+    });
+
+    test('a document with no link gets the picked connection as its link, and the next run uses the link', async () => {
+        const document = await vscode.workspace.openTextDocument({ language: 'dql', content: 'select 1' });
+        manager.pickAnswers = ['Rest'];
+
+        const first = await documentConnection(manager, documents, document);
+        const second = await documentConnection(manager, documents, document);
+
+        assert.strictEqual(first, manager.getOpenConnection('Rest'));
+        assert.strictEqual(second, first);
+        assert.strictEqual(documents.connectionName(document), 'Rest');
+        assert.strictEqual(manager.pickCalls.length, 1);
+    });
+
+    test('a linked connection that is not open is connected', async () => {
+        const document = await vscode.workspace.openTextDocument({ language: 'dql', content: 'select 1' });
+        await documents.link(document, 'Dfc');
+
+        const connection = await documentConnection(manager, documents, document);
+
+        assert.strictEqual(connection, manager.getOpenConnection('Dfc'));
+        assert.deepStrictEqual(manager.pickCalls, []);
+    });
+
+    test('a link to a connection that is no longer configured asks again', async () => {
+        const document = await vscode.workspace.openTextDocument({ language: 'dql', content: 'select 1' });
+        await documents.link(document, 'Missing');
+        manager.pickAnswers = ['Dfc'];
+
+        const connection = await documentConnection(manager, documents, document);
+
+        assert.strictEqual(connection?.name, 'Dfc');
+        assert.strictEqual(documents.connectionName(document), 'Dfc');
+        assert.strictEqual(manager.pickCalls.length, 1);
+    });
+
+    test('with one open connection a document with no link uses it without asking', async () => {
+        const document = await vscode.workspace.openTextDocument({ language: 'dql', content: 'select 1' });
+        const open = await manager.connect('Dfc');
+
+        const connection = await documentConnection(manager, documents, document);
+
+        assert.strictEqual(connection, open);
+        assert.strictEqual(documents.connectionName(document), 'Dfc');
+        assert.deepStrictEqual(manager.pickCalls, []);
+    });
+
+    test('a cancelled pick returns no connection and stores no link', async () => {
+        const document = await vscode.workspace.openTextDocument({ language: 'dql', content: 'select 1' });
+        manager.pickAnswers = [undefined];
+
+        const connection = await documentConnection(manager, documents, document);
+
+        assert.strictEqual(connection, undefined);
+        assert.strictEqual(documents.connectionName(document), undefined);
+        assert.strictEqual(manager.pickCalls.length, 1);
+    });
+});
+
+suite('Document Connections Test Suite', () => {
+    let state: FakeMemento;
+    let documents: DocumentConnections;
+
+    setup(() => {
+        state = new FakeMemento();
+        documents = new DocumentConnections(state);
+    });
+
+    teardown(() => {
+        documents.dispose();
+    });
+
+    test('a link survives a new DocumentConnections built on the same workspace state', async () => {
+        await documents.link(fileDocument('/work/query.dql'), 'Rest');
+
+        const reloaded = new DocumentConnections(state);
+
+        assert.strictEqual(reloaded.connectionName(fileDocument('/work/query.dql')), 'Rest');
+        reloaded.dispose();
+    });
+
+    test('an untitled document link is kept in memory only', async () => {
+        const document = await vscode.workspace.openTextDocument({ language: 'dql', content: 'select 1' });
+
+        await documents.link(document, 'Rest');
+
+        assert.strictEqual(documents.connectionName(document), 'Rest');
+        assert.deepStrictEqual(state.keys(), []);
+    });
+
+    test('a renamed file keeps its link under the new URI, and so does a file in a renamed folder', async () => {
+        await documents.link(fileDocument('/work/query.dql'), 'Rest');
+        await documents.link(fileDocument('/work/dql/users.dql'), 'Dfc');
+
+        await documents.moveLinks([
+            { oldUri: vscode.Uri.file('/work/query.dql'), newUri: vscode.Uri.file('/work/renamed.dql') },
+            { oldUri: vscode.Uri.file('/work/dql'), newUri: vscode.Uri.file('/work/queries') }
+        ]);
+
+        assert.strictEqual(documents.connectionName(fileDocument('/work/query.dql')), undefined);
+        assert.strictEqual(documents.connectionName(fileDocument('/work/renamed.dql')), 'Rest');
+        assert.strictEqual(documents.connectionName(fileDocument('/work/queries/users.dql')), 'Dfc');
+    });
+
+    test('a deleted file loses its link and other links stay', async () => {
+        await documents.link(fileDocument('/work/query.dql'), 'Rest');
+        await documents.link(fileDocument('/work/other.dql'), 'Dfc');
+
+        await documents.removeLinks([vscode.Uri.file('/work/query.dql')]);
+
+        assert.strictEqual(documents.connectionName(fileDocument('/work/query.dql')), undefined);
+        assert.strictEqual(documents.connectionName(fileDocument('/work/other.dql')), 'Dfc');
+    });
+
+    suite('an untitled document saved to a file', () => {
+        let folder: string;
+
+        setup(() => {
+            folder = fs.mkdtempSync(path.join(os.tmpdir(), 'dctm-links-'));
+        });
+
+        teardown(async () => {
+            await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+            fs.rmSync(folder, { recursive: true, force: true });
+        });
+
+        async function untitledAt(name: string, text: string): Promise<vscode.TextDocument> {
+            const document = await vscode.workspace.openTextDocument(
+                vscode.Uri.file(path.join(folder, name)).with({ scheme: 'untitled' }));
+            const edit = new vscode.WorkspaceEdit();
+            edit.insert(document.uri, new vscode.Position(0, 0), text);
+            await vscode.workspace.applyEdit(edit);
+            return document;
+        }
+
+        // The link is stored from the save event, after save() has resolved.
+        async function settle(): Promise<void> {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        test('gives the saved file the link of the untitled document in the workspace state', async () => {
+            const untitled = await untitledAt('saved.dql', 'select object_name from dm_cabinet');
+            await documents.link(untitled, 'Rest');
+
+            await untitled.save();
+            await settle();
+
+            const saved = vscode.Uri.file(path.join(folder, 'saved.dql')).toString();
+            assert.deepStrictEqual(state.get('dctm.documentLinks'), { [saved]: 'Rest' });
+        });
+
+        test('a saved file that already has a link keeps it', async () => {
+            await documents.link(fileDocument(path.join(folder, 'linked.dql')), 'Dfc');
+            const untitled = await untitledAt('linked.dql', 'select object_name from dm_cabinet');
+            await documents.link(untitled, 'Rest');
+
+            await untitled.save();
+            await settle();
+
+            assert.strictEqual(documents.connectionName(fileDocument(path.join(folder, 'linked.dql'))), 'Dfc');
+        });
+
+        test('two open untitled documents with the same text and different links give the saved file no link', async () => {
+            const untitled = await untitledAt('shared.dql', 'select object_name from dm_cabinet');
+            await documents.link(untitled, 'Rest');
+            const other = await vscode.workspace.openTextDocument({ language: 'dql', content: 'select object_name from dm_cabinet' });
+            await documents.link(other, 'Dfc');
+
+            await untitled.save();
+            await settle();
+
+            assert.strictEqual(documents.connectionName(fileDocument(path.join(folder, 'shared.dql'))), undefined);
         });
     });
 
-    suite('getEffectiveConnection()', () => {
-        test('returns notebook connection when available', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/test.dctmbook';
+    test('the connection of a notebook cell is its notebook binding', async () => {
+        const notebook = await notebookWith({ connection: 'Rest' });
 
-            // Set up global connection
-            const globalConn: ActiveConnection = {
-                config: testConnections[0],
-                sessionId: 'global-session',
-                username: 'globaluser'
-            };
-            manager.setActiveConnection(globalConn);
-
-            // Connect notebook
-            await manager.connectNotebook(notebookUri, 'prod-docbase', 'notebookuser', 'pass');
-
-            // Should return notebook connection, not global
-            const effective = manager.getEffectiveConnection(notebookUri);
-            assert.ok(effective);
-            assert.strictEqual(effective!.config.name, 'prod-docbase');
-            assert.strictEqual(effective!.username, 'notebookuser');
-        });
-
-        test('falls back to global connection when notebook not connected', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/test.dctmbook';
-
-            // Set up global connection only
-            const globalConn: ActiveConnection = {
-                config: testConnections[0],
-                sessionId: 'global-session',
-                username: 'globaluser'
-            };
-            manager.setActiveConnection(globalConn);
-
-            // No notebook connection - should fall back to global
-            const effective = manager.getEffectiveConnection(notebookUri);
-            assert.ok(effective);
-            assert.strictEqual(effective!.config.name, 'dev-docbase');
-            assert.strictEqual(effective!.username, 'globaluser');
-        });
-
-        test('returns global connection when notebookUri is undefined', () => {
-            const manager = new TestableConnectionManager(testConnections);
-
-            const globalConn: ActiveConnection = {
-                config: testConnections[1],
-                sessionId: 'global-session',
-                username: 'globaluser'
-            };
-            manager.setActiveConnection(globalConn);
-
-            const effective = manager.getEffectiveConnection(undefined);
-            assert.ok(effective);
-            assert.strictEqual(effective!.config.name, 'prod-docbase');
-        });
-
-        test('returns null when no connections exist', () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/test.dctmbook';
-
-            const effective = manager.getEffectiveConnection(notebookUri);
-            assert.strictEqual(effective, null);
-        });
-
-        test('returns null when global disconnected and notebook not connected', () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/test.dctmbook';
-
-            manager.setActiveConnection(null);
-
-            const effective = manager.getEffectiveConnection(notebookUri);
-            assert.strictEqual(effective, null);
-        });
+        assert.strictEqual(documents.connectionName(notebook.cellAt(0).document), 'Rest');
     });
 
-    suite('hasNotebookConnection()', () => {
-        test('returns true for connected notebook', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/test.dctmbook';
+    test('linking a notebook cell binds its notebook', async () => {
+        const notebook = await notebookWith({});
 
-            await manager.connectNotebook(notebookUri, 'dev-docbase', 'user', 'pass');
+        await documents.link(notebook.cellAt(0).document, 'Dfc');
 
-            assert.strictEqual(manager.hasNotebookConnection(notebookUri), true);
-        });
-
-        test('returns false for unconnected notebook', () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/test.dctmbook';
-
-            assert.strictEqual(manager.hasNotebookConnection(notebookUri), false);
-        });
-
-        test('returns false after notebook is disconnected', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/test.dctmbook';
-
-            await manager.connectNotebook(notebookUri, 'dev-docbase', 'user', 'pass');
-            await manager.disconnectNotebook(notebookUri);
-
-            assert.strictEqual(manager.hasNotebookConnection(notebookUri), false);
-        });
+        assert.strictEqual(notebook.metadata.connection, 'Dfc');
+        assert.deepStrictEqual(state.keys(), []);
     });
 
-    suite('getAllNotebookConnections()', () => {
-        test('returns empty map when no notebooks connected', () => {
-            const manager = new TestableConnectionManager(testConnections);
+    test('fires the change event when a link changes and when a notebook binding changes', async () => {
+        const notebook = await notebookWith({});
+        let fired = 0;
+        documents.onDidChange(() => fired++);
 
-            const all = manager.getAllNotebookConnections();
-            assert.strictEqual(all.size, 0);
-        });
+        await documents.link(fileDocument('/work/query.dql'), 'Rest');
+        await bindNotebook(notebook, 'Dfc');
 
-        test('returns all connected notebooks', async () => {
-            const manager = new TestableConnectionManager(testConnections);
+        assert.strictEqual(fired, 2);
+    });
+});
 
-            await manager.connectNotebook('file:///nb1.dctmbook', 'dev-docbase', 'u1', 'p');
-            await manager.connectNotebook('file:///nb2.dctmbook', 'prod-docbase', 'u2', 'p');
-            await manager.connectNotebook('file:///nb3.dctmbook', 'test-docbase', 'u3', 'p');
-
-            const all = manager.getAllNotebookConnections();
-            assert.strictEqual(all.size, 3);
-            assert.ok(all.has('file:///nb1.dctmbook'));
-            assert.ok(all.has('file:///nb2.dctmbook'));
-            assert.ok(all.has('file:///nb3.dctmbook'));
-        });
-
-        test('returns copy of map (immutable)', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-
-            await manager.connectNotebook('file:///nb1.dctmbook', 'dev-docbase', 'u1', 'p');
-
-            const all = manager.getAllNotebookConnections();
-            all.delete('file:///nb1.dctmbook'); // Modify the returned map
-
-            // Original should still have the connection
-            assert.ok(manager.hasNotebookConnection('file:///nb1.dctmbook'));
-        });
+suite('Notebook Binding Test Suite', () => {
+    test('Open notebook binds an unbound notebook, opens one bound to this connection and asks for another', () => {
+        assert.strictEqual(openNotebookAction(undefined, 'conn1'), 'bind');
+        assert.strictEqual(openNotebookAction('conn1', 'conn1'), 'open');
+        assert.strictEqual(openNotebookAction('conn2', 'conn1'), 'ask');
     });
 
-    suite('disconnectAllNotebooks()', () => {
-        test('disconnects all notebook sessions', async () => {
-            const manager = new TestableConnectionManager(testConnections);
+    test('bindNotebook writes the connection name and keeps the other metadata', async () => {
+        const data = new vscode.NotebookData([
+            new vscode.NotebookCellData(vscode.NotebookCellKind.Code, 'select 1 from dm_server_config', 'dql')
+        ]);
+        data.metadata = { connection: 'conn2', author: 'test' };
+        const notebook = await vscode.workspace.openNotebookDocument('dctmbook', data);
 
-            const session1 = await manager.connectNotebook('file:///nb1.dctmbook', 'dev-docbase', 'u1', 'p');
-            const session2 = await manager.connectNotebook('file:///nb2.dctmbook', 'prod-docbase', 'u2', 'p');
-            const session3 = await manager.connectNotebook('file:///nb3.dctmbook', 'test-docbase', 'u3', 'p');
+        assert.strictEqual(await bindNotebook(notebook, 'conn1'), true);
 
-            assert.strictEqual(manager.getMockBridge().getActiveSessionCount(), 3);
-
-            await manager.disconnectAllNotebooks();
-
-            assert.strictEqual(manager.getAllNotebookConnections().size, 0);
-            assert.ok(!manager.getMockBridge().isSessionActive(session1));
-            assert.ok(!manager.getMockBridge().isSessionActive(session2));
-            assert.ok(!manager.getMockBridge().isSessionActive(session3));
-        });
-
-        test('handles empty notebook connections', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-
-            // Should not throw
-            await manager.disconnectAllNotebooks();
-            assert.strictEqual(manager.getAllNotebookConnections().size, 0);
-        });
-
-        test('does not affect global connection', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-
-            const globalConn: ActiveConnection = {
-                config: testConnections[0],
-                sessionId: 'global-session',
-                username: 'globaluser'
-            };
-            manager.setActiveConnection(globalConn);
-
-            await manager.connectNotebook('file:///nb1.dctmbook', 'dev-docbase', 'u1', 'p');
-            await manager.disconnectAllNotebooks();
-
-            // Global should still be connected
-            assert.ok(manager.getActiveConnection());
-            assert.strictEqual(manager.getActiveConnection()!.sessionId, 'global-session');
-        });
-    });
-
-    suite('Multiple concurrent sessions', () => {
-        test('each notebook gets unique session ID', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const sessions: string[] = [];
-
-            for (let i = 0; i < 5; i++) {
-                const session = await manager.connectNotebook(
-                    `file:///nb${i}.dctmbook`,
-                    'dev-docbase',
-                    `user${i}`,
-                    'pass'
-                );
-                sessions.push(session);
-            }
-
-            // All sessions should be unique
-            const uniqueSessions = new Set(sessions);
-            assert.strictEqual(uniqueSessions.size, 5, 'All session IDs should be unique');
-        });
-
-        test('notebooks can be connected and disconnected independently', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-
-            // Connect 3 notebooks
-            await manager.connectNotebook('file:///nb1.dctmbook', 'dev-docbase', 'u1', 'p');
-            await manager.connectNotebook('file:///nb2.dctmbook', 'prod-docbase', 'u2', 'p');
-            await manager.connectNotebook('file:///nb3.dctmbook', 'test-docbase', 'u3', 'p');
-
-            // Disconnect middle one
-            await manager.disconnectNotebook('file:///nb2.dctmbook');
-
-            assert.ok(manager.hasNotebookConnection('file:///nb1.dctmbook'));
-            assert.ok(!manager.hasNotebookConnection('file:///nb2.dctmbook'));
-            assert.ok(manager.hasNotebookConnection('file:///nb3.dctmbook'));
-
-            // Reconnect the disconnected one
-            await manager.connectNotebook('file:///nb2.dctmbook', 'dev-docbase', 'u2new', 'p');
-
-            const conn = manager.getNotebookConnection('file:///nb2.dctmbook');
-            assert.strictEqual(conn!.username, 'u2new');
-        });
-
-        test('getEffectiveConnection returns correct connection for each notebook', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-
-            // Set global
-            manager.setActiveConnection({
-                config: testConnections[0],
-                sessionId: 'global',
-                username: 'global-user'
-            });
-
-            // Connect some notebooks
-            await manager.connectNotebook('file:///bound1.dctmbook', 'prod-docbase', 'bound-user1', 'p');
-            await manager.connectNotebook('file:///bound2.dctmbook', 'test-docbase', 'bound-user2', 'p');
-
-            // Notebook with its own connection
-            const eff1 = manager.getEffectiveConnection('file:///bound1.dctmbook');
-            assert.strictEqual(eff1!.config.name, 'prod-docbase');
-
-            // Another notebook with its own connection
-            const eff2 = manager.getEffectiveConnection('file:///bound2.dctmbook');
-            assert.strictEqual(eff2!.config.name, 'test-docbase');
-
-            // Unbound notebook falls back to global
-            const eff3 = manager.getEffectiveConnection('file:///unbound.dctmbook');
-            assert.strictEqual(eff3!.config.name, 'dev-docbase');
-            assert.strictEqual(eff3!.username, 'global-user');
-        });
-    });
-
-    suite('Notebook metadata connection binding', () => {
-        // These tests verify the contract for metadata-based binding
-        // The actual notebook metadata is managed by VS Code NotebookEdit API
-
-        test('connection name can be retrieved from metadata structure', () => {
-            // Simulating notebook metadata structure
-            const notebookMetadata = {
-                connection: 'dev-docbase'
-            };
-
-            const boundConnection = notebookMetadata.connection;
-            assert.strictEqual(boundConnection, 'dev-docbase');
-        });
-
-        test('metadata without connection returns undefined', () => {
-            const notebookMetadata: { connection?: string } = {};
-
-            const boundConnection = notebookMetadata.connection;
-            assert.strictEqual(boundConnection, undefined);
-        });
-
-        test('binding can be removed by deleting connection property', () => {
-            const notebookMetadata: { connection?: string } = {
-                connection: 'dev-docbase'
-            };
-
-            delete notebookMetadata.connection;
-            assert.strictEqual(notebookMetadata.connection, undefined);
-        });
-
-        test('binding can be updated to different connection', () => {
-            const notebookMetadata = {
-                connection: 'dev-docbase'
-            };
-
-            notebookMetadata.connection = 'prod-docbase';
-            assert.strictEqual(notebookMetadata.connection, 'prod-docbase');
-        });
-    });
-
-    suite('REST vs DFC connection routing', () => {
-        test('ensureRunning is called with dfc connection type for DFC connection', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/dfc-type-test.dctmbook';
-
-            await manager.connectNotebook(notebookUri, 'dev-docbase', 'user', 'pass');
-
-            assert.strictEqual(
-                manager.getMockBridge().lastConnectionType,
-                'dfc',
-                'ensureRunning should be called with dfc connection type'
-            );
-        });
-
-        test('ensureRunning is called with rest connection type for REST connection', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/rest-type-test.dctmbook';
-
-            await manager.connectNotebook(notebookUri, 'rest-docbase', 'user', 'pass');
-
-            assert.strictEqual(
-                manager.getMockBridge().lastConnectionType,
-                'rest',
-                'ensureRunning should be called with rest connection type'
-            );
-        });
-
-        test('can connect notebook to REST connection', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/rest-test.dctmbook';
-
-            const sessionId = await manager.connectNotebook(
-                notebookUri,
-                'rest-docbase',
-                'restuser',
-                'restpass'
-            );
-
-            assert.ok(sessionId, 'Should return session ID for REST connection');
-            const conn = manager.getNotebookConnection(notebookUri);
-            assert.strictEqual(conn!.config.type, 'rest');
-            assert.strictEqual(conn!.config.endpoint, 'http://rest.example.com/dctm-rest');
-        });
-
-        test('can connect notebook to DFC connection', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/dfc-test.dctmbook';
-
-            const sessionId = await manager.connectNotebook(
-                notebookUri,
-                'dev-docbase',
-                'dfcuser',
-                'dfcpass'
-            );
-
-            assert.ok(sessionId, 'Should return session ID for DFC connection');
-            const conn = manager.getNotebookConnection(notebookUri);
-            assert.strictEqual(conn!.config.type, 'dfc');
-            assert.strictEqual(conn!.config.docbroker, 'devserver');
-        });
-
-        test('can connect multiple notebooks to different connection types', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-
-            await manager.connectNotebook('file:///nb-dfc.dctmbook', 'dev-docbase', 'u1', 'p1');
-            await manager.connectNotebook('file:///nb-rest.dctmbook', 'rest-docbase', 'u2', 'p2');
-
-            const dfcConn = manager.getNotebookConnection('file:///nb-dfc.dctmbook');
-            const restConn = manager.getNotebookConnection('file:///nb-rest.dctmbook');
-
-            assert.strictEqual(dfcConn!.config.type, 'dfc');
-            assert.strictEqual(restConn!.config.type, 'rest');
-            assert.strictEqual(dfcConn!.config.docbroker, 'devserver');
-            assert.strictEqual(restConn!.config.endpoint, 'http://rest.example.com/dctm-rest');
-        });
-
-        test('getEffectiveConnection returns correct type for REST connection', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-            const notebookUri = 'file:///notebooks/rest-effective.dctmbook';
-
-            await manager.connectNotebook(notebookUri, 'rest-docbase', 'user', 'pass');
-
-            const effective = manager.getEffectiveConnection(notebookUri);
-            assert.ok(effective);
-            assert.strictEqual(effective!.config.type, 'rest');
-            assert.strictEqual(effective!.config.endpoint, 'http://rest.example.com/dctm-rest');
-            assert.strictEqual(effective!.config.docbroker, undefined);
-        });
-
-        test('REST connection does not have docbroker in config', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-
-            await manager.connectNotebook('file:///nb.dctmbook', 'rest-docbase', 'user', 'pass');
-
-            const conn = manager.getNotebookConnection('file:///nb.dctmbook');
-            assert.strictEqual(conn!.config.type, 'rest');
-            assert.strictEqual(conn!.config.endpoint, 'http://rest.example.com/dctm-rest');
-            assert.strictEqual(conn!.config.docbroker, undefined);
-            assert.strictEqual(conn!.config.port, undefined);
-        });
-
-        test('DFC connection does not have endpoint in config', async () => {
-            const manager = new TestableConnectionManager(testConnections);
-
-            await manager.connectNotebook('file:///nb.dctmbook', 'dev-docbase', 'user', 'pass');
-
-            const conn = manager.getNotebookConnection('file:///nb.dctmbook');
-            assert.strictEqual(conn!.config.type, 'dfc');
-            assert.strictEqual(conn!.config.docbroker, 'devserver');
-            assert.strictEqual(conn!.config.port, 1489);
-            assert.strictEqual(conn!.config.endpoint, undefined);
-        });
+        assert.strictEqual(notebook.metadata.connection, 'conn1');
+        assert.strictEqual(notebook.metadata.author, 'test');
     });
 });

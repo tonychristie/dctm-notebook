@@ -1,4 +1,4 @@
-import { ConnectionManager } from './connectionManager';
+import { RepositoryConnection } from './repositoryConnection';
 
 /**
  * Request to execute a DFC API method
@@ -36,6 +36,8 @@ export interface MethodInfo {
     returnType: string;
     parameters: ParameterInfo[];
     description?: string;
+    /** Runs on the session, not on an object */
+    session?: boolean;
 }
 
 /**
@@ -51,6 +53,71 @@ export interface ParameterInfo {
  * Common DFC methods organized by category
  */
 export const COMMON_DFC_METHODS: Record<string, MethodInfo[]> = {
+    'Session': [
+        {
+            name: 'getSessionId',
+            returnType: 'string',
+            parameters: [],
+            description: 'Returns the ID of the session',
+            session: true
+        },
+        {
+            name: 'getLoginTicket',
+            returnType: 'string',
+            parameters: [],
+            description: 'Returns a login ticket for the session user',
+            session: true
+        },
+        {
+            name: 'getLoginUserName',
+            returnType: 'string',
+            parameters: [],
+            description: 'Returns the name of the user logged in to the session',
+            session: true
+        },
+        {
+            name: 'getDocbaseName',
+            returnType: 'string',
+            parameters: [],
+            description: 'Returns the name of the repository',
+            session: true
+        },
+        {
+            name: 'getDocbaseId',
+            returnType: 'string',
+            parameters: [],
+            description: 'Returns the ID of the repository',
+            session: true
+        },
+        {
+            name: 'getDocbaseOwnerName',
+            returnType: 'string',
+            parameters: [],
+            description: 'Returns the name of the repository owner',
+            session: true
+        },
+        {
+            name: 'getServerVersion',
+            returnType: 'string',
+            parameters: [],
+            description: 'Returns the version of the Content Server',
+            session: true
+        },
+        {
+            name: 'getDBMSName',
+            returnType: 'string',
+            parameters: [],
+            description: 'Returns the name of the database used by the repository',
+            session: true
+        },
+        {
+            name: 'isConnected',
+            returnType: 'boolean',
+            parameters: [],
+            description: 'Returns true if the session is connected',
+            session: true
+        }
+    ],
     'Object Lifecycle': [
         {
             name: 'save',
@@ -90,8 +157,8 @@ export const COMMON_DFC_METHODS: Record<string, MethodInfo[]> = {
             name: 'checkin',
             returnType: 'IDfId',
             parameters: [
-                { name: 'versionLabels', type: 'boolean', required: true },
-                { name: 'versionLabel', type: 'string', required: true }
+                { name: 'keepLock', type: 'boolean', required: true },
+                { name: 'versionLabels', type: 'string', required: true }
             ],
             description: 'Checks in the object with a new version'
         },
@@ -478,33 +545,16 @@ export const COMMON_DFC_METHODS: Record<string, MethodInfo[]> = {
     ]
 };
 
+export function isSessionMethod(method: string): boolean {
+    return Object.values(COMMON_DFC_METHODS).some(methods => methods.some(m => m.name === method && m.session));
+}
+
 /**
  * Executor for DFC API method calls
  */
 export class ApiExecutor {
-    private connectionManager: ConnectionManager;
-
-    constructor(connectionManager: ConnectionManager) {
-        this.connectionManager = connectionManager;
-    }
-
-    /**
-     * Execute a DFC API method via the bridge.
-     * The bridge handles backend type (DFC or REST) internally.
-     */
-    async execute(request: ApiMethodRequest): Promise<ApiMethodResponse> {
-        const connection = this.connectionManager.getActiveConnection();
-        if (!connection) {
-            throw new Error('No active connection');
-        }
-
-        if (!connection.sessionId) {
-            throw new Error('No active session');
-        }
-
-        const bridge = this.connectionManager.getDctmBridge();
-
-        const response = await bridge.executeApi(
+    async execute(request: ApiMethodRequest, connection: RepositoryConnection): Promise<ApiMethodResponse> {
+        const response = await connection.bridge.executeApi(
             connection.sessionId,
             request.typeName || '',
             request.method,
@@ -527,50 +577,5 @@ export class ApiExecutor {
             resultType: apiResponse.resultType || 'unknown',
             executionTimeMs: apiResponse.executionTimeMs || 0
         };
-    }
-
-    /**
-     * Get available methods for a category
-     */
-    getMethodsByCategory(category: string): MethodInfo[] {
-        return COMMON_DFC_METHODS[category] || [];
-    }
-
-    /**
-     * Get all method categories
-     */
-    getCategories(): string[] {
-        return Object.keys(COMMON_DFC_METHODS);
-    }
-
-    /**
-     * Find method info by name
-     */
-    findMethod(methodName: string): MethodInfo | undefined {
-        for (const methods of Object.values(COMMON_DFC_METHODS)) {
-            const found = methods.find(m => m.name === methodName);
-            if (found) {
-                return found;
-            }
-        }
-        return undefined;
-    }
-
-    /**
-     * Get all methods as flat list
-     */
-    getAllMethods(): MethodInfo[] {
-        return Object.values(COMMON_DFC_METHODS).flat();
-    }
-
-    /**
-     * Search methods by name pattern
-     */
-    searchMethods(pattern: string): MethodInfo[] {
-        const lowerPattern = pattern.toLowerCase();
-        return this.getAllMethods().filter(m =>
-            m.name.toLowerCase().includes(lowerPattern) ||
-            (m.description && m.description.toLowerCase().includes(lowerPattern))
-        );
     }
 }

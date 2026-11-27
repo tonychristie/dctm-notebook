@@ -1,0 +1,30 @@
+.notebook-output .dql-result-container .table-container {
+    max-height: 400px;
+}
+
+.api-result-container {
+    font-family: var(--vscode-font-family);
+    font-size: 12px;
+}
+.api-result-container .object-id {
+    color: var(--vscode-textLink-foreground);
+    text-decoration: underline;
+    cursor: pointer;
+}
+.api-result-container .object-id:hover {
+    color: var(--vscode-textLink-activeForeground);
+}
+.api-result-container .result-meta {
+    margin-bottom: 8px;
+    color: var(--vscode-descriptionForeground);
+}
+.api-result-container .result-content {
+    background: var(--vscode-textCodeBlock-background);
+    padding: 8px;
+    border-radius: 4px;
+    font-family: var(--vscode-editor-font-family);
+}
+.api-result-container .result-content pre {
+    margin: 0;
+    white-space: pre-wrap;
+}

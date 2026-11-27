@@ -1,0 +1,46 @@
+@import '../results/resultsGrid.css';
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 10px;
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-foreground);
+    background-color: var(--vscode-editor-background);
+}
+
+.query {
+    flex-shrink: 0;
+    max-height: 30%;
+    overflow: auto;
+    font-family: var(--vscode-editor-font-family);
+    background-color: var(--vscode-textCodeBlock-background);
+    padding: 8px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    white-space: pre-wrap;
+}
+
+.results {
+    flex: 1;
+    min-height: 0;
+}
+
+.results .dql-result-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.results .table-container {
+    flex: 1;
+    min-height: 0;
+}

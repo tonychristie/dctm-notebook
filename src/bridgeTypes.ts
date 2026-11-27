@@ -74,6 +74,22 @@ export interface GroupDetails extends GroupInfo {
     attributes: AttributeInfo[];
 }
 
+export function toGroupDetails(group: GroupInfo): GroupDetails {
+    const attributes: AttributeInfo[] = [
+        { name: 'group_name', value: group.groupName, dataType: 'string' },
+        { name: 'description', value: group.description, dataType: 'string' },
+        { name: 'group_class', value: group.groupClass, dataType: 'string' },
+        { name: 'group_admin', value: group.groupAdmin, dataType: 'string' },
+        { name: 'is_private', value: group.isPrivate, dataType: 'boolean' },
+        { name: 'owner_name', value: group.ownerName, dataType: 'string' },
+        { name: 'group_address', value: group.groupAddress, dataType: 'string' },
+        { name: 'group_source', value: group.groupSource, dataType: 'string' },
+        { name: 'is_dynamic', value: group.isDynamic, dataType: 'boolean' }
+    ].sort((a, b) => a.name.localeCompare(b.name));
+
+    return { ...group, attributes };
+}
+
 /**
  * Generic attribute information.
  */
@@ -146,10 +162,8 @@ export interface IUnifiedBridge {
 
     /**
      * Get users from the repository.
-     * @param sessionId Active session ID
-     * @param pattern Optional filter pattern
      */
-    getUsers(sessionId: string, pattern?: string): Promise<UserInfo[]>;
+    getUsers(sessionId: string): Promise<UserInfo[]>;
 
     /**
      * Get a single user by username.
@@ -158,10 +172,8 @@ export interface IUnifiedBridge {
 
     /**
      * Get groups from the repository.
-     * @param sessionId Active session ID
-     * @param pattern Optional filter pattern
      */
-    getGroups(sessionId: string, pattern?: string): Promise<GroupInfo[]>;
+    getGroups(sessionId: string): Promise<GroupInfo[]>;
 
     /**
      * Get a single group by name.

@@ -51,101 +51,57 @@ suite('Error Utils Test Suite', () => {
 
         suite('Bridge error responses', () => {
 
-            test('extracts message from full bridge error response', () => {
-                const responseData: BridgeErrorResponse = {
-                    status: 400,
-                    code: 'E_INPUT_ILLEGAL_ARGUMENTS',
-                    message: 'There are illegal arguments provided.',
-                    details: 'Failed to instantiate class Foo'
+            test('converts a bridge error with null details into a BridgeError', () => {
+                const responseData = {
+                    code: 'DQL_ERROR',
+                    message: 'DQL execution failed: [DM_QUERY_E_SYNTAX]error: syntax error',
+                    details: null,
+                    timestamp: '2026-11-06T08:30:28.468021942Z',
+                    path: '/api/v1/dql'
                 };
                 const axiosError = createMockAxiosError(responseData, 400);
 
                 const result = extractBridgeError(axiosError);
 
                 assert.ok(result instanceof BridgeError);
-                assert.ok(result.message.includes('There are illegal arguments provided'));
-                assert.ok(result.message.includes('E_INPUT_ILLEGAL_ARGUMENTS'));
-                assert.ok(result.message.includes('Failed to instantiate class Foo'));
-
-                const bridgeError = result as BridgeError;
-                assert.strictEqual(bridgeError.code, 'E_INPUT_ILLEGAL_ARGUMENTS');
-                assert.strictEqual(bridgeError.details, 'Failed to instantiate class Foo');
-                assert.strictEqual(bridgeError.httpStatus, 400);
+                assert.strictEqual(result.httpStatus, 400);
+                assert.strictEqual(result.code, 'DQL_ERROR');
+                assert.strictEqual(
+                    result.message,
+                    '[DQL_ERROR] DQL execution failed: [DM_QUERY_E_SYNTAX]error: syntax error'
+                );
             });
 
-            test('handles bridge error without details', () => {
-                const responseData: BridgeErrorResponse = {
-                    status: 404,
-                    code: 'E_OBJECT_NOT_FOUND',
-                    message: 'Object not found'
-                };
-                const axiosError = createMockAxiosError(responseData, 404);
-
-                const result = extractBridgeError(axiosError);
-
-                assert.ok(result instanceof BridgeError);
-                assert.ok(result.message.includes('Object not found'));
-                assert.ok(result.message.includes('E_OBJECT_NOT_FOUND'));
-                assert.ok(!result.message.includes('Details:'));
-
-                const bridgeError = result as BridgeError;
-                assert.strictEqual(bridgeError.details, undefined);
-            });
-
-            test('handles bridge error without code', () => {
+            test('appends details to the message of a BridgeError', () => {
                 const responseData = {
-                    status: 500,
-                    message: 'Internal server error'
+                    code: 'INTERNAL_ERROR',
+                    message: 'An unexpected error occurred',
+                    details: 'java.lang.IllegalStateException: session closed',
+                    timestamp: '2026-11-06T08:31:12.104558211Z',
+                    path: '/api/v1/dql'
                 };
                 const axiosError = createMockAxiosError(responseData, 500);
 
                 const result = extractBridgeError(axiosError);
 
                 assert.ok(result instanceof BridgeError);
+                assert.strictEqual(result.httpStatus, 500);
+                assert.strictEqual(result.details, 'java.lang.IllegalStateException: session closed');
+                assert.ok(result.message.endsWith('Details: java.lang.IllegalStateException: session closed'));
+            });
+
+            test('converts a body with a message and no code into a plain Error', () => {
+                const responseData = {
+                    message: 'Internal server error',
+                    timestamp: '2026-11-06T08:31:12.104558211Z',
+                    path: '/api/v1/dql'
+                };
+                const axiosError = createMockAxiosError(responseData, 500);
+
+                const result = extractBridgeError(axiosError);
+
+                assert.ok(!(result instanceof BridgeError));
                 assert.strictEqual(result.message, 'Internal server error');
-
-                const bridgeError = result as BridgeError;
-                assert.strictEqual(bridgeError.code, undefined);
-            });
-
-            test('handles bridge error with only message and status', () => {
-                const responseData: BridgeErrorResponse = {
-                    status: 401,
-                    message: 'Authentication failed'
-                };
-                const axiosError = createMockAxiosError(responseData, 401);
-
-                const result = extractBridgeError(axiosError);
-
-                assert.ok(result instanceof BridgeError);
-                assert.strictEqual(result.message, 'Authentication failed');
-            });
-
-            test('formats error message with code prefix', () => {
-                const responseData: BridgeErrorResponse = {
-                    status: 400,
-                    code: 'E_DQL_SYNTAX_ERROR',
-                    message: 'Syntax error at position 12'
-                };
-                const axiosError = createMockAxiosError(responseData, 400);
-
-                const result = extractBridgeError(axiosError);
-
-                assert.strictEqual(result.message, '[E_DQL_SYNTAX_ERROR] Syntax error at position 12');
-            });
-
-            test('formats error message with details suffix', () => {
-                const responseData: BridgeErrorResponse = {
-                    status: 400,
-                    message: 'Query failed',
-                    details: 'Column "foo" does not exist'
-                };
-                const axiosError = createMockAxiosError(responseData, 400);
-
-                const result = extractBridgeError(axiosError);
-
-                assert.ok(result.message.includes('Query failed'));
-                assert.ok(result.message.includes('\n\nDetails: Column "foo" does not exist'));
             });
         });
 
@@ -160,7 +116,7 @@ suite('Error Utils Test Suite', () => {
 
                 const result = extractBridgeError(axiosError);
 
-                // Should fall back to plain error since status is missing
+                // Should fall back to plain error since code is missing
                 assert.ok(result instanceof Error);
                 assert.strictEqual(result.message, 'Something went wrong');
             });
@@ -279,22 +235,22 @@ suite('Error Utils Test Suite', () => {
 
         test('sets name property to BridgeError', () => {
             const response: BridgeErrorResponse = {
-                status: 400,
+                code: 'DQL_ERROR',
                 message: 'Test error'
             };
 
-            const error = new BridgeError(response);
+            const error = new BridgeError(response, 400);
 
             assert.strictEqual(error.name, 'BridgeError');
         });
 
         test('is instanceof Error', () => {
             const response: BridgeErrorResponse = {
-                status: 400,
+                code: 'DQL_ERROR',
                 message: 'Test error'
             };
 
-            const error = new BridgeError(response);
+            const error = new BridgeError(response, 400);
 
             assert.ok(error instanceof Error);
             assert.ok(error instanceof BridgeError);
@@ -302,13 +258,12 @@ suite('Error Utils Test Suite', () => {
 
         test('preserves structured properties', () => {
             const response: BridgeErrorResponse = {
-                status: 403,
                 code: 'E_PERMISSION_DENIED',
                 message: 'Access denied',
                 details: 'User lacks read permission'
             };
 
-            const error = new BridgeError(response);
+            const error = new BridgeError(response, 403);
 
             assert.strictEqual(error.httpStatus, 403);
             assert.strictEqual(error.code, 'E_PERMISSION_DENIED');

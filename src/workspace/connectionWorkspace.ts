@@ -15,6 +15,8 @@ export const WORKSPACE_VIEW_TYPE = 'dctmConnectionWorkspace';
 
 export type WorkspaceTab = 'cabinets' | EntityTabName | 'dql' | 'dump' | 'api';
 
+const DEFAULT_TAB: WorkspaceTab = 'dql';
+
 export interface WorkspacePageState {
     connectionName: string;
     activeTab?: WorkspaceTab;
@@ -248,16 +250,16 @@ export class ConnectionWorkspace {
             <button id="wsConnect">Connect</button>
         </div>
         <div class="ws-tabs" role="tablist">
+            <button role="tab" id="tab-dql" data-tab="dql" aria-controls="panel-dql">DQL</button>
+            <button role="tab" id="tab-api" data-tab="api" aria-controls="panel-api">API</button>
+            <button role="tab" id="tab-dump" data-tab="dump" aria-controls="panel-dump">Dump</button>
             <button role="tab" id="tab-cabinets" data-tab="cabinets" aria-controls="panel-cabinets">Cabinets</button>
             <button role="tab" id="tab-types" data-tab="types" aria-controls="panel-types">Types</button>
             <button role="tab" id="tab-users" data-tab="users" aria-controls="panel-users">Users</button>
             <button role="tab" id="tab-groups" data-tab="groups" aria-controls="panel-groups">Groups</button>
-            <button role="tab" id="tab-dql" data-tab="dql" aria-controls="panel-dql">DQL</button>
-            <button role="tab" id="tab-dump" data-tab="dump" aria-controls="panel-dump">Dump</button>
-            <button role="tab" id="tab-api" data-tab="api" aria-controls="panel-api">API</button>
         </div>
         <div class="ws-panels">
-            <section class="ws-panel cabinets-tab" role="tabpanel" id="panel-cabinets" aria-labelledby="tab-cabinets">
+            <section class="ws-panel cabinets-tab" role="tabpanel" id="panel-cabinets" aria-labelledby="tab-cabinets" hidden>
                 <div class="tab-toolbar">
                     <button data-action="refreshCabinets" title="Reload the cabinet list">
                         <span class="codicon codicon-refresh"></span> Refresh
@@ -308,7 +310,7 @@ function entityPanel(tab: EntityTabName, label: string): string {
             </section>`;
 }
 
-const DQL_PANEL = `<section class="ws-panel dql-tab" role="tabpanel" id="panel-dql" aria-labelledby="tab-dql" hidden>
+const DQL_PANEL = `<section class="ws-panel dql-tab" role="tabpanel" id="panel-dql" aria-labelledby="tab-dql">
                 <div class="tab-toolbar">
                     <button class="primary" data-action="runQuery" title="Run the selection, or the whole query (Ctrl+Enter)">
                         <span class="codicon codicon-play"></span> Run
@@ -422,7 +424,7 @@ export class ConnectionWorkspaces implements vscode.Disposable {
     async show(connectionName: string, tab?: WorkspaceTab): Promise<ConnectionWorkspace> {
         let pending = this.pendingShows.get(connectionName);
         if (!pending) {
-            pending = this.findOrCreate(connectionName, tab ?? 'cabinets')
+            pending = this.findOrCreate(connectionName, tab ?? DEFAULT_TAB)
                 .finally(() => this.pendingShows.delete(connectionName));
             this.pendingShows.set(connectionName, pending);
         }
@@ -481,7 +483,7 @@ export class ConnectionWorkspaces implements vscode.Disposable {
         }
         panel.webview.options = workspacePanelOptions(this.extensionUri);
         const tab = state?.activeTab;
-        const workspace = this.add(panel, name, isWorkspaceTab(tab) ? tab : 'cabinets');
+        const workspace = this.add(panel, name, isWorkspaceTab(tab) ? tab : DEFAULT_TAB);
         this.pendingRevivals.get(name)?.(workspace);
     }
 
